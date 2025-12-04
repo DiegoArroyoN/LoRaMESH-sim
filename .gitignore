@@ -1,0 +1,16 @@
+# Build artifacts
+build/
+*.o
+*.obj
+*.exe
+*.out
+*.log
+*.pcap
+*.csv
+*.txt
+*.png
+*.html
+*.xml
+*.pdf
+*.pyc
+__pycache__/
