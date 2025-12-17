@@ -1,283 +1,125 @@
-# The Network Simulator, Version 3
+# Simulador LoRa Mesh sobre ns-3
 
-[![codecov](https://codecov.io/gh/nsnam/ns-3-dev-git/branch/master/graph/badge.svg)](https://codecov.io/gh/nsnam/ns-3-dev-git/branch/master/)
-[![Gitlab CI](https://gitlab.com/nsnam/ns-3-dev/badges/master/pipeline.svg)](https://gitlab.com/nsnam/ns-3-dev/-/pipelines)
-[![Github CI](https://github.com/nsnam/ns-3-dev-git/actions/workflows/per_commit.yml/badge.svg)](https://github.com/nsnam/ns-3-dev-git/actions)
+Proyecto basado en ns-3 (3.45) que implementa una red LoRa en topología mesh con enrutamiento por Vector de Distancia, ADR hop-by-hop, MAC CSMA/CAD con duty-cycle y modelo de energía. Incluye scripts de simulación (`scratch/LoRaMESH-sim`) y un pipeline de análisis en `analysis/`.
 
-[![Latest Release](https://gitlab.com/nsnam/ns-3-dev/-/badges/release.svg)](https://gitlab.com/nsnam/ns-3-dev/-/releases)
+## Estructura del repositorio
+- `src/loramesh/`: módulo reusable de LoRaMesh.
+  - `model/`: componentes principales (métrica compuesta, ADR, MAC CSMA/CAD+duty, modelo de energía, routing DV).
+  - `helper/loramesh-helper.{h,cc}`: instala nodos, dispositivos y aplicaciones en un escenario lineal.
+- `scratch/LoRaMESH-sim/`: simulador LoRaMesh listo para ejecutar.
+  - `mesh_dv_baseline.cc`: `main` con CLI.
+  - `mesh_dv_app.{h,cc}`: aplicación mesh (DV, forwarding, generación de tráfico).
+  - `mesh_lora_net_device.{h,cc}` y cabeceras de MAC/metric tags.
+  - `metrics_collector.{h,cc}`: recolector y exportador de CSV (TX, RX, rutas, delay, duty, energía, overhead).
+- `analysis/`: análisis offline.
+  - `run_analysis.py`: lee los CSV, deduplica TX/RX para PDR, y genera tablas y figuras.
+  - `results/<label>/`: salidas de análisis (summary, CSV derivados, figuras).
+- `build/`, `cmake-cache/`: artefactos de compilación (ignorados).
 
-## License
+## Simulación: parámetros y ejecución
+Script principal: `scratch/LoRaMESH-sim/mesh_dv_baseline`.
 
-This software is licensed under the terms of the GNU General Public License v2.0 only (GPL-2.0-only).
-See the LICENSE file for more details.
+Parámetros CLI relevantes:
+- `--nEd`: número de end devices (se crea un GW adicional).
+- `--stopSec`: tiempo de simulación en segundos.
+- `--spacing`: separación lineal entre nodos (m).
+- `--gwHeight`: altura del gateway (m).
+- `--enableAdr`: habilita ADR hop-by-hop.
+- `--enableDuty`: aplica límite de duty-cycle.
+- `--dutyLimit`: límite de duty (0.01 = 1%).
+- `--enablePcap`: genera PCAP por nodo.
 
-## Table of Contents
+Ejemplos:
+```bash
+# Simulación base (sin ADR ni duty)
+./ns3 run "scratch/LoRaMESH-sim/mesh_dv_baseline --nEd=5 --stopSec=120 --enableAdr=false --enableDuty=false"
 
-* [Overview](#overview-an-open-source-project)
-* [Software overview](#software-overview)
-* [Getting ns-3](#getting-ns-3)
-* [Building ns-3](#building-ns-3)
-* [Testing ns-3](#testing-ns-3)
-* [Running ns-3](#running-ns-3)
-* [ns-3 Documentation](#ns-3-documentation)
-* [Working with the Development Version of ns-3](#working-with-the-development-version-of-ns-3)
-* [Contributing to ns-3](#contributing-to-ns-3)
-* [Reporting Issues](#reporting-issues)
-* [Asking Questions](#asking-questions)
-* [ns-3 App Store](#ns-3-app-store)
-
-> **NOTE**: Much more substantial information about ns-3 can be found at
-<https://www.nsnam.org>
-
-## Overview: An Open Source Project
-
-ns-3 is a free open source project aiming to build a discrete-event
-network simulator targeted for simulation research and education.
-This is a collaborative project; we hope that
-the missing pieces of the models we have not yet implemented
-will be contributed by the community in an open collaboration
-process. If you would like to contribute to ns-3, please check
-the [Contributing to ns-3](#contributing-to-ns-3) section below.
-
-This README excerpts some details from a more extensive
-tutorial that is maintained at:
-<https://www.nsnam.org/documentation/latest/>
-
-## Software overview
-
-From a software perspective, ns-3 consists of a number of C++
-libraries organized around different topics and technologies.
-Programs that actually run simulations can be written in
-either C++ or Python; the use of Python is enabled by
-[runtime C++/Python bindings](https://cppyy.readthedocs.io/en/latest/).  Simulation programs will
-typically link or import the ns `core` library and any additional
-libraries that they need.  ns-3 requires a modern C++ compiler
-installation (g++ or clang++) and the [CMake](https://cmake.org) build system.
-Most ns-3 programs are single-threaded; there is some limited
-support for parallelization using the [MPI](https://www.nsnam.org/docs/models/html/distributed.html) framework.
-ns-3 can also run in a real-time emulation mode by binding to an
-Ethernet device on the host machine and generating and consuming
-packets on an actual network.  The ns-3 APIs are documented
-using [Doxygen](https://www.doxygen.nl).
-
-The code for the framework and the default models provided
-by ns-3 is built as a set of libraries. The libraries maintained
-by the open source project can be found in the `src` directory.
-Users may extend ns-3 by adding libraries to the build;
-third-party libraries can be found on the [ns-3 App Store](https://www.nsnam.org)
-or elsewhere in public Git repositories, and are usually added to the `contrib` directory.
-
-## Getting ns-3
-
-ns-3 can be obtained by either downloading a released source
-archive, or by cloning the project's
-[Git repository](https://gitlab.com/nsnam/ns-3-dev.git).
-
-Starting with ns-3 release version 3.45, there are two versions
-of source archives that are published with each release:
-
-1. ns-3.##.tar.bz2
-1. ns-allinone-3.##.tar.bz2
-
-The first archive is simply a compressed archive of the same code
-that one can obtain by checking out the release tagged code from
-the ns-3-dev Git repository.  The second archive consists of
-ns-3 plus additional contributed modules that are maintained outside
-of the main ns-3 open source project but that have been reviewed
-by maintainers and lightly tested for compatibility with the
-release.  The contributed modules included in the `allinone` release
-will change over time as new third-party libraries emerge while others
-may lose compatibility with the ns-3 mainline (e.g., if they become
-unmaintained).
-
-## Building ns-3
-
-As mentioned above, ns-3 uses the CMake build system, but
-the project maintains a customized wrapper around CMake
-called the `ns3` tool.  This tool provides a
-[Waf-like](https://waf.io) API
-to the underlying CMake build manager.
-To build the set of default libraries and the example
-programs included in this package, you need to use the
-`ns3` tool. This tool provides a Waf-like API to the
-underlying CMake build manager.
-Detailed information on how to use `ns3` is included in the
-[quick start guide](doc/installation/source/quick-start.rst).
-
-Before building ns-3, you must configure it.
-This step allows the configuration of the build options,
-such as whether to enable the examples, tests and more.
-
-To configure ns-3 with examples and tests enabled,
-run the following command on the ns-3 main directory:
-
-```shell
-./ns3 configure --enable-examples --enable-tests
+# Con ADR y duty-cycle al 1%
+./ns3 run "scratch/LoRaMESH-sim/mesh_dv_baseline --nEd=10 --stopSec=300 --enableAdr=true --enableDuty=true --dutyLimit=0.01"
 ```
 
-Then, build ns-3 by running the following command:
+Topología: lineal, nodos separados por `spacing`, gateway al final con altura `gwHeight`. El helper configura canal LoRa (LogDistance, 915 MHz), mobility constante y aplicaciones DV en todos los nodos.
 
-```shell
+## Métricas y trazas CSV
+`metrics_collector` exporta al final de cada simulación:
+- `mesh_dv_metrics_tx.csv`: timestamp(s), nodeId, seq, dst, ttl, hops, rssi(dBm), battery(mV), score, sf, energyJ, energyFrac, ok.
+- `mesh_dv_metrics_rx.csv`: timestamp(s), nodeId, src, dst, seq, ttl, hops, rssi(dBm), battery(mV), score, sf, energyJ, energyFrac, forwarded.
+- `mesh_dv_metrics_routes.csv`: timestamp(s), nodeId, destination, nextHop, hops, score, seq, action.
+- `mesh_dv_metrics_delay.csv`: timestamp(s), src, dst, seq, hops, delay(s), bytes, sf, delivered (solo paquetes entregados en el GW).
+- `mesh_dv_metrics_duty.csv`: nodeId, dutyUsed, txCount, backoffCount.
+- `mesh_dv_metrics_energy.csv`: nodeId, energyInitialJ, energyConsumedJ, energyRemainingJ, energyFrac.
+- `mesh_dv_metrics_overhead.csv`: trazas de control (si se registran).
+
+Claves:
+- TX/RX se deduplican por (nodeId/src, seq) para PDR en análisis.
+- PDR por nodo = `rx_unique / tx_unique` donde `tx_unique` son pares (nodeId, seq) con `ok==1` y `rx_unique` son pares (src, seq) entregados en el GW.
+- PDR global = `rx_unique_total / tx_unique_total`.
+
+## Pipeline de análisis (`analysis/run_analysis.py`)
+Uso:
+```bash
+python3 analysis/run_analysis.py --label "nEd=5_stop=120_ADR=on_duty=1%" --duty-limit 0.01
+```
+Qué hace:
+- Lee los CSV generados en la raíz.
+- Deduplica TX por (nodeId, seq) y RX en el GW por (src, seq) para PDR global y por nodo.
+- Calcula retrasos (media/mediana/p50/p90/p99) a partir de `mesh_dv_metrics_delay.csv`.
+- Hops promedio, distribución de SF, duty usado y energía restante.
+- Guarda tablas en `analysis/results/<label>/` (e.g., `summary_metrics.csv`, `pdr_per_node.csv`, `sf_distribution.csv`, `energy_metrics.csv`).
+- Genera figuras en `analysis/results/<label>/figs/`: `pdr_per_node.png`, `delay_cdf.png`, `hops_hist.png`, `sf_distribution.png`, `duty_used_per_node.png`, `energy_remaining_per_node.png`.
+
+### Componentes clave y funciones destacadas
+- `scratch/LoRaMESH-sim/mesh_dv_app.cc`
+  - `StartApplication()`: registra callbacks, configura MAC/energía/routing y lanza beacons DV y generación de datos.
+  - `L2Receive()`: punto de entrada de paquetes; decide si actualizar DV (broadcast), entregar al GW o reenviar unicast, registrando métricas RX.
+  - `ForwardWithTtl()`: maneja forwarding con TTL, deduplicación y duty-cycle antes de enviar.
+  - `BuildAndSendDv()`: prepara y envía beacons DV con las mejores rutas conocidas.
+  - `SendDataPacket()`: genera tráfico de datos de ED→GW y encola para CSMA.
+  - Hooks de métricas: `LogTxEvent`, `LogRxEvent` registran TX/RX con SF, energía y se actualiza `RecordE2eDelay` al llegar al GW.
+- `scratch/LoRaMESH-sim/metrics_collector.{h,cc}`
+  - `RecordTx/Rx`: guardan eventos con timestamp, SF, batería, energía y score.
+  - `RecordRoute`: trazas DV (NEW/UPDATE/PURGE).
+  - `RecordE2eDelay`: registra delay e2e al entregar en GW usando primer TX visto.
+  - `RecordDuty`: dutyUsed, txCount, backoffCount por nodo.
+  - `RecordEnergySnapshot`: energía inicial/restante/fracción por nodo.
+  - `ExportToCSV`: escribe todos los CSV de métricas al final de la simulación.
+- `src/loramesh/model/` (resumen por fichero):
+  - `loramesh-metric-composite`: métrica de enlace (ToA+hops+RSSI+batería/energía).
+  - `loramesh-adr-hopbyhop`: selección de SF según SNR por enlace.
+  - `loramesh-mac-csma-cad`: CSMA/CAD con ventana de backoff y duty-cycle.
+  - `loramesh-energy-model`: seguimiento de energía/voltaje por nodo (TX/RX/idle).
+  - `loramesh-routing-dv`: tabla DV, actualización por beacons, selección de next-hop y anuncios.
+- `analysis/run_analysis.py`
+  - `compute_pdr()`: deduplica TX por (nodeId,seq) y RX en GW por (src,seq); calcula tx_unique, rx_unique y PDR por nodo y global.
+  - `compute_delay_stats()`: media/mediana/p50/p90/p99 de delay(s).
+  - `compute_hops()`: hops promedio y tabla por paquete entregado.
+  - `compute_sf_distribution()`: distribución de SF.
+  - Generadores de figuras: barras de PDR/SF/duty/energía y CDF de delay.
+
+## Requisitos y compilación
+- ns-3 3.45 (incluido en este árbol).
+- Compilador C++20 y CMake (usando `./ns3` wrapper).
+- Python 3 con `pandas` y `matplotlib` para el análisis.
+
+Build:
+```bash
+./ns3 configure --enable-examples
 ./ns3 build
 ```
 
-By default, the build artifacts will be stored in the `build/` directory.
+## Flujo típico de experimentos
+1. Ejecutar simulación:
+   ```bash
+   ./ns3 run "scratch/LoRaMESH-sim/mesh_dv_baseline --nEd=5 --stopSec=120 --enableAdr=true --enableDuty=true --dutyLimit=0.01 --enablePcap=false"
+   ```
+2. Analizar resultados:
+   ```bash
+   python3 analysis/run_analysis.py --label "nEd5_120s_ADRon_duty1" --duty-limit 0.01
+   ```
+3. Revisar `analysis/results/<label>/` para CSV y PNG generados.
 
-### Supported Platforms
+## Contribución y licencia
+- Código base ns-3 bajo GPL-2.0-only (ver LICENSE).
+- Aportaciones al simulador/analysis son bienvenidas mediante PRs o issues; mantén estilo C++/Python del proyecto y añade pruebas o comandos de reproducción.
 
-The current codebase is expected to build and run on the
-set of platforms listed in the [release notes](RELEASE_NOTES.md)
-file.
-
-Other platforms may or may not work: we welcome patches to
-improve the portability of the code to these other platforms.
-
-## Testing ns-3
-
-ns-3 contains test suites to validate the models and detect regressions.
-To run the test suite, run the following command on the ns-3 main directory:
-
-```shell
-./test.py
-```
-
-More information about ns-3 tests is available in the
-[test framework](doc/manual/source/test-framework.rst) section of the manual.
-
-## Running ns-3
-
-On recent Linux systems, once you have built ns-3 (with examples
-enabled), it should be easy to run the sample programs with the
-following command, such as:
-
-```shell
-./ns3 run simple-global-routing
-```
-
-That program should generate a `simple-global-routing.tr` text
-trace file and a set of `simple-global-routing-xx-xx.pcap` binary
-PCAP trace files, which can be read by `tcpdump -n -tt -r filename.pcap`.
-The program source can be found in the `examples/routing` directory.
-
-## Running ns-3 from Python
-
-If you do not plan to modify ns-3 upstream modules, you can get
-a pre-built version of the ns-3 python bindings. It is recommended
-to create a python virtual environment to isolate different application
-packages from system-wide packages (installable via the OS package managers).
-
-```shell
-python3 -m venv ns3env
-source ./ns3env/bin/activate
-pip install ns3
-```
-
-If you do not have `pip`, check their documents
-on [how to install it](https://pip.pypa.io/en/stable/installation/).
-
-After installing the `ns3` package, you can then create your simulation python script.
-Below is a trivial demo script to get you started.
-
-```python
-from ns import ns
-
-ns.LogComponentEnable("Simulator", ns.LOG_LEVEL_ALL)
-
-ns.Simulator.Stop(ns.Seconds(10))
-ns.Simulator.Run()
-ns.Simulator.Destroy()
-```
-
-The simulation will take a while to start, while the bindings are loaded.
-The script above will print the logging messages for the called commands.
-
-Use `help(ns)` to check the prototypes for all functions defined in the
-ns3 namespace. To get more useful results, query specific classes of
-interest and their functions e.g., `help(ns.Simulator)`.
-
-Smart pointers `Ptr<>` can be differentiated from objects by checking if
-`__deref__` is listed in `dir(variable)`. To dereference the pointer,
-use `variable.__deref__()`.
-
-Most ns-3 simulations are written in C++ and the documentation is
-oriented towards C++ users. The ns-3 tutorial programs (`first.cc`,
-`second.cc`, etc.) have Python equivalents, if you are looking for
-some initial guidance on how to use the Python API. The Python
-API may not be as full-featured as the C++ API, and an API guide
-for what C++ APIs are supported or not from Python do not currently exist.
-The project is looking for additional Python maintainers to improve
-the support for future Python users.
-
-## ns-3 Documentation
-
-Once you have verified that your build of ns-3 works by running
-the `simple-global-routing` example as outlined in the [running ns-3](#running-ns-3)
-section, it is quite likely that you will want to get started on reading
-some ns-3 documentation.
-
-All of that documentation should always be available from
-the ns-3 website: <https://www.nsnam.org/documentation/>.
-
-This documentation includes:
-
-* a tutorial
-* a reference manual
-* models in the ns-3 model library
-* a wiki for user-contributed tips: <https://www.nsnam.org/wiki/>
-* API documentation generated using doxygen: this is
-  a reference manual, most likely not very well suited
-  as introductory text:
-  <https://www.nsnam.org/doxygen/index.html>
-
-## Working with the Development Version of ns-3
-
-If you want to download and use the development version of ns-3, you
-need to use the tool `git`. A quick and dirty cheat sheet is included
-in the manual, but reading through the Git
-tutorials found in the Internet is usually a good idea if you are not
-familiar with it.
-
-If you have successfully installed Git, you can get
-a copy of the development version with the following command:
-
-```shell
-git clone https://gitlab.com/nsnam/ns-3-dev.git
-```
-
-However, we recommend to follow the GitLab guidelines for starters,
-that includes creating a GitLab account, forking the ns-3-dev project
-under the new account's name, and then cloning the forked repository.
-You can find more information in the [manual](https://www.nsnam.org/docs/manual/html/working-with-git.html).
-
-## Contributing to ns-3
-
-The process of contributing to the ns-3 project varies with
-the people involved, the amount of time they can invest
-and the type of model they want to work on, but the current
-process that the project tries to follow is described in the
-[contributing code](https://www.nsnam.org/developers/contributing-code/)
-website and in the [CONTRIBUTING.md](CONTRIBUTING.md) file.
-
-## Reporting Issues
-
-If you would like to report an issue, you can open a new issue in the
-[GitLab issue tracker](https://gitlab.com/nsnam/ns-3-dev/-/issues).
-Before creating a new issue, please check if the problem that you are facing
-was already reported and contribute to the discussion, if necessary.
-
-## Asking Questions
-
-ns-3 has an official [ns-3-users message board](https://groups.google.com/g/ns-3-users)
-where the community asks questions and share helpful advice.
-Additionally, ns-3 has the [ns-3 Zulip chat](https://ns-3.zulipchat.com/), used to discuss
-development issues and questions among maintainers and the community.
-
-Please use the above resources to ask questions about ns-3, rather than creating issues.
-
-## ns-3 App Store
-
-The official [ns-3 App Store](https://apps.nsnam.org/) is a centralized directory
-listing third-party modules for ns-3 available on the Internet.
-
-More information on how to submit an ns-3 module to the ns-3 App Store is available
-in the [ns-3 App Store documentation](https://www.nsnam.org/docs/contributing/html/external.html).
+Referencias adicionales: la documentación general de ns-3 está disponible en <https://www.nsnam.org>.

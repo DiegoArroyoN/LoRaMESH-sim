@@ -50,3 +50,36 @@ vcpkg/
 
 # Ignore local cache used by e.g. clangd
 .cache/
+
+# Virtualenvs / Python cache
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# Build / cmake / out
+build/
+build-dir/
+cmake-*/
+cmake-build-*/
+out/
+
+# Simulation outputs
+*.pcap
+*.tr
+*.log
+*.dat
+*.csv
+analysis/results/
+mesh_dv_metrics_*.csv
+
+# Figures / reports
+*.png
+*.jpg
+*.pdf
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*~
