@@ -1,10 +1,13 @@
 #include "metrics_collector.h"
 #include "ns3/log.h"
 #include <iomanip>
+#include <tuple>
 
 NS_LOG_COMPONENT_DEFINE ("MetricsCollector");
 
 namespace ns3 {
+
+MetricsCollector* g_metricsCollector = nullptr;
 
 MetricsCollector::MetricsCollector ()
 {
@@ -18,7 +21,8 @@ MetricsCollector::~MetricsCollector ()
 
 void
 MetricsCollector::RecordTx (uint32_t nodeId, uint32_t seq, uint32_t dst, uint8_t ttl,
-                            uint8_t hops, int16_t rssi, uint16_t battery, uint16_t score, bool ok)
+                            uint8_t hops, int16_t rssi, uint16_t battery, uint16_t score, uint8_t sf,
+                            double energyJ, double energyFrac, bool ok)
 {
   TxEvent event;
   event.timestamp = Simulator::Now ();
@@ -30,15 +34,27 @@ MetricsCollector::RecordTx (uint32_t nodeId, uint32_t seq, uint32_t dst, uint8_t
   event.rssi = rssi;
   event.battery = battery;
   event.score = score;
+  event.sf = sf;
+  event.energyJ = energyJ;
+  event.energyFrac = energyFrac;
   event.ok = ok;
   
   m_txEvents.push_back (event);
+
+  if (dst != 0xFFFF)
+  {
+    std::tuple<uint32_t, uint32_t, uint32_t> key {nodeId, dst, seq};
+    if (m_firstTxTime.find (key) == m_firstTxTime.end ())
+    {
+      m_firstTxTime[key] = event.timestamp.GetSeconds ();
+    }
+  }
 }
 
 void
 MetricsCollector::RecordRx (uint32_t nodeId, uint32_t src, uint32_t dst, uint32_t seq,
                             uint8_t ttl, uint8_t hops, int16_t rssi, uint16_t battery,
-                            uint16_t score, bool isForwarded)
+                            uint16_t score, uint8_t sf, double energyJ, double energyFrac, bool isForwarded)
 {
   RxEvent event;
   event.timestamp = Simulator::Now ();
@@ -51,6 +67,9 @@ MetricsCollector::RecordRx (uint32_t nodeId, uint32_t src, uint32_t dst, uint32_
   event.rssi = rssi;
   event.battery = battery;
   event.score = score;
+  event.sf = sf;
+  event.energyJ = energyJ;
+  event.energyFrac = energyFrac;
   event.isForwarded = isForwarded;
   
   m_rxEvents.push_back (event);
@@ -71,6 +90,22 @@ MetricsCollector::RecordRoute (uint32_t nodeId, uint32_t destination, uint32_t n
   event.action = action;
   
   m_routeEvents.push_back (event);
+}
+
+void
+MetricsCollector::RecordRouteUsed (uint32_t nodeId, uint32_t destination, uint32_t nextHop,
+                                   uint8_t hops, uint16_t score, uint32_t seq)
+{
+  RouteEvent event;
+  event.timestamp = Simulator::Now ();
+  event.nodeId = nodeId;
+  event.destination = destination;
+  event.nextHop = nextHop;
+  event.hops = hops;
+  event.score = score;
+  event.seq = seq;
+  event.action = "USED";
+  m_routeUsedEvents.push_back (event);
 }
 
 void
@@ -108,10 +143,51 @@ MetricsCollector::RecordOverhead (uint32_t nodeId, const std::string& kind, uint
 }
 
 void
+MetricsCollector::RecordDuty (uint32_t nodeId, double dutyUsed, uint32_t txCount, uint32_t backoffCount)
+{
+  DutyEvent ev;
+  ev.nodeId = nodeId;
+  ev.dutyUsed = dutyUsed;
+  ev.txCount = txCount;
+  ev.backoffCount = backoffCount;
+  m_dutyEvents.push_back (ev);
+}
+
+void
+MetricsCollector::RecordEnergySnapshot (uint32_t nodeId, double energyJ, double energyFrac)
+{
+  EnergySummary& s = m_energySummary[nodeId];
+  if (s.initialJ < 0.0 && energyJ >= 0.0)
+  {
+    s.initialJ = energyJ;
+  }
+  if (energyJ >= 0.0)
+  {
+    s.remainingJ = energyJ;
+  }
+  if (energyFrac >= 0.0)
+  {
+    s.frac = energyFrac;
+  }
+}
+
+double
+MetricsCollector::GetFirstTxTime (uint32_t src, uint32_t dst, uint32_t seq) const
+{
+  std::tuple<uint32_t, uint32_t, uint32_t> key {src, dst, seq};
+  auto it = m_firstTxTime.find (key);
+  if (it == m_firstTxTime.end ())
+  {
+    return -1.0;
+  }
+  return it->second;
+}
+
+void
 MetricsCollector::ExportTxCSV (std::string filename)
 {
   std::ofstream file (filename);
-  file << "timestamp(s),nodeId,seq,dst,ttl,hops,rssi(dBm),battery(mV),score,ok\n";
+  file << "timestamp(s),nodeId,seq,dst,ttl,hops,rssi(dBm),battery(mV),score,sf,energyJ,energyFrac,ok\n";
   
   for (const auto& event : m_txEvents)
   {
@@ -124,6 +200,9 @@ MetricsCollector::ExportTxCSV (std::string filename)
           << "," << event.rssi
           << "," << event.battery
           << "," << event.score
+          << "," << (int)event.sf
+          << "," << event.energyJ
+          << "," << event.energyFrac
           << "," << (event.ok ? 1 : 0) << "\n";
   }
   
@@ -135,7 +214,7 @@ void
 MetricsCollector::ExportRxCSV (std::string filename)
 {
   std::ofstream file (filename);
-  file << "timestamp(s),nodeId,src,dst,seq,ttl,hops,rssi(dBm),battery(mV),score,forwarded\n";
+  file << "timestamp(s),nodeId,src,dst,seq,ttl,hops,rssi(dBm),battery(mV),score,sf,energyJ,energyFrac,forwarded\n";
   
   for (const auto& event : m_rxEvents)
   {
@@ -149,6 +228,9 @@ MetricsCollector::ExportRxCSV (std::string filename)
           << "," << event.rssi
           << "," << event.battery
           << "," << event.score
+          << "," << (int)event.sf
+          << "," << event.energyJ
+          << "," << event.energyFrac
           << "," << (event.isForwarded ? 1 : 0) << "\n";
   }
   
@@ -176,6 +258,28 @@ MetricsCollector::ExportRouteCSV (std::string filename)
   
   file.close ();
   NS_LOG_INFO ("Route CSV exportado a: " << filename);
+}
+
+void
+MetricsCollector::ExportRouteUsedCSV (std::string filename)
+{
+  std::ofstream file (filename);
+  file << "timestamp(s),nodeId,destination,nextHop,hops,score,seq,action\n";
+
+  for (const auto& event : m_routeUsedEvents)
+  {
+    file << std::fixed << std::setprecision(9) << event.timestamp.GetSeconds()
+          << "," << event.nodeId
+          << "," << event.destination
+          << "," << event.nextHop
+          << "," << (int)event.hops
+          << "," << event.score
+          << "," << event.seq
+          << "," << event.action << "\n";
+  }
+
+  file.close ();
+  NS_LOG_INFO ("Route USED CSV exportado a: " << filename);
 }
 
 void
@@ -221,13 +325,52 @@ MetricsCollector::ExportOverheadCSV (std::string filename)
 }
 
 void
+MetricsCollector::ExportDutyCSV (std::string filename)
+{
+  std::ofstream file (filename);
+  file << "nodeId,dutyUsed,txCount,backoffCount\n";
+  for (const auto& e : m_dutyEvents)
+    {
+      file << e.nodeId
+           << "," << std::fixed << std::setprecision(6) << e.dutyUsed
+           << "," << e.txCount
+           << "," << e.backoffCount << "\n";
+    }
+  file.close ();
+  NS_LOG_INFO ("Duty CSV exportado a: " << filename);
+}
+
+void
+MetricsCollector::ExportEnergyCSV (std::string filename)
+{
+  std::ofstream file (filename);
+  file << "nodeId,energyInitialJ,energyConsumedJ,energyRemainingJ,energyFrac\n";
+  for (const auto& kv : m_energySummary)
+    {
+      uint32_t node = kv.first;
+      const EnergySummary& s = kv.second;
+      double consumed = (s.initialJ >= 0.0 && s.remainingJ >= 0.0) ? (s.initialJ - s.remainingJ) : -1.0;
+      file << node
+           << "," << s.initialJ
+           << "," << consumed
+           << "," << s.remainingJ
+           << "," << s.frac << "\n";
+    }
+  file.close ();
+  NS_LOG_INFO ("Energy CSV exportado a: " << filename);
+}
+
+void
 MetricsCollector::ExportToCSV (std::string prefix)
 {
   ExportTxCSV (prefix + "_tx.csv");
   ExportRxCSV (prefix + "_rx.csv");
   ExportRouteCSV (prefix + "_routes.csv");
+  ExportRouteUsedCSV (prefix + "_routes_used.csv");
   ExportDelayCSV (prefix + "_delay.csv");
   ExportOverheadCSV (prefix + "_overhead.csv");
+  ExportDutyCSV (prefix + "_duty.csv");
+  ExportEnergyCSV (prefix + "_energy.csv");
   
   NS_LOG_INFO ("=== MÉTRICAS EXPORTADAS ===");
   NS_LOG_INFO ("TX events: " << m_txEvents.size ());

@@ -7,6 +7,8 @@
 #include "ns3/mac48-address.h"
 #include "ns3/ptr.h"
 #include "ns3/pcap-file-wrapper.h"
+#include "ns3/loramesh-mac-csma-cad.h"
+#include "ns3/loramesh-energy-model.h"
 
 namespace ns3 {
 namespace lorawan {
@@ -27,6 +29,10 @@ public:
   // Setters
   void SetPhy (Ptr<LoraPhy> phy);
   Ptr<LoraPhy> GetPhy () const;
+  void SetMac (Ptr<loramesh::CsmaCadMac> mac) { m_mac = mac; }
+  Ptr<loramesh::CsmaCadMac> GetMac () const { return m_mac; }
+  void SetEnergyModel (Ptr<loramesh::EnergyModel> energy) { m_energyModel = energy; }
+  Ptr<loramesh::EnergyModel> GetEnergyModel () const { return m_energyModel; }
   // Habilita volcados pcap (TX/RX) desde Send/Receive.
   void SetPcap (Ptr<PcapFileWrapper> tx, Ptr<PcapFileWrapper> rx)
   {
@@ -69,6 +75,8 @@ public:
 private:
   Ptr<LoraPhy> m_phy;
   Ptr<Node> m_node;
+  Ptr<loramesh::CsmaCadMac> m_mac;
+  Ptr<loramesh::EnergyModel> m_energyModel;
   Ptr<PcapFileWrapper> m_pcapTx {nullptr};
   Ptr<PcapFileWrapper> m_pcapRx {nullptr};
   double m_lastRxRssi; ///< Last received RSSI in dBm

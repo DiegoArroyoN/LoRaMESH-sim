@@ -5,6 +5,7 @@
 #include "ns3/nstime.h"
 #include <cstdint>
 #include <vector>
+#include <set>
 
 namespace ns3 {
 
@@ -28,6 +29,7 @@ public:
   void SetBatt_mV (uint16_t v)     { m_batt_mV = v; }
   void SetScoreX100 (uint16_t v)   { m_scoreX100 = v; }
   void SetSf (uint8_t v)           { m_sf = v; }
+  void SetExpectedNextHop (uint16_t v) { m_expectedNextHop = v; }
 
   uint16_t GetSrc () const       { return m_src; }
   uint16_t GetDst () const       { return m_dst; }
@@ -39,6 +41,7 @@ public:
   uint16_t GetBatt_mV () const   { return m_batt_mV; }
   uint16_t GetScoreX100 () const { return m_scoreX100; }
   uint8_t  GetSf () const        { return m_sf; }
+  uint16_t GetExpectedNextHop () const { return m_expectedNextHop; }
 
   // Tag API
   uint32_t GetSerializedSize () const override;
@@ -64,8 +67,8 @@ public:
   static void DeserializeRoutePayload(const uint8_t* in, size_t len, std::vector<RoutePayloadEntry>& entries);
 
 private:
-  // Tamaño total = 2+2+4+1+1+4+2+2+2 = 20 bytes
-  // Con SF (1 byte) = 21 bytes
+  // Tamaño base = 2+2+4+1+1+4+2+2+2 = 20 bytes
+  // Con SF (1 byte) + expectedNextHop (2 bytes) = 23 bytes
   uint16_t m_src = 0;
   uint16_t m_dst = 0;
   uint32_t m_seq = 0;
@@ -76,6 +79,7 @@ private:
   int16_t  m_rssiDbm = -127;
   uint16_t m_batt_mV = 3300;
   uint16_t m_scoreX100 = 100;
+  uint16_t m_expectedNextHop = 0;
 };
 
 } // namespace ns3

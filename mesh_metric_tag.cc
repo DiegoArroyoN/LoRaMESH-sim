@@ -25,7 +25,7 @@ MeshMetricTag::GetInstanceTypeId () const
 uint32_t
 MeshMetricTag::GetSerializedSize () const
 {
-  return 21;
+  return 23;
 }
 
 void
@@ -41,6 +41,7 @@ MeshMetricTag::Serialize (TagBuffer i) const
   i.WriteU16 (static_cast<uint16_t>(m_rssiDbm)); // cuidado con signo en print
   i.WriteU16 (m_batt_mV);
   i.WriteU16 (m_scoreX100);
+  i.WriteU16 (m_expectedNextHop);
 }
 
 void
@@ -56,6 +57,7 @@ MeshMetricTag::Deserialize (TagBuffer i)
   m_rssiDbm   = static_cast<int16_t>(i.ReadU16 ());
   m_batt_mV   = i.ReadU16 ();
   m_scoreX100 = i.ReadU16 ();
+  m_expectedNextHop = i.ReadU16 ();
 }
 
 void
@@ -70,7 +72,8 @@ MeshMetricTag::Print (std::ostream &os) const
      << " toaUs=" << m_toaUs
      << " rssi=" << m_rssiDbm << "dBm"
      << " batt=" << m_batt_mV << "mV"
-     << " score=" << m_scoreX100;
+     << " score=" << m_scoreX100
+     << " expNextHop=" << m_expectedNextHop;
 }
 
 } // namespace ns3

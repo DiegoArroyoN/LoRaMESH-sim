@@ -136,7 +136,8 @@ MeshLoraNetDevice::Send (Ptr<Packet> packet, const Address& dest, uint16_t proto
                   << " pktSize=" << packet->GetSize ());
 
   MeshMetricTag meshTag;
-  double txPowerDbm = 10.0;
+  // Potencia base para datos; DV ya se eleva más abajo
+  double txPowerDbm = 20.0;
   if (packet->PeekPacketTag (meshTag))
   {
     uint8_t desiredSf = meshTag.GetSf ();
@@ -172,6 +173,15 @@ MeshLoraNetDevice::Send (Ptr<Packet> packet, const Address& dest, uint16_t proto
   if (edPhy)
   {
     Time txDuration = edPhy->GetOnAirTime (packet, txParams);
+    if (m_mac)
+    {
+      m_mac->NotifyTxStart (txDuration.GetSeconds ());
+    }
+    if (m_energyModel && m_node)
+    {
+      m_energyModel->UpdateEnergy (m_node->GetId (), loramesh::EnergyModel::kDefaultTxCurrentMa,
+                                   txDuration.GetSeconds ());
+    }
     NS_LOG_UNCOND("Node " << GetNode()->GetId() 
                   << " duración TX: " << txDuration.GetMilliSeconds() << "ms"
                   << " (" << txDuration.GetSeconds() << "s)");
@@ -241,6 +251,19 @@ MeshLoraNetDevice::Receive (Ptr<const Packet> packet)
     {
       srcAddr = macHdr.GetSrc ();
     }
+  MeshMetricTag rxTag;
+  if (pktCopy->PeekPacketTag (rxTag))
+  {
+    double duration = rxTag.GetToaUs () / 1e6;
+    if (m_mac)
+    {
+      m_mac->NotifyRxStart (duration);
+    }
+    if (m_energyModel && m_node)
+    {
+      m_energyModel->UpdateRxEnergy (m_node->GetId (), duration);
+    }
+  }
   
   if (!m_rxCallback.IsNull ())
   {
