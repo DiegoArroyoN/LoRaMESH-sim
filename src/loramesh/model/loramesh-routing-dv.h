@@ -90,6 +90,8 @@ public:
   void SetInitTtl (uint8_t ttl);
   void SetMaxRoutes (uint32_t maxRoutes);
   void SetSequence (uint32_t seq);
+  void SetExpireWindow (Time expire);
+  void SetMaxHops (uint8_t maxHops);
   void SetRouteChangeCallback (RouteChangeCallback cb);
   void SetFloodCallback (FloodCallback cb);
 
@@ -102,6 +104,7 @@ public:
   void UpdateFromDvMsg (const DvMessage& msg, const NeighborLinkInfo& link);
   void FloodDvUpdate ();
   void PrintRoutingTable () const;
+  void PrintRouteTo (NodeId dest) const;
   void PurgeExpiredRoutes ();
 
   std::vector<RouteAnnouncement> GetBestRoutes (uint32_t maxRoutes) const;
@@ -115,6 +118,8 @@ private:
 
   NodeId m_nodeId {0};
   Time m_routeTimeout { Seconds (180) };
+  Time m_expireWindow { Seconds (180) };
+  uint8_t m_maxHops { 7 };
   uint8_t m_initTtl { 10 };
   uint32_t m_maxRoutes { 25 };
   uint32_t m_sequence { 0 };

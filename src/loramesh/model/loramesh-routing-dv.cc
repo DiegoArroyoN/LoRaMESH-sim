@@ -57,6 +57,18 @@ RoutingDv::SetSequence (uint32_t seq)
 }
 
 void
+RoutingDv::SetExpireWindow (Time expire)
+{
+  m_expireWindow = expire;
+}
+
+void
+RoutingDv::SetMaxHops (uint8_t maxHops)
+{
+  m_maxHops = maxHops;
+}
+
+void
 RoutingDv::SetRouteChangeCallback (RouteChangeCallback cb)
 {
   m_routeChangeCallback = cb;
@@ -101,11 +113,31 @@ RoutingDv::GetRoute (NodeId dest) const
     {
       return nullptr;
     }
-  if (IsExpired (it->second))
+  const RouteEntry& entry = it->second;
+  const Time now = Simulator::Now ();
+  const Time age = now - entry.lastUpdate;
+  if (age > m_expireWindow)
+    {
+      NS_LOG_INFO ("RoutingDv: route expired node=" << m_nodeId
+                   << " dst=" << entry.destination
+                   << " via=" << entry.nextHop
+                   << " age=" << age.GetSeconds () << "s");
+      return nullptr;
+    }
+  if (entry.hops > m_maxHops)
+    {
+      NS_LOG_INFO ("RoutingDv: route too many hops node=" << m_nodeId
+                   << " dst=" << entry.destination
+                   << " via=" << entry.nextHop
+                   << " hops=" << unsigned (entry.hops)
+                   << " H_MAX=" << unsigned (m_maxHops));
+      return nullptr;
+    }
+  if (IsExpired (entry))
     {
       return nullptr;
     }
-  return &it->second;
+  return &entry;
 }
 
 std::size_t
@@ -133,7 +165,7 @@ RoutingDv::UpdateFromDvMsg (const DvMessage& msg, const NeighborLinkInfo& link)
   direct.batt_mV = link.batt_mV;
   direct.scoreX100 = link.scoreX100;
   direct.lastUpdate = Simulator::Now ();
-  direct.expiryTime = direct.lastUpdate + m_routeTimeout;
+  direct.expiryTime = direct.lastUpdate + m_expireWindow;
   direct.nextHopMac = link.mac;
   UpdateRoute (direct);
 
@@ -155,7 +187,7 @@ RoutingDv::UpdateFromDvMsg (const DvMessage& msg, const NeighborLinkInfo& link)
       candidate.batt_mV = entry.batt_mV;
       candidate.scoreX100 = entry.scoreX100;
       candidate.lastUpdate = Simulator::Now ();
-      candidate.expiryTime = candidate.lastUpdate + m_routeTimeout;
+      candidate.expiryTime = candidate.lastUpdate + m_expireWindow;
       candidate.nextHopMac = link.mac;
       UpdateRoute (candidate);
     }
@@ -190,6 +222,25 @@ RoutingDv::PrintRoutingTable () const
                    << " seq=" << e.seqNum
                    << " age=" << (Simulator::Now () - e.lastUpdate).GetSeconds () << "s");
     }
+}
+
+void
+RoutingDv::PrintRouteTo (NodeId dest) const
+{
+  auto it = m_routes.find (dest);
+  if (it == m_routes.end () || IsExpired (it->second))
+    {
+      NS_LOG_INFO ("RoutingDv: no route to dest=" << dest << " for node " << m_nodeId);
+      return;
+    }
+  const RouteEntry& e = it->second;
+  NS_LOG_INFO ("RoutingDv SNAPSHOT node=" << m_nodeId
+               << " dest=" << dest
+               << " nextHop=" << e.nextHop
+               << " hops=" << unsigned (e.hops)
+               << " sf=" << unsigned (e.sf)
+               << " score=" << e.scoreX100
+               << " seq=" << e.seqNum);
 }
 
 void

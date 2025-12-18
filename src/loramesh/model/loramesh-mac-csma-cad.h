@@ -29,6 +29,7 @@ public:
   void NotifyRxStart (double durationSeconds);
   uint32_t GetBackoffSlots ();
   double GetDutyCycleUsed ();
+  double GetDutyCycleLimit () const;
   void SetDutyCycleLimit (double limit);
   void SetDutyCycleWindow (Time window);
   void SetCadDuration (Time duration);

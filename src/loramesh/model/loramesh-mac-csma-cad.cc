@@ -102,6 +102,12 @@ CsmaCadMac::GetDutyCycleUsed ()
   return total.GetSeconds () / m_dutyCycleWindow.GetSeconds ();
 }
 
+double
+CsmaCadMac::GetDutyCycleLimit () const
+{
+  return m_dutyCycleLimit;
+}
+
 void
 CsmaCadMac::SetDutyCycleLimit (double limit)
 {

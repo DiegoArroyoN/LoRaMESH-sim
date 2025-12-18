@@ -105,6 +105,8 @@ def plot_hist(series, title, xlabel, outfile, cumulative=False, bins=50):
 
 
 def plot_bar(series, title, xlabel, ylabel, outfile):
+    if series.empty:
+        return
     plt.figure()
     series.plot(kind="bar")
     plt.title(title)
