@@ -14,3 +14,17 @@ build/
 *.pdf
 *.pyc
 __pycache__/
+
+# Simulation artifacts
+validation_results/
+validation_logs/
+analysis/
+mesh_dv_summary*.json
+mesh_dv_metrics_*.csv
+sim_output*.txt
+sim_results*.txt
+validation_log.txt
+
+# Local editor/system artifacts
+.vscode/
+.DS_Store
