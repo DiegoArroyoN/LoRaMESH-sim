@@ -1,0 +1,16 @@
+analyze_metrics.py
+make_fig11_fig12_report_pack.py
+make_prelim_table_from_campaign.py
+make_pueyo_fig11_fig12_plots.py
+run_pueyo2024_paper_like_ab.py
+run_pueyo_best_of_sf_range_compact.py
+run_pueyo_fig11_fig12_campaign.py
+run_pueyo_fig11_fig12_toa_bestof_campaign.py
+run_pueyo_fig11a_trend_replication.py
+run_pueyo_low_full_workload.py
+run_pueyo_paper_like_capture_sensitivity.py
+run_pueyo_paper_like_grid_n64_safe.py
+run_pueyo_paper_like_grid_n_sweep.py
+run_pueyo_paper_like_n9_grid_sf_sweep.py
+run_pueyo_phy_ablation.py
+run_pueyo_workload_parity_audit.py
