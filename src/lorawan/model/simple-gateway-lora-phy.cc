@@ -1,0 +1,738 @@
+/*
+ * Copyright (c) 2017 University of Padova
+ *
+ * SPDX-License-Identifier: GPL-2.0-only
+ *
+ * Author: Davide Magrin <magrinda@dei.unipd.it>
+ */
+
+#include "simple-gateway-lora-phy.h"
+#include "lora-channel.h"
+
+// SX1276 end-device sensitivity (dBm) for SF7..SF12 @ BW=125kHz
+// Source: Semtech SX1276 datasheet, Table 10
+// Shadows GatewayLoraPhy::sensitivity which uses SX1301 concentrator values
+// that are ~6-7 dB more sensitive and inappropriate for peer-to-peer mesh.
+const double ns3::lorawan::SimpleGatewayLoraPhy::sensitivity[6] =
+    {-123.0, -126.0, -129.0, -132.0, -133.0, -136.0};
+
+#include "lora-tag.h"
+
+#include "ns3/boolean.h"
+#include "ns3/double.h"
+#include "ns3/enum.h"
+#include "ns3/log.h"
+#include "ns3/simulator.h"
+#include "ns3/uinteger.h"
+
+#include <algorithm>
+#include <cmath>
+#include <numeric>
+
+namespace
+{
+
+double
+Percentile95Double(std::vector<double> values)
+{
+    if (values.empty())
+    {
+        return 0.0;
+    }
+    std::sort(values.begin(), values.end());
+    const std::size_t idx = static_cast<std::size_t>(std::ceil(0.95 * values.size())) - 1;
+    return values[std::min(idx, values.size() - 1)];
+}
+
+} // namespace
+
+namespace ns3
+{
+namespace lorawan
+{
+
+NS_LOG_COMPONENT_DEFINE("SimpleGatewayLoraPhy");
+
+NS_OBJECT_ENSURE_REGISTERED(SimpleGatewayLoraPhy);
+
+/***********************************************************************
+ *                 Implementation of gateway methods                   *
+ ***********************************************************************/
+
+TypeId
+SimpleGatewayLoraPhy::GetTypeId()
+{
+    static TypeId tid =
+        TypeId("ns3::SimpleGatewayLoraPhy")
+            .SetParent<GatewayLoraPhy>()
+            .SetGroupName("lorawan")
+            .AddConstructor<SimpleGatewayLoraPhy>()
+            .AddAttribute("EnableSfScanRx",
+                          "Enable RX SF scan (SF detection + lock) instead of immediate true-SF lock.",
+                          BooleanValue(true),
+                          MakeBooleanAccessor(&SimpleGatewayLoraPhy::m_enableSfScanRx),
+                          MakeBooleanChecker())
+            .AddAttribute("SfScanMin",
+                          "Minimum SF scanned in RX scan mode.",
+                          UintegerValue(7),
+                          MakeUintegerAccessor(&SimpleGatewayLoraPhy::m_sfScanMin),
+                          MakeUintegerChecker<uint8_t>(7, 12))
+            .AddAttribute("SfScanMax",
+                          "Maximum SF scanned in RX scan mode.",
+                          UintegerValue(12),
+                          MakeUintegerAccessor(&SimpleGatewayLoraPhy::m_sfScanMax),
+                          MakeUintegerChecker<uint8_t>(7, 12))
+            .AddAttribute("SfScanCadSymbols",
+                          "Number of CAD symbols per SF scan dwell.",
+                          UintegerValue(2),
+                          MakeUintegerAccessor(&SimpleGatewayLoraPhy::m_sfScanCadSymbols),
+                          MakeUintegerChecker<uint8_t>(1, 32))
+            .AddAttribute("SfScanBandwidthHz",
+                          "Bandwidth used to compute scan CAD duration.",
+                          UintegerValue(125000),
+                          MakeUintegerAccessor(&SimpleGatewayLoraPhy::m_sfScanBandwidthHz),
+                          MakeUintegerChecker<uint32_t>(1))
+            .AddAttribute("SfScanCadMarginDb",
+                          "Margin [dB] over sensitivity required to detect preamble during scan.",
+                          DoubleValue(0.0),
+                          MakeDoubleAccessor(&SimpleGatewayLoraPhy::m_sfScanCadMarginDb),
+                          MakeDoubleChecker<double>())
+            .AddAttribute("SfScanEdThresholdDbm",
+                          "Energy detect threshold [dBm] to enqueue a pending signal for scan.",
+                          DoubleValue(-120.0),
+                          MakeDoubleAccessor(&SimpleGatewayLoraPhy::m_sfScanEdThresholdDbm),
+                          MakeDoubleChecker<double>())
+            .AddAttribute("SfScanResetOnNewSignal",
+                          "If true, when a new pending signal arrives during SCAN state, scan restarts at SfScanMin.",
+                          BooleanValue(true),
+                          MakeBooleanAccessor(&SimpleGatewayLoraPhy::m_sfScanResetOnNewSignal),
+                          MakeBooleanChecker())
+            .AddAttribute("SfScanStartSf",
+                          "SF scan start mode: SF_MIN or LAST_LOCKED.",
+                          EnumValue(SimpleGatewayLoraPhy::SCAN_START_SF_MIN),
+                          MakeEnumAccessor<SimpleGatewayLoraPhy::ScanStartSfMode>(
+                              &SimpleGatewayLoraPhy::m_sfScanStartMode),
+                          MakeEnumChecker(SimpleGatewayLoraPhy::SCAN_START_SF_MIN,
+                                          "SF_MIN",
+                                          SimpleGatewayLoraPhy::SCAN_START_LAST_LOCKED,
+                                          "LAST_LOCKED"));
+
+    return tid;
+}
+
+SimpleGatewayLoraPhy::SimpleGatewayLoraPhy()
+{
+    NS_LOG_FUNCTION_NOARGS();
+}
+
+SimpleGatewayLoraPhy::~SimpleGatewayLoraPhy()
+{
+    NS_LOG_FUNCTION_NOARGS();
+}
+
+uint64_t
+SimpleGatewayLoraPhy::GetRxScanAttempts() const
+{
+    return m_rxScanAttempts;
+}
+
+uint64_t
+SimpleGatewayLoraPhy::GetRxScanLocks() const
+{
+    return m_rxScanLocks;
+}
+
+uint64_t
+SimpleGatewayLoraPhy::GetRxScanMissBeforeLock() const
+{
+    return m_rxScanMissBeforeLock;
+}
+
+uint64_t
+SimpleGatewayLoraPhy::GetRxPostLockInterferenceFail() const
+{
+    return m_rxPostLockInterferenceFail;
+}
+
+uint64_t
+SimpleGatewayLoraPhy::GetNoMoreDemodulatorsDrops() const
+{
+    return m_noMoreDemodulatorsDrops;
+}
+
+double
+SimpleGatewayLoraPhy::GetRxAcquisitionDelayMeanSeconds() const
+{
+    if (m_rxAcquisitionDelaySamples.empty())
+    {
+        return 0.0;
+    }
+    const double sum =
+        std::accumulate(m_rxAcquisitionDelaySamples.begin(), m_rxAcquisitionDelaySamples.end(), 0.0);
+    return sum / static_cast<double>(m_rxAcquisitionDelaySamples.size());
+}
+
+double
+SimpleGatewayLoraPhy::GetRxAcquisitionDelayP95Seconds() const
+{
+    return Percentile95Double(m_rxAcquisitionDelaySamples);
+}
+
+LoraInterferenceHelper::Stats
+SimpleGatewayLoraPhy::GetInterferenceStats() const
+{
+    return m_interference.GetStats();
+}
+
+double
+SimpleGatewayLoraPhy::GetRxScanTimeTotalSeconds() const
+{
+    return m_rxScanTimeTotal.GetSeconds();
+}
+
+uint8_t
+SimpleGatewayLoraPhy::ClampScanSf(uint8_t sf) const
+{
+    const uint8_t sfMin = std::min<uint8_t>(m_sfScanMin, m_sfScanMax);
+    const uint8_t sfMax = std::max<uint8_t>(m_sfScanMin, m_sfScanMax);
+    return std::min<uint8_t>(std::max<uint8_t>(sf, sfMin), sfMax);
+}
+
+uint8_t
+SimpleGatewayLoraPhy::GetNextScanSf(uint8_t sf) const
+{
+    const uint8_t sfMin = std::min<uint8_t>(m_sfScanMin, m_sfScanMax);
+    const uint8_t sfMax = std::max<uint8_t>(m_sfScanMin, m_sfScanMax);
+    if (sf >= sfMax)
+    {
+        return sfMin;
+    }
+    return static_cast<uint8_t>(sf + 1);
+}
+
+Time
+SimpleGatewayLoraPhy::ComputeCadDurationForSf(uint8_t sf) const
+{
+    LoraTxParameters params;
+    params.sf = ClampScanSf(sf);
+    params.bandwidthHz = std::max<uint32_t>(1, m_sfScanBandwidthHz);
+    const Time tSym = LoraPhy::GetTSym(params);
+    const uint8_t cadSymbols = std::max<uint8_t>(1, m_sfScanCadSymbols);
+    const double cadSec = tSym.GetSeconds() * static_cast<double>(cadSymbols);
+    return Seconds(std::max(1e-6, cadSec));
+}
+
+double
+SimpleGatewayLoraPhy::GetSensitivityForSf(uint8_t sf) const
+{
+    if (sf < 7 || sf > 12)
+    {
+        return sensitivity[0];
+    }
+    return sensitivity[static_cast<std::size_t>(sf - 7)];
+}
+
+void
+SimpleGatewayLoraPhy::PurgeExpiredPendingSignals()
+{
+    const Time now = Simulator::Now();
+    for (auto it = m_pendingSignals.begin(); it != m_pendingSignals.end();)
+    {
+        if (it->end <= now)
+        {
+            if (it->event != m_lockedEvent)
+            {
+                m_rxScanMissBeforeLock++;
+                m_phyRxEndTrace(it->packet);
+            }
+            it = m_pendingSignals.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+bool
+SimpleGatewayLoraPhy::TryLockOnScanSf(uint8_t sf)
+{
+    const Time now = Simulator::Now();
+
+    auto bestIt = m_pendingSignals.end();
+    for (auto it = m_pendingSignals.begin(); it != m_pendingSignals.end(); ++it)
+    {
+        if (it->end <= now)
+        {
+            continue;
+        }
+        if (it->sfTrue != sf)
+        {
+            continue;
+        }
+        if (!IsOnFrequency(it->freqHz))
+        {
+            continue;
+        }
+        const double required = GetSensitivityForSf(sf) + m_sfScanCadMarginDb;
+        if (it->rxPowerDbm < required)
+        {
+            continue;
+        }
+
+        if (bestIt == m_pendingSignals.end() || it->rxPowerDbm > bestIt->rxPowerDbm ||
+            (it->rxPowerDbm == bestIt->rxPowerDbm && it->start < bestIt->start))
+        {
+            bestIt = it;
+        }
+    }
+
+    if (bestIt == m_pendingSignals.end())
+    {
+        return false;
+    }
+
+    auto pathIt = m_receptionPaths.end();
+    for (auto it = m_receptionPaths.begin(); it != m_receptionPaths.end(); ++it)
+    {
+        if ((*it)->IsAvailable())
+        {
+            pathIt = it;
+            break;
+        }
+    }
+
+    if (pathIt == m_receptionPaths.end())
+    {
+        if (m_device)
+        {
+            m_noMoreDemodulatorsDrops++;
+            m_noMoreDemodulators(bestIt->packet, m_device->GetNode()->GetId());
+        }
+        else
+        {
+            m_noMoreDemodulatorsDrops++;
+            m_noMoreDemodulators(bestIt->packet, 0);
+        }
+        return false;
+    }
+
+    const Time remaining = bestIt->end - now;
+    if (!remaining.IsPositive())
+    {
+        return false;
+    }
+
+    Ptr<SimpleGatewayLoraPhy::ReceptionPath> path = *pathIt;
+    path->LockOnEvent(bestIt->event);
+    m_occupiedReceptionPaths++;
+    EventId endReceiveEventId =
+        Simulator::Schedule(remaining, &LoraPhy::EndReceive, this, bestIt->packet, bestIt->event);
+    path->SetEndReceive(endReceiveEventId);
+
+    m_lockedEvent = bestIt->event;
+    m_rxState = RxState::RX_LOCK;
+    m_lastLockedSf = sf;
+    m_rxScanLocks++;
+
+    const double acqDelaySec = std::max(0.0, (now - bestIt->start).GetSeconds());
+    m_rxAcquisitionDelaySamples.push_back(acqDelaySec);
+
+    m_pendingSignals.erase(bestIt);
+    return true;
+}
+
+void
+SimpleGatewayLoraPhy::StartScanIfNeeded()
+{
+    if (!m_enableSfScanRx)
+    {
+        return;
+    }
+    if (m_isTransmitting)
+    {
+        return;
+    }
+
+    PurgeExpiredPendingSignals();
+    if (m_pendingSignals.empty())
+    {
+        return;
+    }
+    if (m_rxState != RxState::IDLE)
+    {
+        return;
+    }
+
+    m_rxState = RxState::SCAN;
+    if (m_sfScanStartMode == SCAN_START_LAST_LOCKED)
+    {
+        m_scanCurrentSf = ClampScanSf(m_lastLockedSf);
+    }
+    else
+    {
+        m_scanCurrentSf = ClampScanSf(std::min<uint8_t>(m_sfScanMin, m_sfScanMax));
+    }
+
+    if (!m_scanEvent.IsPending())
+    {
+        m_scanEvent = Simulator::ScheduleNow(&SimpleGatewayLoraPhy::HandleScanStep, this);
+    }
+}
+
+void
+SimpleGatewayLoraPhy::HandleScanStep()
+{
+    if (m_rxState != RxState::SCAN)
+    {
+        return;
+    }
+    if (m_isTransmitting)
+    {
+        m_rxState = RxState::IDLE;
+        return;
+    }
+
+    PurgeExpiredPendingSignals();
+    if (m_pendingSignals.empty())
+    {
+        m_rxState = RxState::IDLE;
+        return;
+    }
+
+    const uint8_t sf = ClampScanSf(m_scanCurrentSf);
+    m_rxScanAttempts++;
+    const Time cadDuration = ComputeCadDurationForSf(sf);
+    m_rxScanTimeTotal += cadDuration;
+
+    if (TryLockOnScanSf(sf))
+    {
+        return;
+    }
+
+    m_scanCurrentSf = GetNextScanSf(sf);
+    m_scanEvent = Simulator::Schedule(cadDuration, &SimpleGatewayLoraPhy::HandleScanStep, this);
+}
+
+void
+SimpleGatewayLoraPhy::Send(Ptr<Packet> packet,
+                           LoraTxParameters txParams,
+                           uint32_t frequencyHz,
+                           double txPowerDbm)
+{
+    NS_LOG_FUNCTION(this << packet << frequencyHz << txPowerDbm);
+
+    if (m_scanEvent.IsPending())
+    {
+        Simulator::Cancel(m_scanEvent);
+    }
+    m_rxState = RxState::IDLE;
+    m_lockedEvent = nullptr;
+    m_pendingSignals.clear();
+
+    // Get the time a packet with these parameters will take to be transmitted
+    Time duration = GetOnAirTime(packet, txParams);
+
+    NS_LOG_DEBUG("Duration of packet: " << duration << ", SF" << unsigned(txParams.sf));
+
+    // Interrupt all receive operations
+    std::list<Ptr<SimpleGatewayLoraPhy::ReceptionPath>>::iterator it;
+    for (it = m_receptionPaths.begin(); it != m_receptionPaths.end(); ++it)
+    {
+        Ptr<SimpleGatewayLoraPhy::ReceptionPath> currentPath = *it;
+
+        if (!currentPath->IsAvailable()) // Reception path is occupied
+        {
+            // Call the callback for reception interrupted by transmission
+            // Fire the trace source
+            if (m_device)
+            {
+                m_noReceptionBecauseTransmitting(currentPath->GetEvent()->GetPacket(),
+                                                 m_device->GetNode()->GetId());
+            }
+            else
+            {
+                m_noReceptionBecauseTransmitting(currentPath->GetEvent()->GetPacket(), 0);
+            }
+
+            // Cancel the scheduled EndReceive call
+            Simulator::Cancel(currentPath->GetEndReceive());
+
+            // Free it
+            // This also resets all parameters like packet and endReceive call
+            currentPath->Free();
+            m_occupiedReceptionPaths--;
+        }
+    }
+
+    // Send the packet in the channel
+    m_channel->Send(this, packet, txPowerDbm, txParams, duration, frequencyHz);
+
+    Simulator::Schedule(duration, &SimpleGatewayLoraPhy::TxFinished, this, packet);
+
+    m_isTransmitting = true;
+
+    // Fire the trace source
+    if (m_device)
+    {
+        m_startSending(packet, m_device->GetNode()->GetId());
+    }
+    else
+    {
+        m_startSending(packet, 0);
+    }
+}
+
+void
+SimpleGatewayLoraPhy::HandleSignalStart(Ptr<Packet> packet,
+                                        double rxPowerDbm,
+                                        uint8_t sfLatent,
+                                        Time duration,
+                                        uint32_t frequencyHz)
+{
+    NS_LOG_FUNCTION(this << packet << rxPowerDbm << unsigned(sfLatent) << duration << frequencyHz);
+
+    // Fire the trace source
+    m_phyRxBeginTrace(packet);
+
+    if (m_isTransmitting)
+    {
+        NS_LOG_INFO("Dropping packet reception of packet with sf = "
+                    << unsigned(sfLatent) << " because we are in TX mode");
+
+        m_phyRxEndTrace(packet);
+
+        if (m_device)
+        {
+            m_noReceptionBecauseTransmitting(packet, m_device->GetNode()->GetId());
+        }
+        else
+        {
+            m_noReceptionBecauseTransmitting(packet, 0);
+        }
+
+        return;
+    }
+
+    if (!IsOnFrequency(frequencyHz))
+    {
+        NS_LOG_INFO("Dropping packet reception of packet with sf = "
+                    << unsigned(sfLatent) << " because frequency " << frequencyHz
+                    << "Hz is not configured in this PHY");
+        m_phyRxEndTrace(packet);
+        return;
+    }
+
+    if (m_enableSfScanRx && rxPowerDbm < m_sfScanEdThresholdDbm)
+    {
+        NS_LOG_DEBUG("Dropping signal before scan enqueue due to ED threshold: rxPower=" << rxPowerDbm
+                                                                                          << "dBm < "
+                                                                                          << m_sfScanEdThresholdDbm
+                                                                                          << "dBm");
+        m_phyRxEndTrace(packet);
+        return;
+    }
+
+    // Add the event to the LoraInterferenceHelper
+    Ptr<LoraInterferenceHelper::Event> event;
+    event = m_interference.Add(duration, rxPowerDbm, sfLatent, packet, frequencyHz);
+
+    if (!m_enableSfScanRx)
+    {
+        // Legacy behaviour: immediate lock using true SF from channel event.
+        for (auto it = m_receptionPaths.begin(); it != m_receptionPaths.end(); ++it)
+        {
+            Ptr<SimpleGatewayLoraPhy::ReceptionPath> currentPath = *it;
+            if (!currentPath->IsAvailable())
+            {
+                continue;
+            }
+
+            const double requiredSensitivity = GetSensitivityForSf(sfLatent);
+            if (rxPowerDbm < requiredSensitivity)
+            {
+                NS_LOG_INFO("Dropping packet reception of packet with sf = "
+                            << unsigned(sfLatent) << " because under the sensitivity of "
+                            << requiredSensitivity << " dBm");
+
+                if (m_device)
+                {
+                    m_underSensitivity(packet, m_device->GetNode()->GetId());
+                }
+                else
+                {
+                    m_underSensitivity(packet, 0);
+                }
+                return;
+            }
+
+            currentPath->LockOnEvent(event);
+            m_occupiedReceptionPaths++;
+
+            EventId endReceiveEventId =
+                Simulator::Schedule(duration, &LoraPhy::EndReceive, this, packet, event);
+            currentPath->SetEndReceive(endReceiveEventId);
+            return;
+        }
+
+        if (m_device)
+        {
+            m_noMoreDemodulatorsDrops++;
+            m_noMoreDemodulators(packet, m_device->GetNode()->GetId());
+        }
+        else
+        {
+            m_noMoreDemodulatorsDrops++;
+            m_noMoreDemodulators(packet, 0);
+        }
+        return;
+    }
+
+    // Scan mode: keep pending and lock only after SF detection by scan.
+    PendingSignal pending;
+    pending.packet = packet;
+    pending.event = event;
+    pending.sfTrue = sfLatent;
+    pending.freqHz = frequencyHz;
+    pending.rxPowerDbm = rxPowerDbm;
+    pending.start = Simulator::Now();
+    pending.end = pending.start + duration;
+    m_pendingSignals.push_back(pending);
+
+    if (m_enableSfScanRx && m_sfScanResetOnNewSignal && m_rxState == RxState::SCAN)
+    {
+        m_scanCurrentSf = ClampScanSf(std::min<uint8_t>(m_sfScanMin, m_sfScanMax));
+    }
+
+    StartScanIfNeeded();
+}
+
+void
+SimpleGatewayLoraPhy::StartReceive(Ptr<Packet> packet,
+                                   double rxPowerDbm,
+                                   uint8_t sf,
+                                   Time duration,
+                                   uint32_t frequencyHz)
+{
+    HandleSignalStart(packet, rxPowerDbm, sf, duration, frequencyHz);
+}
+
+void
+SimpleGatewayLoraPhy::NotifySignalStart(Ptr<Packet> packet,
+                                        double rxPowerDbm,
+                                        Time duration,
+                                        uint32_t frequencyHz,
+                                        uint64_t signalId)
+{
+    uint8_t latentSf = 7;
+    bool hasLatentSf = false;
+    Ptr<LoraChannel> channel = DynamicCast<LoraChannel>(GetChannel());
+    if (channel)
+    {
+        hasLatentSf = channel->GetLatentSignalSf(signalId, &latentSf);
+    }
+    if (!hasLatentSf)
+    {
+        NS_LOG_WARN("NotifySignalStart: missing latent SF context for signalId="
+                    << signalId << ", fallback SF7");
+        latentSf = 7;
+    }
+    HandleSignalStart(packet, rxPowerDbm, latentSf, duration, frequencyHz);
+}
+
+void
+SimpleGatewayLoraPhy::EndReceive(Ptr<Packet> packet, Ptr<LoraInterferenceHelper::Event> event)
+{
+    NS_LOG_FUNCTION(this << packet << *event);
+
+    // Call the trace source
+    m_phyRxEndTrace(packet);
+
+    // Call the LoraInterferenceHelper to determine whether there was
+    // destructive interference. If the packet is correctly received, this
+    // method returns a 0.
+    uint8_t packetDestroyed = 0;
+    packetDestroyed = m_interference.IsDestroyedByInterference(event);
+
+    // Check whether the packet was destroyed
+    if (packetDestroyed != uint8_t(0))
+    {
+        m_rxPostLockInterferenceFail++;
+
+        NS_LOG_DEBUG("packetDestroyed by " << unsigned(packetDestroyed));
+
+        // Log detallado de interferencia para debugging
+        uint32_t nodeId = m_device ? m_device->GetNode()->GetId() : 0;
+        NS_LOG_UNCOND("PHY_INTERFERENCE_DROP node="
+                      << nodeId << " time=" << Simulator::Now().GetSeconds()
+                      << " rxSF=" << unsigned(event->GetSpreadingFactor()) << " destroyedBy=SF"
+                      << unsigned(packetDestroyed) << " rxPower=" << event->GetRxPowerdBm() << "dBm"
+                      << " duration=" << event->GetDuration().GetSeconds() << "s"
+                      << " size=" << packet->GetSize() << "B");
+
+        // Update the packet's LoraTag
+        LoraTag tag;
+        packet->RemovePacketTag(tag);
+        tag.SetDestroyedBy(packetDestroyed);
+        packet->AddPacketTag(tag);
+
+        if (m_device)
+        {
+            m_interferedPacket(packet, m_device->GetNode()->GetId());
+        }
+        else
+        {
+            m_interferedPacket(packet, 0);
+        }
+    }
+    else
+    {
+        NS_LOG_INFO("Packet with SF " << unsigned(event->GetSpreadingFactor())
+                                      << " received correctly");
+
+        if (m_device)
+        {
+            m_successfullyReceivedPacket(packet, m_device->GetNode()->GetId());
+        }
+        else
+        {
+            m_successfullyReceivedPacket(packet, 0);
+        }
+
+        if (!m_rxOkCallback.IsNull())
+        {
+            LoraTag tag;
+            packet->RemovePacketTag(tag);
+            tag.SetReceivePower(event->GetRxPowerdBm());
+            tag.SetFrequency(event->GetFrequency());
+            packet->AddPacketTag(tag);
+
+            m_rxOkCallback(packet);
+        }
+    }
+
+    for (auto it = m_receptionPaths.begin(); it != m_receptionPaths.end(); ++it)
+    {
+        Ptr<SimpleGatewayLoraPhy::ReceptionPath> currentPath = *it;
+
+        if (currentPath->GetEvent() == event)
+        {
+            currentPath->Free();
+            if (m_occupiedReceptionPaths > 0)
+            {
+                m_occupiedReceptionPaths--;
+            }
+            break;
+        }
+    }
+
+    if (m_lockedEvent == event)
+    {
+        m_lockedEvent = nullptr;
+    }
+    m_rxState = RxState::IDLE;
+    StartScanIfNeeded();
+}
+
+} // namespace lorawan
+} // namespace ns3

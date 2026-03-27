@@ -1,0 +1,30 @@
+build_lib(
+  LIBNAME loramesh
+  SOURCE_FILES
+    model/loramesh-metric-composite.cc
+    model/loramesh-adr-hopbyhop.cc
+    model/loramesh-mac-csma-cad.cc
+    model/loramesh-energy-model.cc
+    model/loramesh-routing-dv.cc
+    helper/loramesh-helper.cc
+  HEADER_FILES
+    model/loramesh-metric-composite.h
+    model/loramesh-adr-hopbyhop.h
+    model/loramesh-mac-csma-cad.h
+    model/loramesh-energy-model.h
+    model/loramesh-routing-dv.h
+    helper/loramesh-helper.h
+    ../../scratch/LoRaMESH-sim/mesh_dv_app.h
+    ../../scratch/LoRaMESH-sim/mesh_lora_net_device.h
+    ../../scratch/LoRaMESH-sim/mesh_mac_header.h
+    ../../scratch/LoRaMESH-sim/mesh_metric_tag.h
+    ../../scratch/LoRaMESH-sim/data_wire_header_v2.h
+    ../../scratch/LoRaMESH-sim/data_wire_header_pueyo7b.h
+    ../../scratch/LoRaMESH-sim/beacon_wire_header_v2.h
+    ../../scratch/LoRaMESH-sim/metrics_collector.h
+  LIBRARIES_TO_LINK
+    ${libcore}
+    ${libnetwork}
+    ${libmobility}
+    ${liblorawan}
+)
