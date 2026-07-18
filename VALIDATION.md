@@ -83,6 +83,33 @@ Validation" del paper y la respuesta preempaquetada a revisores.
   preservado** (minrem cmp−toa en a2a: +0.049 → +0.053). El dataset 6B
   queda validado como equivalente con 1 byte menos de beacon.
 
+## 2026-07-18 — F1.4(a) Invariante de duty cycle, corpus 6B completo (PASS)
+
+- **Qué:** `dutyUsed` por nodo en TODOS los runs dc1 del corpus 6B
+  (spine a2a/conv/msink + soc_ablation + wsweep).
+- **Resultado:** **55 600 nodos-run bajo EU868 1 %: cero violaciones**;
+  el máximo observado es exactamente 0.01000 (el enforcement satura en
+  el límite). Contraste sin límite (dcoff): máx 0.0886 — el limitador
+  está genuinamente apagado ahí. Verificación corpus-completa del claim
+  regulatorio central del paper.
+- **Pendiente (instrumentación):** versión estricta por ventana
+  deslizante requiere columna ToA por transmisión en el log de tx; se
+  añade en el port del módulo.
+- **Test:** `/home/diego/sim/_f14_f13_sweep.py`.
+
+## 2026-07-18 — F1.3(a) Cierre contable de energía, corpus 6B (PASS con nota)
+
+- **Qué:** invariante inicial − consumida = restante por nodo, 111 200
+  nodos-run.
+- **Resultado:** error máximo 0.010 J sobre baterías de ~3888 J
+  (2.6 ppm) — exactamente el redondeo del CSV, que loguea con 2
+  decimales; el cross-check `energyFrac` vs restante/inicial (precisión
+  completa) da error máx 1.8e-04. **El cierre se cumple dentro de la
+  precisión del log.** Nota para el port: subir la precisión del CSV de
+  energía (≥6 decimales) para poder apretar el umbral del assert.
+- Pendiente F1.3(b): E_tx = V·I·ToA al mJ contra datasheet (necesita la
+  columna ToA por tx) y T50 analítico en escenario trivial.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
