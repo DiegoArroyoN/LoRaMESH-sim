@@ -48,21 +48,55 @@ Validation" del paper y la respuesta preempaquetada a revisores.
 - Es el smoke del Gate 5: estructura de módulo estándar verificada
   contra instalación limpia.
 
-## Hallazgos de auditoría abiertos (F0.2)
+## 2026-07-18 — F0.4(a) Determinismo misma-máquina (PASS)
 
-1. **Dualidad de métricas en el árbol de campaña.** El árbol frozen
-   (2026-03-27) implementa la métrica en `CompositeMetric`
-   (α=0.40/β=0.30/δ=0.30, hop normalizado /10, Ψ asintótica 1−b^p) y la
-   app la invoca en 3 sitios; el árbol override (2026-05-30, binario de
-   las campañas del paper) añadió `RoutingDv::ComputeThesisLinkCost`
-   (0.60/0.15/0.25, β constante por salto, Ψ por tramos — la fórmula del
-   paper) y la app aún llama a `m_compositeMetric.ComputeLinkCost` en el
-   scoring de enlaces RX. **Acción pendiente (al volver el servidor):**
-   verificar en el override si `CompositeMetric` fue actualizada o si
-   conviven dos fórmulas con pesos distintos alimentando cosas distintas
-   (score de enlace vs costo de ruta). El módulo `contrib/dv-cl` nace
-   con UNA sola implementación de registro (`DvClCompositeMetric`) tras
-   la interfaz `DvClRoutingMetric`, retirando el duplicado en el port.
+- **Qué:** mismo escenario (a2a N=25 grid, cmp_csma, dcoff) + misma
+  semilla (`rngRun=7`) ejecutado dos veces en el servidor de campañas.
+- **Resultado:** `mesh_dv_summary.json` **bit-idéntico** y las 5 tablas
+  de métricas (delay/duty/energy/lifetime/tx) idénticas byte a byte.
+- **Test:** `/home/diego/sim/_f04_determinism.sh` (servidor).
+- Pendiente F0.4(b): determinismo cross-máquina (requiere el módulo
+  portable) y golden traces de regresión (abajo).
+
+## 2026-07-18 — F0.3 metadatos por corrida + F0.4(b) golden traces (OPERATIVOS)
+
+- **F0.3:** wrapper `/home/diego/sim/run_with_metadata.sh` emite
+  `run_metadata.json` por corrida: commit hash del árbol, nº de archivos
+  sucios, SHA256 y ruta del binario, argv completo, timestamps y
+  duración, hostname. Verificado sobre el snapshot
+  `server-state-20260718` (commit 92bb756, árbol limpio).
+- **F0.4(b):** golden traces de 3 escenarios chicos con el binario 6B
+  actual, en `/home/diego/sim/golden_traces/` con manifiesto
+  `GOLDEN_SHA256`: g1 a2a N9 cmp_csma dcoff · g2 conv N25 toa_aloha dc1
+  · g3 a2a N9 cmp_csma dc1. Regla: cualquier cambio de código se
+  compara contra estos hashes; si el cambio es intencional, el golden se
+  actualiza explícitamente en el commit.
+
+## 2026-07-18 — Dato 6B vs 7B a escala completa (PASS)
+
+- **Qué:** re-run 6B completo (18 campañas, terminado 2026-07-05)
+  contra el dato 7B canónico, todas las celdas del spine (3 modelos ×
+  4 variantes × 2 topologías × 2 regímenes DC × N).
+- **Resultado:** celdas headline prácticamente idénticas (p.ej. a2a
+  grid dcoff N49: toa 14.50→14.60, cmp 16.79→16.70); máx |ΔPDR| =
+  2.26 pp (celda N=9 de alta varianza); **edge energético del SoC
+  preservado** (minrem cmp−toa en a2a: +0.049 → +0.053). El dataset 6B
+  queda validado como equivalente con 1 byte menos de beacon.
+
+## Hallazgos de auditoría (F0.2)
+
+1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
+   (2026-03-27) implementa `CompositeMetric` con α=0.40/β=0.30/δ=0.30 y
+   Ψ asintótica (generación vieja). En el **override** (binario de las
+   campañas del paper) `CompositeMetric` **fue actualizado** a la
+   fórmula de la tesis — α=0.60/β=0.15/δ=0.25 con Ψ por tramos
+   (b_w=0.50, b_c=0.20, p=2) — de modo que las DOS copias
+   (`CompositeMetric` usada por la app y `ComputeThesisLinkCost` usada
+   por routing-dv) computan la MISMA fórmula. Los datos de campaña no
+   tienen inconsistencia. Queda como deuda de mantenibilidad (dos copias
+   de la misma fórmula = riesgo de divergencia futura); el port a
+   `contrib/dv-cl` las unifica en `DvClCompositeMetric` tras la
+   interfaz `DvClRoutingMetric`.
 2. **Procedencia de `kMaxToaUs`.** La tabla de normalización
    {143360, 256512, 462848, 829440, 1810432, 3293184} µs declara
    "max payload 222B" en su comentario, pero AN1200.13 a 222B da otros
