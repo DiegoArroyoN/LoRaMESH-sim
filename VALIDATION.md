@@ -110,6 +110,36 @@ Validation" del paper y la respuesta preempaquetada a revisores.
 - Pendiente F1.3(b): E_tx = V·I·ToA al mJ contra datasheet (necesita la
   columna ToA por tx) y T50 analítico en escenario trivial.
 
+## 2026-07-18 — Primer ciclo de cambio controlado: columna toaUs (CERTIFICADO)
+
+- **Cambio:** columna `toaUs` por transmisión en `mesh_dv_metrics_tx.csv`
+  (struct → RecordTx → LogTxEvent → call-site → 2 escritores). Commit
+  `790d587` del árbol override.
+- **Certificación logging-only vía golden traces:** con el binario
+  nuevo, los 3 `mesh_dv_summary.json` son **bit-idénticos** a los
+  goldens v1, y los `tx.csv` difieren **exclusivamente** en la columna
+  nueva (verificado con `cut` de la col. 12 + diff). Goldens promovidos
+  a v2 (v1 archivado en `golden_traces_v1_pre_toacol/`),
+  `GOLDEN_SHA256` regenerado — actualización explícita según F0.4.
+
+## 2026-07-18 — F1.4(b) Duty cycle en ventana deslizante (HALLAZGO de semántica)
+
+- **Qué:** con la columna ToA real, máximo airtime por nodo en ventana
+  rodante de 1 h sobre los goldens dc1.
+- **Resultado:** conv 1.21 %, a2a 1.12 % (dcoff de referencia: 5.5 %) —
+  supera el 1 % en ventana rodante, mientras el agregado clava
+  ≤ 1.000 % exacto (55 600 nodos-run, F1.4a).
+- **Mecanismo (confirmado en código):** el MAC aplica presupuesto por
+  **ventana fija de 1 h** (`SetDutyCycleWindow(Hours(1))`,
+  `GetDutyCycleUsed/Limit`). Una ráfaga que cruza el borde de ventana
+  puede alcanzar hasta 2× teórico en ventana rodante; observado ≤ 1.21×.
+- **Disposición:** implementación literal defendible de ETSI EN 300 220
+  (duty definido por hora); la lectura rodante es más conservadora. Se
+  declara explícitamente en el paper ("presupuesto por ventana fija de
+  1 h"). Para el port del módulo: semántica configurable en
+  `RegionalProfile` (ventana fija | rodante | T_off por transmisión
+  estilo Semtech), con la rodante como default estricto.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
