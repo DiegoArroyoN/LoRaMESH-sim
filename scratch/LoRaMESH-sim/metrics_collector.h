@@ -32,6 +32,7 @@ class MetricsCollector
         uint16_t battery;
         uint16_t score;
         uint8_t sf;
+        uint32_t toaUs{0};
         double energyJ;
         double energyFrac;
         bool ok;
@@ -315,6 +316,7 @@ class MetricsCollector
                   uint16_t battery,
                   uint16_t score,
                   uint8_t sf,
+                  uint32_t toaUs,
                   double energyJ,
                   double energyFrac,
                   bool ok);

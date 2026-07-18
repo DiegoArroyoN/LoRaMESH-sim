@@ -76,6 +76,7 @@ MetricsCollector::RecordTx(uint32_t nodeId,
                            uint16_t battery,
                            uint16_t score,
                            uint8_t sf,
+                           uint32_t toaUs,
                            double energyJ,
                            double energyFrac,
                            bool ok)
@@ -92,6 +93,7 @@ MetricsCollector::RecordTx(uint32_t nodeId,
     event.battery = battery;
     event.score = score;
     event.sf = sf;
+    event.toaUs = toaUs;
     event.energyJ = energyJ;
     event.energyFrac = energyFrac;
     event.ok = ok;
@@ -395,7 +397,7 @@ MetricsCollector::ExportTxCSV(std::string filename)
     if (!m_appendMode)
     {
         std::string header = "timestamp(s),nodeId,src,seq,dst,ttl,hops,rssi(dBm),battery(mV),score,sf,"
-                             "energyJ,energyFrac,forwarded,ok\n";
+                             "toaUs,energyJ,energyFrac,forwarded,ok\n";
         file << header;
     }
     file << std::fixed << std::setprecision(9);
@@ -405,7 +407,7 @@ MetricsCollector::ExportTxCSV(std::string filename)
         file << event.timestamp.GetSeconds() << "," << event.nodeId << "," << event.src << ","
              << event.seq << "," << event.dst << "," << (int)event.ttl << "," << (int)event.hops
              << "," << event.rssi << "," << event.battery << "," << event.score << ","
-             << (int)event.sf << "," << event.energyJ << "," << event.energyFrac << ","
+             << (int)event.sf << "," << event.toaUs << "," << event.energyJ << "," << event.energyFrac << ","
              << ((event.nodeId != event.src) ? 1 : 0) << "," << (event.ok ? 1 : 0) << "\n";
     }
 
@@ -662,14 +664,14 @@ MetricsCollector::FlushToDisk()
         if (!m_appendMode)
         {
             file << "timestamp(s),nodeId,src,seq,dst,ttl,hops,rssi(dBm),battery(mV),score,sf,"
-                    "energyJ,energyFrac,ok\n";
+                    "toaUs,energyJ,energyFrac,ok\n";
         }
         file << std::fixed << std::setprecision(9);
         for (const auto& e : m_txEvents)
         {
             file << e.timestamp.GetSeconds() << "," << e.nodeId << "," << e.src << "," << e.seq
                  << "," << e.dst << "," << (int)e.ttl << "," << (int)e.hops << "," << e.rssi
-                 << "," << e.battery << "," << e.score << "," << (int)e.sf << "," << e.energyJ
+                 << "," << e.battery << "," << e.score << "," << (int)e.sf << "," << e.toaUs << "," << e.energyJ
                  << "," << e.energyFrac << "," << (e.ok ? 1 : 0) << "\n";
         }
     }
