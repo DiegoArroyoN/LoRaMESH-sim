@@ -2,7 +2,7 @@
 
 **Proyecto:** `LoRaMESH-sim`  
 **Repositorio:** `ns-3-dev/scratch/LoRaMESH-sim/`  
-**Fecha de actualizacion:** 2026-03-17  
+**Fecha de actualizacion:** 2026-04-15  
 **Documento fuente de verdad:** codigo actual del workspace  
 
 ---
@@ -19,6 +19,38 @@ El objetivo es dejar una referencia completa y consistente para:
 - documentar el path comparable con Pueyo-Centelles,
 - dejar claros los modelos PHY, MAC, routing, trafico y metricas hoy implementados,
 - y servir como base para el informe y la validacion experimental.
+
+## 1.1 Mapa documental
+
+Este FSD ya no debe usarse como documento operativo unico.
+
+La separacion correcta es:
+
+- `README.md`
+  - punto de entrada y quick-start
+- `AI_OPERATOR_GUIDE.md`
+  - guia operativa para otra IA o para trabajo remoto reproducible
+- `FSD_LLD_Simulador_LoRaMESH.md`
+  - arquitectura y dise?o del simulador
+
+Si existe un handoff experimental remoto activo, debe leerse ademas como contexto operativo, pero no reemplaza ni este FSD ni la guia operativa.
+
+## 1.2 Qu? no cubre este documento
+
+Este FSD no debe usarse para:
+
+- decidir por si solo qu? campa?a est? activa o consolidada
+- reemplazar la gu?a operativa de otra IA
+- asumir que una observacion experimental ya qued? validada si no fue registrada en el handoff o en la gu?a operativa
+
+En particular:
+
+- campa?as
+- rutas de archivo consolidado
+- criterio de cierre de una corrida
+- y comandos de operaci?n remota
+
+deben buscarse primero en `AI_OPERATOR_GUIDE.md`.
 
 ---
 
@@ -198,7 +230,15 @@ Responsabilidades actuales:
 El simulador tiene un entrypoint unico (`mesh_dv_baseline.cc`) y varios perfiles.  
 Un perfil no define por si solo una campana completa: define el contrato de protocolo/PHY/MAC/metrica. Los runners externos ajustan `nEd`, topologia, tiempos, seeds y sweep de parametros.
 
-Antes de aplicar overrides por linea de comando, el entrypoint arranca hoy con defaults operativos paper-like:
+Antes de aplicar perfil y overrides por linea de comando, el entrypoint arranca con un conjunto de defaults crudos del binario.
+
+Estos defaults de arranque:
+
+- no deben confundirse con el baseline comparable efectivo,
+- no representan por si solos un perfil experimental valido,
+- y en la practica son sobreescritos por el perfil seleccionado y por los runners de campa?a.
+
+Los defaults crudos actuales son:
 
 - `profile = pueyo2024_paper_like`
 - `wireFormat = pueyo7b`
@@ -218,17 +258,45 @@ Antes de aplicar overrides por linea de comando, el entrypoint arranca hoy con d
 - `enableSfScanRx = true`
 - `nodePlacementMode = random` sobre `1000 x 1000 m`
 
-Estos valores son la base de arranque del binario. En la practica, los perfiles comparables y los runners de campana siguen sobreescribiendo gran parte de la configuracion.
+Estos valores son solo la base de arranque del binario. El baseline operativo real se define recien despues de aplicar perfil, overrides y runner de campa?a.
 
 ## 5.2 Tabla de perfiles
 
 | Perfil | Proposito | Wire de datos | Beacon path | Metrica DV | `sfLinkMode` | CSMA | Duty | Rango SF | Receive-start | Interferencia |
 |---|---|---|---|---|---|---:|---:|---|---|---|
 | `extended` | perfil legacy de ingenieria / experimentacion | `v2` | `v2` | `composite_score` | `observed_rxsf` | si | si | `7-12` | scan/lock por defecto | `puello` |
-| `pueyo2024` | baseline comparable estricto | `pueyo7b` | Pueyo | `toa_only` | `deterministic_sensitivity` | no | no | `7-12` | scan/lock por defecto | `pueyo_fixed_capture` |
+| `pueyo2024` | baseline comparable historico mas amplio | `pueyo7b` | Pueyo | `toa_only` | `deterministic_sensitivity` | no | no | `7-12` | scan/lock por defecto | `pueyo_fixed_capture` |
 | `pueyo2024_paper_like` | mejor aproximacion actual al paper | `pueyo7b` | Pueyo | `toa_only` | `deterministic_sensitivity` | no | no | `7-8` | FLoRa-like immediate lock | `pueyo_fixed_capture` |
-| `proposal_pueyo_like` | propuesta comparable contra Pueyo | `pueyo7b` | Pueyo | `composite_score` | `deterministic_sensitivity` | si | si (1%) | `7-12` | scan/lock por defecto | `pueyo_fixed_capture` |
+| `proposal_pueyo_like` | propuesta comparable contra Pueyo | `pueyo7b` | Pueyo | `composite_score` | `deterministic_sensitivity` | si | si (1%) | `7-12` | FLoRa-like immediate lock | `pueyo_fixed_capture` |
 | `proposal_pueyo_like_observed` | propuesta comparable sin oraculo de SF | `pueyo7b` | Pueyo | `composite_score` | `observed_rxsf` | si | si (1%) | `7-12` | scan/lock por defecto | `pueyo_fixed_capture` |
+
+Detalles operativos importantes:
+
+- `proposal_pueyo_like`
+  - `PrioritizeBeacons = false`
+  - `PueyoStrictQueueScheduler = true`
+- `proposal_pueyo_like_observed`
+  - `PrioritizeBeacons = true`
+  - `PueyoStrictQueueScheduler = false`
+
+### Lectura correcta y trampas por perfil
+
+| Perfil | Qu? se quiere medir | Qu? s? cambia | Qu? suele malinterpretarse |
+|---|---|---|---|
+| `pueyo2024_paper_like` | baseline comparable principal | `toa_only`, `SF7-8`, receive-start FLoRa-like, sin `CSMA`, sin duty | no es "el default del binario"; es un baseline configurado |
+| `pueyo2024` | baseline comparable hist?rico m?s amplio | `toa_only`, `SF7-12`, scan/lock por defecto | no es la r?plica paper-like estricta actual |
+| `proposal_pueyo_like` | bundle de propuesta comparable | `composite_score`, `CSMA`, duty `1%`, `SF7-12`, receive-start FLoRa-like | no a?sla por separado m?trica, MAC/duty y energ?a |
+| `proposal_pueyo_like_observed` | variante comparable sin or?culo de SF | `observed_rxsf`, `CSMA`, duty `1%`, scan/lock por defecto | no es la variante principal de propuesta |
+| `extended` | ingenier?a/legacy | stack general con defaults m?s amplios | no debe usarse como baseline paper-like |
+
+Conclusi?n documental:
+
+- `pueyo2024_paper_like` es el baseline real para campa?as comparables principales
+- `proposal_pueyo_like` sirve para comparar bundle completo de propuesta vs baseline
+- hoy el c?digo no ofrece perfiles limpios para atribuir por separado:
+  - m?trica compuesta
+  - MAC/duty
+  - energ?a
 
 ## 5.3 Base comparable Pueyo
 
@@ -255,7 +323,7 @@ La base comparable aplicada por `mesh_dv_baseline.cc` fija hoy, para los perfile
 
 ## 5.4 Distincion clave entre `pueyo2024` y `pueyo2024_paper_like`
 
-`pueyo2024` es el baseline comparable estricto actual del codigo.  
+`pueyo2024` es el baseline comparable historico mas amplio del codigo.  
 `pueyo2024_paper_like` es un clon controlado que conserva esa base y cambia solo:
 
 - `sfMin = 7`
@@ -331,6 +399,24 @@ El entrypoint `mesh_dv_baseline.cc` sobreescribe los defaults del helper y usa c
 - perdida en referencia `L0 = 127.41 dB`
 - `shadowingSigmaDb = 3.57`
 
+Importante:
+
+- la sombra actual no esta modelada como una perturbacion fija correlacionada por enlace
+- hoy se implementa encadenando `RandomPropagationLossModel`
+- por eso, con `shadowingSigmaDb > 0`, los umbrales de alcance dejan de ser cortes exactos y pasan a comportarse como una zona probabilistica
+
+En un estudio controlado con `shadowingSigmaDb = 0`, los quiebres deterministas observados fueron:
+
+- `SF7`: ultimo metro que funciona `224`, primer metro que falla `225`
+- `SF8`: ultimo metro que funciona `313`, primer metro que falla `314`
+
+Traducidos a diagonal equivalente de una grilla perfecta:
+
+- `SF7`: `158.88 m`
+- `SF8`: `221.46 m`
+
+Por tanto, los pares `177/178` y `246/247/248` no representan los quiebres geometricos exactos de este modelo tal como esta implementado hoy.
+
 ## 6.4 Banda y canalizacion
 
 El simulador actual usa:
@@ -381,6 +467,11 @@ Con esto, el supuesto actual es:
 | 12 | -136 |
 
 ## 7.4 Dos modos de receive-start
+
+En la practica actual:
+
+- `pueyo2024` y `proposal_pueyo_like_observed` quedan en modo normal con `EnableSfScanRx=true`
+- `pueyo2024_paper_like` y `proposal_pueyo_like` usan el modo FLoRa-like con `EnableSfScanRx=false`
 
 ### Modo normal (`EnableSfScanRx=true`)
 
@@ -439,6 +530,23 @@ El simulador actual **no** hace esto:
 - multiples reception paths por nodo,
 - multi-demod concurrente tipo SX1301/SX1302,
 - multicanal LoRaWAN gateway.
+
+## 7.7 Causa ra?z, mecanismo dominante y contadores
+
+Lectura correcta del cuello PHY actual:
+
+| Capa de interpretaci?n | Significado |
+|---|---|
+| causa ra?z | muchas transmisiones comparten el mismo medio single-channel |
+| mecanismo dominante de fallo | un receptor ya est? ocupado demodulando otra se?al cuando llega una nueva |
+| mecanismo secundario de fallo | una se?al ya lockeada muere por interferencia posterior |
+| contadores m?s ?tiles | `rx_no_more_demodulators`, `rx_post_lock_interference_fail`, `pueyo_same_sf_overlap_events` |
+
+Esto implica:
+
+- el problema de fondo sigue siendo contenci?n del canal compartido
+- pero el s?ntoma m?s da?ino en este modelo suele ser "receptor ocupado"
+- por eso variantes temporales que espacian transmisiones pueden mejorar PDR sin tocar routing
 
 ---
 
@@ -507,12 +615,17 @@ Si no aplica el modo estricto Pueyo, `ProcessTxQueue()` usa un selector legacy a
 
 ### Scheduler Pueyo estricto
 
-Si se cumplen ambas condiciones:
+Si `pueyoStrictQueueScheduler = true`, `ProcessTxQueue()` usa `SelectStrictQueueHead()` antes de decidir qu? paquete queda al frente de la cola.
 
-- `enableCsma = false`
-- `pueyoStrictQueueScheduler = true`
+Eso aplica tanto:
 
-entonces `ProcessTxQueue()` usa `SelectStrictQueueHead()` antes de transmitir.
+- con `CSMA = false`
+- como con `CSMA = true`
+
+La diferencia es el paso siguiente:
+
+- con `CSMA = false`, el paquete elegido intenta salir directo
+- con `CSMA = true`, el paquete elegido pasa despues por CAD/backoff/duty antes del TX real
 
 ## 9.4 CSMA/CAD y duty-cycle
 
@@ -530,6 +643,17 @@ Cuando el duty-cycle bloquea TX:
 - se incrementan contadores separados para control y data,
 - se reintenta mas tarde.
 
+Importante para interpretar el modelo actual:
+
+- `CadDecisionModel = local_power` no declara busy por cualquier TX activa en el canal
+- en la implementacion actual primero exige:
+  - misma frecuencia
+  - y mismo SF que el paquete que intenta salir
+- solo despues compara potencia recibida contra sensibilidad CAD + margen
+
+Entonces, el `CSMA/CAD` actual no representa una ocupacion universal del canal single-channel.  
+Representa una decision local dependiente del SF del paquete en transmisi?n.
+
 ## 9.5 Control guard y latest-only
 
 El stack actual conserva varias optimizaciones opcionales:
@@ -540,6 +664,14 @@ El stack actual conserva varias optimizaciones opcionales:
 - `ExtraDvBeacon*`
 
 Estas pueden ser utiles en perfiles generales o de propuesta, pero no forman parte del baseline comparable paper-like puro.
+
+## 9.6 Qu? suele malinterpretarse en MAC/cola
+
+- incluso con `CSMA = false`, sigue existiendo una cola TX local en la app
+- por tanto, "paquete generado" no significa "paquete transmitido inmediatamente"
+- `PueyoStrictQueueScheduler` no implica ausencia de cola; implica otra pol?tica de selecci?n del head
+- `CadDecisionModel = local_power` no representa ocupaci?n universal del canal
+- `dutyBlocked*` describe defer por pol?tica MAC, no p?rdida PHY
 
 ---
 
@@ -611,6 +743,7 @@ Observacion importante actual:
 
 - en `pueyo7b`, la secuencia de datos no viaja on-air en el header de datos;
 - la secuencia completa para deduplicacion y metricas sigue en `MeshMetricTag`.
+- por tanto, la semantica completa de deduplicacion de datos `pueyo7b` depende del tag interno local, no solo del header on-air de 7 bytes
 
 ## 10.4 Formatos de beacon soportados
 
@@ -646,6 +779,12 @@ Cada entrada Pueyo actual ocupa:
 
 Tamano por entrada: **3 bytes**.
 
+Importante:
+
+- en el path score-only comparable, la verdad on-air del beacon es `destination + score`
+- la estructura interna `DvEntry` puede seguir cargando `hops`, `sf`, `toaUs` y otros campos legacy, pero esos no son verdad anunciada on-air en este path
+- al recibir un beacon, esos campos se reconstruyen localmente usando el enlace hacia el originador y la metrica/configuracion local
+
 ## 10.5 Path de beacon real en perfiles comparables
 
 Hoy, si `wireFormat == pueyo7b`:
@@ -654,8 +793,20 @@ Hoy, si `wireFormat == pueyo7b`:
 - los **beacons** usan `BuildAndSendDvPueyo()`, `ParseBeaconWirePacketPueyo()` y `DecodeDvEntriesPueyo()`.
 
 Esto ya no depende semanticamente del serializer generico V2 para el baseline comparable.
+- el beacon comparable no publica `hops`, `sf` ni `toaUs` por entrada; esos quedan como reconstruccion local del receptor
 
-## 10.6 `rp_counter` en beacons
+## 10.6 Tabla de verdad on-air vs reconstrucci?n local
+
+| Wire item | Vive on-air | Origen del valor | Qui?n lo reconstruye o usa localmente | Riesgo si se interpreta mal |
+|---|---|---|---|---|
+| `DataWireHeaderPueyo7b.src/dst/via/flags_ttl` | s? | app TX de datos | RX de datos y forwarding | correcto para identidad L3 m?nima |
+| secuencia completa de datos `pueyo7b` | no en el header de 7 B | `MeshMetricTag` | app/collector local | creer que el header de 7 B basta para deduplicaci?n completa |
+| `BeaconWireHeaderPueyo.src/dst/flags_ttl` | s? | app TX de beacon | RX de beacon | identidad del beacon y `rp_counter` truncado |
+| `destination + score` de DV comparable | s? | `SerializeDvEntriesPueyo()` | `DecodeDvEntriesPueyo()` + `RoutingDv` | creer que hop/SF/ToA viajan expl?citos on-air |
+| `hops`, `sf`, `toaUs`, `rawMetric` en `DvEntry` | no como verdad on-air comparable | reconstrucci?n local | `RoutingDv` y m?tricas | tratarlos como si hubieran sido anunciados por el vecino |
+| `nextHopMac` | no | cache local `nodeId -> linkAddr` | app TX/forward | asumir que la ruta l?gica ya incluye direcci?n de enlace lista para usar |
+
+## 10.7 `rp_counter` en beacons
 
 En el wire no-v1, el lower 6-bit field del beacon se usa como `rp_counter`:
 
@@ -663,7 +814,7 @@ En el wire no-v1, el lower 6-bit field del beacon se usa como `rp_counter`:
 - avanza modulo 64,
 - en recepcion se extiende a una secuencia monotona local por origen con `ResolveBeaconSequenceFromRpCounter()`.
 
-## 10.7 Presupuesto real de beacon comparable
+## 10.8 Presupuesto real de beacon comparable
 
 La capacidad de beacon se calcula con `GetBeaconRouteCapacity()`.
 
@@ -688,7 +839,13 @@ Es decir:
 - pero el payload real ocupado por entradas cabe en multiplos de 3,
 - por eso el limite efectivo actual es 249 B de entries.
 
-## 10.8 MTU real en la ruta mesh
+Importante:
+
+- en el baseline comparable actual, `GetBeaconRouteCapacity()` usa primero `dvPayloadMaxBytes`
+- eso significa que el limite practico del beacon comparable hoy viene del payload DV configurado, no del MTU del device
+- el chequeo por MTU solo pasa a ser dominante si `dvPayloadMaxBytes <= 0`
+
+## 10.9 MTU real en la ruta mesh
 
 `MeshLoraNetDevice::GetMtu()` contiene una tabla SF->MTU pensada para `EndDeviceLoraPhy`, pero el simulador mesh usa `SimpleGatewayLoraPhy`.  
 Por lo tanto, en la ruta real actual:
@@ -725,6 +882,16 @@ La tabla actual de rutas se separa en:
 - `m_backupRoutes` (backup)
 - `m_inboundRoutes` (reachability inbound explicita)
 
+Lectura correcta de estas tres estructuras:
+
+- `m_routes`
+  - ruta primaria actualmente elegida para cada destino
+- `m_backupRoutes`
+  - candidato alternativo por destino, conservado para promotion local si la primaria expira o deja de ser usable
+- `m_inboundRoutes`
+  - reachability directa hacia nodos que efectivamente anunciaron un beacon recibido
+  - no equivale por si sola a una ruta end-to-end arbitraria, pero si alimenta el candidate set que luego puede anunciarse o promoverse
+
 ## 11.2 Metricas soportadas
 
 ### `toa_only`
@@ -758,6 +925,26 @@ El candidato se construye sumando:
 
 El helper `CompositeMetric` sigue existiendo y se usa para ciertos calculos de enlace/compatibilidad local, pero la comparacion final de rutas y la acumulacion de costo end-to-end se resuelven en `RoutingDv`.
 
+Eso deja hoy dos capas relacionadas, pero no equivalentes:
+
+- `CompositeMetric`
+  - formula local fija
+  - pesos `0.40 / 0.30 / 0.30`
+  - penalizacion energetica con `p = 2`
+- `RoutingDv`
+  - formula authoritative para seleccionar y acumular rutas
+  - pesos configurables:
+    - `CompositeWToa`
+    - `CompositeWHop`
+    - `CompositeWEnergy`
+  - curva energetica configurable:
+    - `EnergyLo`
+    - `EnergyHi`
+    - `EnergyPow`
+    - `EnergyMaxPenalty`
+
+Por tanto, variar los pesos por CLI en `RoutingDv` no reconfigura automaticamente toda la logica del helper `CompositeMetric`.
+
 ## 11.3 Codificacion on-air del costo
 
 El routing soporta:
@@ -775,6 +962,24 @@ Semantica actual:
 - `0` = unreachable/poison
 - `1..255` = costo/anuncio valido
 
+Lectura mas fina por modo:
+
+- `cost255`
+  - el valor on-air crece con el costo cuantizado
+  - menor valor anunciado = mejor ruta
+- `score255`
+  - el valor on-air es la inversion del costo cuantizado en rango `1..255`
+  - mayor valor anunciado = mejor ruta
+- `score100`
+  - el valor on-air es una version normalizada en `1..100`
+  - mayor valor anunciado = mejor ruta
+
+Importante:
+
+- el baseline comparable Pueyo usa `cost255`
+- por tanto, en ese baseline un beacon con valor mas bajo representa mejor camino
+- para `composite_score`, el costo crudo primero se cuantiza con `CompositeCostStep` y luego se codifica segun `CostEncoding`
+
 ## 11.4 Actualizacion al recibir un beacon
 
 `UpdateFromDvMsg()` hace hoy este flujo:
@@ -785,6 +990,20 @@ Semantica actual:
 4. procesa cada `destination + score` anunciados,
 5. para cada entrada arma un `candidate` usando el enlace local al originador,
 6. pasa el candidato a `UpdateRoute()`.
+
+Si el anuncio recibido llega como unreachable/poison:
+
+- ese destino no entra como ruta usable,
+- el estado previo puede marcarse como fallido/poisoned,
+- y eso afecta tanto seleccion futura como elegibilidad para promotion de backups.
+
+Matices importantes:
+
+- la ruta directa al originador se intenta actualizar como cualquier otra, pero se bloquea si el destino esta en hold-down
+- las entries remotas tambien se ignoran si el destino anunciado esta en hold-down
+- en `toa_only`, el `score` on-air se decodifica a unidades de costo de camino y luego se suma el costo local del enlace
+- en `composite_score`, el `score` on-air se decodifica a `pathRaw`, y sobre eso se suma el incremento local de enlace y la penalizacion energetica local
+- por tanto, el anuncio recibido no se copia literal a la tabla: siempre se recompone un candidato local con el enlace hacia el originador del beacon
 
 ## 11.5 Inbound routes
 
@@ -803,6 +1022,20 @@ Puede incluir:
 - poison prioritario,
 - `TOP_SCORE`, `UNIFORM` o `COST_WEIGHTED` segun perfil.
 
+Mas fino:
+
+- primero puede reservar capacidad para destinos activos
+- luego puede forzar inclusion del sink si existe y aun no entro
+- luego inserta `poison` con prioridad alta para invalidar rutas stale
+- y finalmente completa el resto con seleccion top-score o sampleo estocastico sin reemplazo
+- esta politica trabaja sobre `m_routes`; no es la politica baseline-only del path Pueyo
+
+En la rama estocastica:
+
+- `UNIFORM` usa pesos uniformes
+- `COST_WEIGHTED` usa `1 / (0.05 + metrica_comparable)`
+- la seleccion es sin reemplazo, porque cada ruta elegida se elimina del pool antes del siguiente draw
+
 ### `GetBestRoutesPueyo()`
 
 Es la politica baseline-only del beacon comparable.  
@@ -813,6 +1046,14 @@ Hoy hace esto:
 - si todo cabe, ordena por mejor costo,
 - si no cabe, selecciona sin reemplazo con muestreo `cost_weighted` puro.
 
+Lectura correcta frente a la politica generica:
+
+- `GetBestRoutesPueyo()` no replica las prefases de destinos activos ni de sink
+- tampoco introduce una fase separada de poison prioritario como la politica generica
+- toma un candidate set mas cercano al baseline comparable y luego aplica orden por costo o muestreo `cost_weighted`
+- por eso `PurePueyoBaselineMode=true` no solo cambia serializer; cambia tambien la politica concreta de que rutas salen en el beacon
+- si una misma `destination` aparece en `m_routes` y `m_inboundRoutes`, primero se colapsa a un solo candidato por destino antes del anuncio
+
 ## 11.7 Regla de comparacion entre rutas
 
 `IsCandidateBetter()` compara hoy por:
@@ -821,6 +1062,12 @@ Hoy hace esto:
 2. costo comparable (`GetComparableMetric()`)
 3. SF mas bajo
 4. desempate aleatorio si persiste empate y cambia next-hop
+
+Matices importantes:
+
+- el desempate aleatorio solo aparece si ya hubo empate total de usabilidad, costo y SF
+- si el `nextHop` es el mismo, un empate no se trata como cambio real de ruta
+- la hysteresis por mejora minima (`routeSwitchMinDeltaX100`) no vive en `IsCandidateBetter()`, sino mas abajo en `UpdateRoute()` y solo para `MetricMode::COMPOSITE_SCORE`
 
 ## 11.8 Expiracion, poison y limpieza
 
@@ -832,6 +1079,31 @@ El routing actual soporta:
 - backup promotions,
 - hold-down de destinos recientemente fallidos,
 - y limites globales de tabla con eviction.
+
+Lectura mas fina:
+
+- `GetRoute()` primero intenta la primaria; solo si ya no es usable la elimina/poisoniza localmente y luego intenta promotion del backup
+- la promotion de backup ocurre bajo demanda de lookup, no como tarea de fondo separada
+- `poison` no representa una ruta valida de costo alto; representa explicitamente "destino no alcanzable" para ese anuncio
+- un `candidate` con `scoreX100 = 0` solo envenena entradas existentes que compartan el mismo `nextHop`; no hace un borrado global indiscriminado del destino
+- el hold-down se usa para frenar reintroduccion inmediata de destinos recientemente fallados
+- `m_inboundRoutes` y `m_backupRoutes` no son solo cache pasiva; participan en la reconstruccion del candidate set y en la recuperacion local ante fallos
+- el limite de backups hoy es practicamente **uno por destino**, porque `m_backupRoutes` es un `map<dest, RouteEntry>`
+- ante overflow global de tabla, la eviction prioriza primero backups; solo si no hay backups pasa a expulsar primarias
+
+## 11.9 Ciclo de vida real de una ruta
+
+| Estado o transici?n | Qu? la dispara | Resultado real |
+|---|---|---|
+| nueva primaria | no existe primaria para ese destino | entra a `m_routes` |
+| refresh misma primaria | llega candidato con mismo `nextHop` | se actualiza primaria existente |
+| switch de primaria | candidato distinto mejora a la primaria y pasa hysteresis si aplica | primaria vieja puede pasar a backup |
+| add backup | ya existe primaria, no hay backup y el candidato no reemplaza primaria | entra a `m_backupRoutes` |
+| refresh backup | llega candidato con mismo `nextHop` que el backup | se actualiza backup existente |
+| replace backup | candidato no reemplaza primaria pero s? mejora al backup | reemplaza backup |
+| poison por `nextHop` | llega anuncio unreachable/poison o falla ligada a ese vecino | invalida entradas que usen ese `nextHop`, no borra globalmente el destino |
+| expire/purge | timeout de ruta o limpieza de estado stale | salida de primaria o backup seg?n corresponda |
+| backup promotion | `GetRoute()` encuentra primaria no usable y backup v?lido | backup asciende bajo demanda |
 
 ---
 
@@ -876,6 +1148,28 @@ Como los beacons Pueyo/V2 no cargan `MeshMacHeader`, `MeshLoraNetDevice::Receive
 Eso se usa solo como wrapper interno de ns-3 para poder entregar un `from` direccionable al nivel superior y poblar la tabla `nodeId -> linkAddr`.
 
 La identidad on-air sigue siendo el `src` logico de 2 bytes.
+
+## 12.5 Qu? hace, qu? no hace y c?mo leerlo
+
+Qu? hace hoy:
+
+- desacopla el baseline comparable del serializer V2 gen?rico
+- anuncia solo `destination + score`
+- reconstruye localmente costo de camino y atributos auxiliares al recibir
+
+Qu? no hace:
+
+- no anuncia `hops`, `sf`, `toaUs` ni `rawMetric` como verdad on-air por entrada
+- no convierte el beacon comparable en una copia wire-exacta del estado interno de `RoutingDv`
+
+C?mo debe leerse:
+
+- el beacon comparable es un canal de reachability cuantizada, no un volcado completo de la tabla de rutas
+- la tabla local del receptor siempre es resultado de:
+  - anuncio recibido
+  - enlace local al originador
+  - configuraci?n local de m?trica/codificaci?n
+  - estado local de hold-down/backup/poison
 
 ---
 
@@ -954,6 +1248,27 @@ El data-plane actual incluye:
 
 Esto evita loops triviales y duplicados durante forwarding multi-hop.
 
+## 13.7 Qu? hace, qu? no hace y c?mo leerlo
+
+Qu? hace hoy:
+
+- genera workload temporal peri?dico o agenda `pueyo_all_to_all`
+- decide `nextHop` y `sf` localmente en cada TX o forward
+- usa cola TX local incluso si `CSMA = false`
+- puede descartar antes del primer TX si no logra materializar el siguiente salto
+
+Qu? no hace:
+
+- no garantiza por s? solo que todo paquete objetivo del workload llegue a generarse si el runner fija una ventana temporal insuficiente
+- no usa el plan de forwarding del hop anterior como verdad obligatoria en el relay
+- no implica ACK/ARQ extremo a extremo
+
+C?mo debe leerse:
+
+- `generated_count` significa "la app s? cre? ese paquete"
+- `source_first_tx_count` significa "ese paquete s? ejecut? un primer TX", no "su primer hop fue exitoso"
+- `drop_no_route_src` y `drop_no_route_relay` significan "no se pudo materializar el siguiente salto", no solo "no exist?a ruta l?gica"
+
 ---
 
 # 14. Modelo temporal del experimento
@@ -1025,7 +1340,11 @@ Se usa dentro de la logica mesh y routing para:
 
 ### `LoRaDeviceEnergyModel` del Energy Framework
 
-`mesh_dv_baseline.cc` instala:
+`mesh_dv_baseline.cc` **solo** instala esta capa si:
+
+- `enableNs3EnergyFramework = true`
+
+Cuando eso ocurre, instala:
 
 - `BasicEnergySource` por nodo
 - `LoRaDeviceEnergyModel` por device mesh
@@ -1044,6 +1363,12 @@ Corrientes base configuradas:
 - IDLE `0.001 A`
 - SLEEP `0.0000002 A`
 
+Cuando `enableNs3EnergyFramework = false`:
+
+- no se instala `BasicEnergySource`
+- no se instala `LoRaDeviceEnergyModel`
+- el baseline comparable principal no depende de este backend para existir ni para correr
+
 ## 15.2 Uso funcional actual
 
 La energia actual influye en:
@@ -1052,7 +1377,47 @@ La energia actual influye en:
 - costo compuesto,
 - consumo del dispositivo durante TX/RX/CAD/IDLE.
 
-En el baseline comparable `toa_only`, la energia sigue registrandose, pero no gobierna la metrica principal.
+Lectura correcta:
+
+- `loramesh::EnergyModel` interno sigue existiendo como parte de la logica mesh
+- el Energy Framework de ns-3 es opcional
+- por tanto, activar `enableNs3EnergyFramework` no significa "encender energia desde cero", sino cambiar el backend de depletion explicito del dispositivo
+
+En el baseline comparable `toa_only`, la energia puede seguir registrandose, pero no gobierna la metrica principal de routing.
+
+En particular:
+
+- `pueyo2024_paper_like` no activa por si solo `enableNs3EnergyFramework`
+- `proposal_pueyo_like` tampoco lo activa por defecto
+
+Por eso no debe describirse el estado actual como una comparaci?n simple entre:
+
+- baseline sin energia
+- versus propuesta con Energy Framework ns-3
+
+## 15.3 Qu? hace, qu? no hace y c?mo leerlo
+
+Qu? hace hoy:
+
+- registra y consume energ?a en la l?gica mesh interna
+- permite que la energ?a entre al costo compuesto cuando la m?trica activa la usa
+- puede instalar adem?s un backend ns-3 de depletion expl?cito si el perfil o CLI lo habilitan
+
+Qu? no hace:
+
+- no separa experimentalmente "energ?a" como dimensi?n limpia por s? sola en los perfiles actuales
+- no convierte a `enableNs3EnergyFramework=true` en condici?n necesaria para que exista estado energ?tico utilizable
+
+C?mo debe leerse:
+
+- hoy "energ?a" significa una combinaci?n de:
+  - estado energ?tico interno
+  - reportabilidad
+  - posible backend adicional del Energy Framework
+- por tanto, cualquier comparaci?n de perfiles debe explicitar si est? comparando:
+  - m?trica compuesta con t?rmino energ?tico
+  - backend energ?tico
+  - o ambos
 
 ---
 
@@ -1116,21 +1481,37 @@ El JSON consolidado actual contiene secciones como:
 - `drops`
 - `thesis_metrics`
 
+Lectura importante:
+
+- varias secciones repiten aliases historicos del mismo valor
+- el resumen mezcla:
+  - m?tricas de paquete generado/entregado,
+  - m?tricas de intentos TX,
+  - y contadores de eventos PHY/control-plane
+- por tanto, no todo campo llamado `ratio` o `pdr` debe leerse como "porcentaje de paquetes entregados"
+
 ## 16.4 Definiciones importantes actuales
 
 El resumen exporta explicitamente:
 
 - `delivery_ratio`
+- `pdr`
 - `pdr_post_convergence`
 - `pdr_no_drain`
 - `source_first_tx_count`
+- `source_first_tx_ratio`
 - `delivered_per_tx_attempt`
+- `tx_attempts_per_generated`
+- `admission_ratio`
+- `source_admission_ratio`
 - `forwarded_unique_count`
 - `routes_total`
 - `control_tx_sent`
 - `data_tx_sent`
+- `rx_no_more_demodulators`
 - `rx_scan_miss_before_lock`
 - `rx_post_lock_interference_fail`
+- `pueyo_same_sf_overlap_events`
 - `queued_packets_end`
 
 Esto permite separar:
@@ -1142,6 +1523,168 @@ Esto permite separar:
 - perdidas de control-plane,
 - backlog,
 - y perdidas PHY.
+
+Para evitar ambig?edad:
+
+- el PDR baseline que se reporta en campa?as es `delivery_ratio`
+- `pdr` y `delivery_ratio` son equivalentes en el resumen actual
+- `delivery_ratio = delivered_count / generated_count`
+- ese denominador considera solo paquetes de datos realmente generados
+- los beacons no entran al PDR
+- si una corrida tuvo `generated_count < workload_target`, eso es un artefacto temporal de generaci?n, no una p?rdida PHY
+- dentro de la secci?n `pdr`, el campo `total_data_tx` hoy **no** representa intentos TX reales
+- en la implementaci?n actual `pdr.total_data_tx` se exporta con el mismo valor que `total_data_generated`
+- los intentos TX reales de datos est?n en:
+  - `pdr.legacy_total_data_tx_attempts`
+  - `tx_attempts.total_data_tx_attempts`
+
+Otras definiciones ?tiles:
+
+- `source_first_tx_count`
+  - paquetes generados que s? alcanzaron al menos un primer TX desde origen
+  - no significa que el primer hop haya sido recibido con ?xito
+  - hoy depende de que exista una marca en `m_firstTxTime`, es decir, de que el primer TX haya llegado a ejecutarse en el dispositivo
+- `source_first_tx_ratio`
+  - alias normalizado de `source_first_tx_count / generated_count`
+- `tx_attempts_per_generated`
+  - intentos TX de datos por paquete generado
+- `admission_ratio`
+  - alias del mismo `tx_attempts_per_generated` en el resumen actual
+- `source_admission_ratio`
+  - alias del mismo `source_first_tx_ratio` en el resumen actual
+  - no representa una metrica independiente adicional
+- `drop_no_route_src`
+  - paquete generado pero sin ruta utilizable en el origen
+- `drop_no_route_relay`
+  - paquete que ya sali? del origen pero muri? en un relay antes del siguiente TX
+  - en la instrumentacion actual mezcla:
+    - ausencia de ruta utilizable en el relay
+    - y ausencia de `linkAddr` utilizable para el `nextHop` del relay
+- `pdr_no_drain`
+  - PDR medido solo sobre paquetes generados antes de `dataStopSec` y entregados antes de `dataStopSec`
+  - sirve para aislar el efecto del drain posterior al fin de la fase de generaci?n
+- `legacy_pdr_tx_based`
+  - `delivered / totalDataTxLegacy`
+  - no es el PDR baseline usado en campa?as
+  - sirve como metrica historica basada en intentos TX, no en workload generado
+- `pdr_by_source`
+  - para cada `src`, usa `delivered_by_src / generated_by_src`
+  - si un origen no gener? trafico, no aparece
+- `delivery_by_destination`
+  - lista solo conteos absolutos entregados por `dst`
+  - no incluye denominador ni PDR por destino
+- `throughput.throughput_bps`
+  - usa `totalDataTxLegacy * payloadBits / activeTrafficSec`
+  - por tanto representa carga agregada intentada de datos, no goodput entregado
+- `throughput.goodput_bps`
+  - usa `deliveredPackets * payloadBits / activeTrafficSec`
+  - esta s? es la tasa ?til efectivamente entregada
+
+Importante para interpretar diagnosticos PHY:
+
+- `rx_no_more_demodulators`
+- `rx_post_lock_interference_fail`
+- `pueyo_same_sf_overlap_events`
+
+no son una particion paquete-a-paquete de las p?rdidas.  
+Son contadores de **eventos PHY** acumulados en la corrida.
+
+Consecuencias:
+
+- pueden ser mayores que `generated_count`
+- no deben leerse como porcentaje directo de paquetes perdidos
+- sirven para diagnosticar el regimen de presi?n del canal y del receptor, no para repartir causalmente el 100% del PDR perdido
+
+## 16.5 Cuantizacion y export de score
+
+La secci?n `quantization` no exporta solo "qu? score anunci? el nodo", sino un muestreo de c?mo el costo crudo local termina cuantizado.
+
+Campos y lectura correcta:
+
+- `metric_raw_*`
+  - resumen estad?stico del costo crudo positivo observado en `m_quantizationSamples`
+- `toa_cost_raw_*`
+  - alias exportado con el mismo valor que `metric_raw_*`
+  - el nombre es historico y puede ser enga?oso en `composite_score`
+  - en `composite_score` no debe leerse como "ToA puro"; sigue siendo el costo crudo cuantizable del modo activo
+- `score_quantized_*`
+  - resumen del score/costo ya cuantizado y listo para codificaci?n on-air
+- `quantization_collisions`
+  - cuenta cu?ntos valores crudos distintos (`rawMetricMilli`) colapsaron al mismo `scoreQuantized`
+  - no mide colisiones de paquetes ni colisiones PHY
+- `quantization_collision_ratio`
+  - `quantization_collisions / samples`
+- `saturation_count`
+  - cuenta cu?ntas muestras alcanzaron o excedieron el valor m?ximo representable por la codificaci?n vigente
+  - el umbral usa:
+    - `255` para `cost255` y `score255`
+    - `100` para `score100`
+  - en `composite_score`, adem?s considera `CompositeCostStep`
+- `saturation_ratio`
+  - `saturation_count / samples`
+- `sample_top_raw`
+  - no es "top best routes"
+  - es una muestra ordenada por `rawMetric` ascendente y luego por `scoreQuantized`
+  - sirve para inspeccionar cuantizaci?n, no para reconstruir toda la tabla de routing
+
+Interpretaci?n correcta:
+
+- una `quantization_collision` significa p?rdida de resoluci?n num?rica, no p?rdida de paquetes
+- una `saturation_count` alta sugiere que el rango on-air se est? quedando corto para el costo efectivo observado
+- estas m?tricas ayudan a auditar fidelidad de anuncio y orden relativo de rutas, no el PDR directamente
+
+## 16.6 Duplicaciones y aliases a no sobreinterpretar
+
+El resumen actual conserva varios aliases por compatibilidad o conveniencia anal?tica:
+
+- `pdr.pdr` == `pdr.delivery_ratio`
+- `pdr.tx_attempts_per_generated` == `pdr.admission_ratio`
+- `pdr.source_first_tx_ratio` == `pdr.source_admission_ratio`
+- `tx_attempts.attempts_per_generated` == `tx_attempts.tx_attempts_per_generated` == `tx_attempts.admission_ratio`
+- `tx_attempts.source_first_tx_ratio` == `tx_attempts.source_admission_ratio`
+- `control_plane.beacon_tx_sent` == `control_plane.control_tx_sent`
+- `queue_backlog.cad_busy_events` duplica el mismo acumulado tambi?n visible en `control_plane`
+- `queue_backlog.duty_blocked_events` complementa a `control_plane.duty_blocked_control/data`, no los reemplaza
+
+Una IA que lea el JSON no deber?a contar estos aliases como m?tricas independientes.
+
+`pdrEndWindowSec` no redefine esta m?trica base. Se usa para vistas derivadas como:
+
+- `pdr_post_convergence`
+- y otros cortes temporales exportados en el resumen
+
+## 16.7 Tabla de lectura m?nima del JSON
+
+| Campo JSON | Sem?ntica real |
+|---|---|
+| `pdr.delivery_ratio` | PDR baseline real: entregados / generados |
+| `pdr.pdr` | alias de `delivery_ratio` |
+| `pdr.total_data_generated` | workload realmente generado |
+| `pdr.total_data_tx` | alias hist?rico; hoy no son intentos TX reales |
+| `pdr.legacy_total_data_tx_attempts` | total de intentos TX de datos |
+| `pdr.source_first_tx_count` | paquetes generados que s? ejecutaron al menos un primer TX |
+| `tx_attempts.total_data_tx_attempts` | intentos TX de datos |
+| `forwarding.forwarded_unique_count` | paquetes ?nicos que s? fueron reenviados al menos una vez |
+| `control_plane.rx_no_more_demodulators` | eventos donde una nueva llegada no pudo adquirirse por receptor ocupado |
+| `control_plane.rx_post_lock_interference_fail` | eventos donde una recepci?n ya lockeada fall? por interferencia posterior |
+| `quantization.quantization_collisions` | colisiones de representaci?n num?rica, no de paquetes |
+| `queue_backlog.queued_packets_end` | paquetes a?n pendientes al final de la corrida |
+| `drops.drop_no_route_src` | ca?da en origen por falta de ruta usable o de `linkAddr` usable |
+| `drops.drop_no_route_relay` | ca?da en relay por falta de ruta usable o de `linkAddr` usable |
+
+## 16.8 Tabla de unidades correctas
+
+| Campo o familia | Unidad correcta |
+|---|---|
+| `delivery_ratio`, `pdr`, `pdr_no_drain`, `pdr_post_convergence` | fracci?n `0..1` |
+| `*_count`, `*_total`, `delivered`, `generated`, `queued_packets_end` | conteo |
+| `rx_no_more_demodulators`, `rx_post_lock_interference_fail`, `pueyo_same_sf_overlap_events` | eventos por corrida |
+| `throughput_bps`, `goodput_bps` | bits por segundo |
+| `*_delay_*_s`, `*_time_s_*`, `active_traffic_sec` | segundos |
+| `tx_attempts_per_generated`, `admission_ratio` | intentos por paquete generado |
+| `source_first_tx_ratio`, `source_admission_ratio` | fracci?n de paquetes generados |
+| `score_quantized_*` | valor cuantizado adimensional |
+| `metric_raw_*`, `toa_cost_raw_*` | costo crudo adimensional del modo activo |
 
 ---
 
@@ -1155,7 +1698,7 @@ La simulacion base sigue entrando por:
 
 ## 17.2 Runners de campana presentes en el arbol
 
-El directorio `scratch/LoRaMESH-sim/` contiene runners Python para campañas y auditorias.  
+El directorio `scratch/LoRaMESH-sim/` contiene runners Python para campa?as y auditorias.  
 Entre los que hoy forman parte del estado real del proyecto estan, por ejemplo:
 
 - `run_pueyo2024_paper_like_ab.py`
@@ -1166,6 +1709,12 @@ Entre los que hoy forman parte del estado real del proyecto estan, por ejemplo:
 - `run_pueyo_workload_parity_audit.py`
 - `run_pueyo_fig11_fig12_toa_bestof_campaign.py`
 - `make_fig11_fig12_report_pack.py`
+
+Importante:
+
+- esta lista no es exhaustiva
+- en la operacion real del proyecto tambien se han usado runners externos al arbol del repo y luego copiados al remoto
+- por tanto, la metodologia experimental vigente no debe inferirse solo desde los scripts presentes dentro de `scratch/LoRaMESH-sim/`
 
 ## 17.3 Rol de esta capa
 
@@ -1203,6 +1752,12 @@ El codigo actual incluye instrumentacion util para auditoria y validacion:
 - `PueyoSyntheticEntriesNodeId`
 - `PueyoSyntheticEntries`
 
+Matiz importante:
+
+- `PueyoValidationTrace` existe tanto en `MeshDvApp` como en `RoutingDv`
+- por tanto, al activarlo no solo se audita serializacion/parsing del beacon path Pueyo, sino tambien parte de la logica de actualizacion y seleccion de rutas
+- `PueyoSyntheticEntries*` en cambio pertenece al beacon path de la app y no redefine el algoritmo nominal de routing
+
 ## 18.2 Uso previsto
 
 Estos hooks sirven para:
@@ -1216,6 +1771,17 @@ Estos hooks sirven para:
 
 Estos hooks siguen presentes en el codigo actual, pero **no** forman parte del comportamiento nominal del protocolo.  
 Son soporte de validacion y deben documentarse como tal.
+
+## 18.4 Qu? no debe inferirse desde los hooks
+
+- activar `PueyoValidationTrace` no redefine la pol?tica nominal de routing
+- `PueyoSyntheticEntries*` no describe tr?fico o anuncios normales del baseline; describe un camino de prueba
+- la existencia de un hook no implica que esa sem?ntica est? activa en campa?as consolidadas
+
+C?mo debe leerse:
+
+- hooks = soporte de auditor?a
+- baseline = comportamiento sin instrumentaci?n extraordinaria
 
 ---
 
@@ -1263,6 +1829,13 @@ El perfil no garantiza por si solo:
 
 Eso sigue dependiendo del runner.
 
+## 19.5 Limites de interpretaci?n experimental
+
+- una ca?da de PDR no debe atribuirse autom?ticamente a routing si los contadores PHY dominan
+- un cambio de `1 m` en distancia no genera un salto duro si el modelo activo usa `shadowingSigmaDb > 0`
+- campa?as con mismo perfil pero distinta geometr?a no a?slan una sola causa f?sica
+- campa?as con `proposal_pueyo_like` no a?slan una sola causa algor?tmica porque cambian varias dimensiones a la vez
+
 ---
 
 # 20. Mapa funcional del flujo principal
@@ -1297,6 +1870,16 @@ Eso sigue dependiendo del runner.
 5. Construye `DataWireHeaderPueyo7b`.
 6. Encola y transmite via `MeshLoraNetDevice`.
 
+Matices importantes:
+
+- el paquete cuenta como `generated` antes de consultar la ruta
+- si `GetRoute(dst)` devuelve `nullptr`, el paquete cae como `drop_no_route_src`
+- si existe ruta logica pero no se puede resolver una `linkAddr` usable para el `nextHop`, tambien cae como `drop_no_route_src`
+- por tanto, en la instrumentacion actual `drop_no_route_src` mezcla:
+  - ausencia de ruta DV usable en el origen
+  - y ausencia de direccion de enlace utilizable para el siguiente salto
+- solo si ambas cosas pasan, ruta y `linkAddr`, el paquete entra al camino de `SendWithCSMA()` y recien ahi puede contribuir a `source_first_tx_count`
+
 ## 20.4 Forwarding
 
 1. Nodo intermedio recibe paquete.
@@ -1305,14 +1888,39 @@ Eso sigue dependiendo del runner.
 4. Selecciona nuevo `nextHop` y `sf` local.
 5. Reencola y retransmite.
 
+Matices importantes:
+
+- el relay vuelve a consultar `GetRoute(dst)` localmente; no reusa ciegamente el plan del hop anterior
+- si el relay no tiene ruta usable, el paquete cae como `drop_no_route_relay`
+- si hay ruta logica pero el relay no puede resolver una `linkAddr` usable para ese `nextHop`, tambien cae como `drop_no_route_relay`
+- por tanto, igual que en origen, `drop_no_route_relay` no significa exclusivamente "sin ruta DV"; significa "el relay no pudo materializar el siguiente salto"
+- solo despues de superar ruta y `linkAddr` el paquete vuelve a `SendWithCSMA()` y entra al regimen normal de cola / duty / CAD / PHY
+
 ---
 
-# 21. Recomendacion documental para el proyecto
+# 21. Errores de interpretacion frecuentes
+
+Errores que el FSD ya no deber?a permitir:
+
+- confundir `generated_count < workload_target` con p?rdida PHY
+- leer contadores PHY como porcentaje directo de paquetes perdidos
+- asumir que `drop_no_route_src` significa solo "sin ruta DV"
+- asumir que `drop_no_route_relay` significa solo "sin ruta DV"
+- asumir que `source_first_tx_ratio` implica recepci?n exitosa del primer hop
+- inferir sem?ntica del protocolo desde runners o scripts de campa?a
+- tratar `177/248` como umbrales geom?tricos exactos del modelo actual
+- contar aliases del JSON como si fueran m?tricas independientes
+- leer `pdr.total_data_tx` como intentos TX reales
+- leer `quantization_collisions` como colisiones de paquetes
+
+---
+
+# 22. Recomendacion documental para el proyecto
 
 A partir del estado actual del codigo, la narrativa correcta del simulador es esta:
 
 - `extended` existe, pero no es la referencia paper-like.
-- `pueyo2024` es el baseline comparable estricto.
+- `pueyo2024` es un baseline comparable historico mas amplio, no la replica paper-like estricta actual.
 - `pueyo2024_paper_like` es la mejor aproximacion actual al paper para resultados comparables.
 - El beacon comparable ya tiene path propio Pueyo.
 - El data wire comparable sigue siendo `pueyo7b`.
@@ -1321,7 +1929,7 @@ A partir del estado actual del codigo, la narrativa correcta del simulador es es
 
 ---
 
-# 22. Checklist de consistencia del documento
+# 23. Checklist de consistencia del documento
 
 Este documento ya refleja el estado actual del codigo en estos puntos criticos:
 
@@ -1339,7 +1947,7 @@ Este documento ya refleja el estado actual del codigo en estos puntos criticos:
 
 ---
 
-# 23. Conclusion
+# 24. Conclusion
 
 El simulador actual ya no debe describirse como una implementacion generica heredada de `wire_v2` con un baseline comparable parcial.  
 Hoy el proyecto tiene:
@@ -1353,9 +1961,10 @@ Hoy el proyecto tiene:
 La referencia principal para comparaciones paper-like debe documentarse en adelante como:
 
 - `pueyo2024_paper_like` para replica comparable principal,
-- `pueyo2024` como baseline estricto historico/comparable,
+- `pueyo2024` como baseline historico/comparable mas amplio,
 - `proposal_pueyo_like` y `proposal_pueyo_like_observed` como perfiles de propuesta comparables sobre la misma base.
 
 ---
 
 **Fin del FSD/LLD actualizado**
+

@@ -4,16 +4,15 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
+import shlex
 import shutil
-import statistics
 import subprocess
 import time
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 NS3_DIR = BASE_DIR.parents[1]
-NS3_BIN = NS3_DIR / "ns3"
+SIM_BIN = NS3_DIR / "build" / "scratch" / "LoRaMESH-sim" / "ns3-dev-mesh_dv_baseline-default"
 
 PROFILE = "pueyo2024_paper_like"
 TOPOLOGY = "pueyo_grid"
@@ -22,10 +21,15 @@ SPACING_M = 177
 SIDE = 8
 N_NODES = SIDE * SIDE
 SEEDS = [1, 2, 3]
+TEMPORAL_POLICY = "policy1_phase_only"
+TEMPORAL_ALLOW_VARIANT = True
+TEMPORAL_START_PHASE_MAX_SEC = 100.0
+TEMPORAL_PERIOD_JITTER_MAX_SEC = 0.0
+TEMPORAL_PERIOD_JITTER_SYMMETRIC = False
+TEMPORAL_ENABLE_DATA_SLOTS = False
 DATA_START_SEC = 300.0
 DRAIN_SEC = 600.0
 PDR_END_WINDOW_SEC = DRAIN_SEC
-METRICS_FLUSH_INTERVAL_SEC = 3600.0
 ROOT_OUTPUTS = [
     "mesh_dv_summary.json",
     "mesh_dv_metrics_tx.csv",
@@ -60,13 +64,9 @@ def stop_sec(n_nodes: int) -> float:
     return data_stop_sec(n_nodes) + DRAIN_SEC
 
 
-def dict_to_cli(args: dict[str, object]) -> str:
-    return " ".join(f"--{k}={v}" for k, v in args.items())
-
-
-def build_args(seed: int) -> dict[str, object]:
+def build_args(seed: int, forced_dst: int, only_src: int) -> dict[str, object]:
     area = (SIDE - 1) * SPACING_M
-    return {
+    args = {
         "profile": PROFILE,
         "nodePlacementMode": TOPOLOGY,
         "pueyoGridSide": SIDE,
@@ -84,11 +84,19 @@ def build_args(seed: int) -> dict[str, object]:
         "enablePcap": "false",
         "verboseLogs": "false",
         "enableNs3EnergyFramework": "false",
-        "enableMetricsPeriodicFlush": "true",
-        "metricsFlushIntervalSec": METRICS_FLUSH_INTERVAL_SEC,
         "enableMetricsEssentialOnly": "true",
+        "allowTemporalDesyncVariant": str(TEMPORAL_ALLOW_VARIANT).lower(),
+        "dataStartPhaseMaxSec": TEMPORAL_START_PHASE_MAX_SEC,
+        "dataPeriodJitterMaxSec": TEMPORAL_PERIOD_JITTER_MAX_SEC,
+        "dataPeriodJitterSymmetric": str(TEMPORAL_PERIOD_JITTER_SYMMETRIC).lower(),
+        "enableDataSlots": str(TEMPORAL_ENABLE_DATA_SLOTS).lower(),
         "rngRun": seed,
     }
+    if forced_dst >= 0:
+        args["forcedDataDestinationId"] = forced_dst
+    if only_src >= 0:
+        args["onlyGenerateFromNodeId"] = only_src
+    return args
 
 
 def move_root_outputs(dst_dir: Path, bucket: str) -> list[str]:
@@ -103,74 +111,29 @@ def move_root_outputs(dst_dir: Path, bucket: str) -> list[str]:
     return moved
 
 
-def percentile95(values: list[float]) -> float:
-    if not values:
-        return 0.0
-    values = sorted(values)
-    idx = max(0, math.ceil(0.95 * len(values)) - 1)
-    return float(values[idx])
-
-
 def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def parse_tx_csv(path: Path) -> tuple[int, int]:
-    source_keys: set[tuple[int, int, int]] = set()
-    forward_keys: set[tuple[int, int, int]] = set()
-    with path.open(newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            dst = int(row["dst"])
-            if dst == 0xFFFF:
-                continue
-            src = int(row["src"])
-            seq = int(row["seq"])
-            node_id = int(row["nodeId"])
-            key = (src, dst, seq)
-            if node_id == src:
-                source_keys.add(key)
-            else:
-                forward_keys.add(key)
-    return len(source_keys), len(forward_keys)
-
-
-def parse_delay_csv(path: Path) -> tuple[int, float, float]:
-    delivered_keys: set[tuple[int, int, int]] = set()
-    delivered_delays: list[float] = []
-    with path.open(newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            if int(row["delivered"]) != 1:
-                continue
-            key = (int(row["src"]), int(row["dst"]), int(row["seq"]))
-            if key in delivered_keys:
-                continue
-            delivered_keys.add(key)
-            delay = float(row["delay_gen_to_rx(s)"])
-            if delay >= 0.0:
-                delivered_delays.append(delay)
-    avg = statistics.mean(delivered_delays) if delivered_delays else 0.0
-    p95 = percentile95(delivered_delays)
-    return len(delivered_keys), float(avg), float(p95)
-
-
-def rebuild_row(run_dir: Path, seed: int, elapsed_s: float) -> dict:
+def rebuild_row(run_dir: Path, seed: int, elapsed_s: float, forced_dst: int, only_src: int) -> dict:
     summary = load_json(run_dir / "root_outputs" / "mesh_dv_summary.json")
-    tx_csv = run_dir / "root_outputs" / "mesh_dv_metrics_tx.csv"
-    delay_csv = run_dir / "root_outputs" / "mesh_dv_metrics_delay.csv"
-    source_first_tx_count, forwarded_unique_count = parse_tx_csv(tx_csv)
-    delivered_count, delay_avg_s, delay_p95_s = parse_delay_csv(delay_csv)
 
     sim = summary["simulation"]
     pdr = summary["pdr"]
     cp = summary["control_plane"]
     routes = summary["routes"]
+    forwarding = summary["forwarding"]
+    delay = summary["delay"]
     drops = summary["drops"]
     q = summary["queue_backlog"]
     expected = expected_generated_total(N_NODES)
     generated = int(pdr["total_data_generated"])
-    delivery_ratio = (float(delivered_count) / float(generated)) if generated > 0 else 0.0
+    delivered_count = int(pdr["delivered"])
+    delay_avg_s = float(delay["avg_s"])
+    delay_p95_s = float(delay["p95_s"])
+    delivery_ratio = float(pdr["delivery_ratio"])
+    source_first_tx_count = int(pdr["source_first_tx_count"])
+    forwarded_unique_count = int(forwarding["forwarded_unique_count"])
 
     row = {
         "profile": sim["profile"],
@@ -179,6 +142,7 @@ def rebuild_row(run_dir: Path, seed: int, elapsed_s: float) -> dict:
         "grid_side": SIDE,
         "n_nodes": N_NODES,
         "load": LOAD,
+        "temporal_policy": TEMPORAL_POLICY,
         "seed": seed,
         "data_start_sec": sim["data_start_sec"],
         "data_stop_sec": sim["data_stop_sec"],
@@ -221,13 +185,20 @@ def rebuild_row(run_dir: Path, seed: int, elapsed_s: float) -> dict:
         "run_dir": str(run_dir),
         "elapsed_s": elapsed_s,
         "reused_from": "",
-        "metrics_periodic_flush": True,
-        "metrics_flush_interval_sec": METRICS_FLUSH_INTERVAL_SEC,
+        "metrics_periodic_flush": False,
+        "metrics_flush_interval_sec": 0.0,
+        "temporal_allow_variant": TEMPORAL_ALLOW_VARIANT,
+        "data_start_phase_max_sec": TEMPORAL_START_PHASE_MAX_SEC,
+        "data_period_jitter_max_sec": TEMPORAL_PERIOD_JITTER_MAX_SEC,
+        "data_period_jitter_symmetric": TEMPORAL_PERIOD_JITTER_SYMMETRIC,
+        "enable_data_slots": TEMPORAL_ENABLE_DATA_SLOTS,
+        "forced_data_destination_id": forced_dst,
+        "only_generate_from_node_id": only_src,
     }
     return row
 
 
-def run_seed(outdir: Path, seed: int) -> dict:
+def run_seed(outdir: Path, seed: int, forced_dst: int, only_src: int) -> dict:
     run_dir = outdir / "runs_safe" / "n64" / f"seed_{seed}"
     done_row_path = run_dir / "rebuilt_row.json"
     if done_row_path.exists():
@@ -240,20 +211,29 @@ def run_seed(outdir: Path, seed: int) -> dict:
         "profile": PROFILE,
         "topology": TOPOLOGY,
         "n_nodes": N_NODES,
+        "temporal_policy": TEMPORAL_POLICY,
         "data_start_sec": DATA_START_SEC,
         "data_stop_sec": data_stop_sec(N_NODES),
         "stop_sec": stop_sec(N_NODES),
-        "metrics_periodic_flush": True,
-        "metrics_flush_interval_sec": METRICS_FLUSH_INTERVAL_SEC,
+        "metrics_periodic_flush": False,
+        "metrics_flush_interval_sec": 0.0,
+        "metrics_essential_only": True,
+        "temporal_allow_variant": TEMPORAL_ALLOW_VARIANT,
+        "data_start_phase_max_sec": TEMPORAL_START_PHASE_MAX_SEC,
+        "data_period_jitter_max_sec": TEMPORAL_PERIOD_JITTER_MAX_SEC,
+        "data_period_jitter_symmetric": TEMPORAL_PERIOD_JITTER_SYMMETRIC,
+        "enable_data_slots": TEMPORAL_ENABLE_DATA_SLOTS,
+        "forced_data_destination_id": forced_dst,
+        "only_generate_from_node_id": only_src,
         "moved_root_outputs_before_run": moved_before,
     }
     (run_dir / "run_meta_before.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
-    sim_args = "mesh_dv_baseline " + dict_to_cli(build_args(seed))
-    cmd = [str(NS3_BIN), "run", "--no-build", sim_args]
+    sim_args = build_args(seed, forced_dst, only_src)
+    cmd = [str(SIM_BIN)] + [f"--{k}={v}" for k, v in sim_args.items()]
     t0 = time.time()
     with (run_dir / "run_command.txt").open("w", encoding="utf-8") as f:
-        f.write(" ".join(cmd) + "\n")
+        f.write(shlex.join(cmd) + "\n")
     proc = subprocess.run(
         cmd,
         cwd=str(NS3_DIR),
@@ -272,7 +252,7 @@ def run_seed(outdir: Path, seed: int) -> dict:
     moved_after = move_root_outputs(run_dir, "root_outputs")
     if "mesh_dv_summary.json" not in moved_after:
         raise SystemExit(f"missing root summary after run at {run_dir}")
-    row = rebuild_row(run_dir, seed, elapsed)
+    row = rebuild_row(run_dir, seed, elapsed, forced_dst, only_src)
     done_row_path.write_text(json.dumps(row, indent=2), encoding="utf-8")
     return row
 
@@ -293,6 +273,8 @@ def parse_args() -> argparse.Namespace:
         default=BASE_DIR / "validation_results" / "pueyo_paper_like_grid_n64_safe_20260323",
     )
     parser.add_argument("--seeds", default="1,2,3")
+    parser.add_argument("--forced-dst", type=int, default=-1)
+    parser.add_argument("--only-src", type=int, default=-1)
     return parser.parse_args()
 
 
@@ -301,14 +283,17 @@ def main() -> None:
     outdir = args.outdir
     ensure_dir(outdir)
     seeds = [int(x) for x in args.seeds.split(",") if x.strip()]
+    forced_dst = int(args.forced_dst)
+    only_src = int(args.only_src)
 
     rows: list[dict] = []
     for seed in seeds:
         print(
-            f"[N64 safe] seed={seed} dataStop={data_stop_sec(N_NODES):.0f}s stop={stop_sec(N_NODES):.0f}s",
+            f"[N64 safe] seed={seed} dataStop={data_stop_sec(N_NODES):.0f}s stop={stop_sec(N_NODES):.0f}s "
+            f"forcedDst={forced_dst} onlySrc={only_src}",
             flush=True,
         )
-        row = run_seed(outdir, seed)
+        row = run_seed(outdir, seed, forced_dst, only_src)
         rows.append(row)
         write_rows_csv(outdir / "pueyo_paper_like_grid_n64_safe_results_raw.csv", rows)
 

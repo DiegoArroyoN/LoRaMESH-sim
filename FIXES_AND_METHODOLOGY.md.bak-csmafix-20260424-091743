@@ -1,0 +1,142 @@
+# Fixes y Metodología — Simulador LoRa Mesh DV (NS-3)
+**Fecha:** 2026-04-20  
+**Referencia:** Pueyo-Centelles 2024, "A Minimalistic Distance-Vector Routing Protocol for LoRa Mesh Networks", IEEE Access 2024  
+**Repo:** `/home/diego/sim/LoRaMESH-sim-frozen-20260327/`
+
+---
+
+## 1. Fixes de Validez (B1–B5)
+
+### B1 — Contador `origin_pending_at_stop`
+**Archivo:** `scratch/LoRaMESH-sim/mesh_dv_app.h`, `mesh_dv_app.cc`, `metrics_collector.h`, `metrics_collector.cc`  
+**Problema:** No había forma de saber cuántos paquetes origen quedaban en cola al terminar la simulación.  
+**Fix:** Se añadió `uint64_t m_originPendingAtStop{0}` incrementado en `StopApplication()` sobre paquetes aún pendientes de transmitir. Se exporta en `runtime_stats.origin_pending_at_stop` del JSON de resumen.  
+**Semántica:** `m_dataPacketsGenerated` NO cambia — sigue contando paquetes generados en memoria. `originPendingAtStop` es un contador diagnóstico opcional para post-proceso.
+
+### B2 — `dedupWindow` 86400s (24h)
+**Archivo:** `scratch/LoRaMESH-sim/mesh_dv_app.h` y `mesh_dv_baseline.cc`  
+**Problema:** Valor por defecto era 600s. En simulaciones largas (Low load, N grande), las ventanas de deduplicación se purgaban antes de terminar la simulación, causando que paquetes duplicados tardíos se contaran como entregas nuevas → PDR inflado artificialmente.  
+**Fix:** Default cambiado a 86400s (> cualquier `stopSec` planeado). El PDR resultante (~53% en N=9 seed=1) es el valor real; el anterior ~77% era falso.
+
+### B4 — `SetStream` por nodo para reproducibilidad RNG
+**Archivo:** `scratch/LoRaMESH-sim/mesh_dv_app.cc`, `src/loramesh/model/loramesh-routing-dv.cc`  
+**Problema:** Los RNGs no tenían stream fijo por nodo, por lo que añadir/quitar nodos cambiaba los resultados de todos los demás.  
+**Fix:**
+- `MeshDvApp`: `m_rng->SetStream(1000000 + nodeId)`
+- `LoRaMeshRoutingDv`: `m_rng->SetStream(2000000 + nodeId)`  
+**Efecto:** Tres corridas con `rngRun=1` producen hashes md5 idénticos; `rngRun=2` produce hashes distintos → reproducibilidad verificada.
+
+### B5 — Bug de conteo e2e en `ForwardWithTtl` (solo protocolo v1)
+**Archivo:** `scratch/LoRaMESH-sim/mesh_dv_app.cc`  
+**Problema:** El conteo de paquetes entregados e2e estaba gateado con `if (myId == m_collectorNodeId)`, ignorando entregas en nodos no-colector.  
+**Fix:** Se eliminó el gate; todos los nodos incrementan el contador e2e cuando son el destino final. Solo afecta a `wireFormat=v1` (legacy); pueyo7b no se ve afectado.
+
+---
+
+## 2. Fix de Métrica — C4: Fórmula Throughput
+
+**Archivo:** `scratch/LoRaMESH-sim/metrics_collector.h`, `metrics_collector.cc`  
+**Problema:** `throughput_bps` usaba `totalDataTxLegacy` (intentos de TX = 2145 para N=9) en lugar de recepciones unicast exitosas de cualquier hop.  
+**Definición paper (Pueyo 2024):**
+> "Throughput: cantidad total de datos válidos (solo payload) transmitidos por cualquier nodo y recibidos correctamente (sin colisiones) por el destinatario indicado en la cabecera del mensaje."
+
+**Fix:**
+1. Añadido `uint32_t m_dataRxAnyHopCount{0}` en `MetricsCollector` (privado)
+2. Incrementado en `RecordRx()` ANTES del gate `essentialMetricsOnly`, filtrado a `dst != 0xFFFF` (excluye beacons broadcast)
+3. Fórmula: `throughputBps = (m_dataRxAnyHopCount × payloadBits) / activeTrafficSec`
+4. Exportado en JSON bajo `throughput.data_rx_any_hop_count`
+
+**Resultado verificado (N=9, grid 177m, stopSec=2100, rngRun=1):**
+
+| KPI | Antes | Después | Paper |
+|-----|-------|---------|-------|
+| throughput_bps | 170.746 | **105.711** | any-hop RX × payload / t |
+| goodput_bps | 74.667 | 74.667 | e2e × payload / t ✓ |
+| PDR | 0.5345 | 0.5345 | delivered/generated ✓ |
+| delay.avg_s | 0.1545 | 0.1545 | avg sobre entregados ✓ |
+
+---
+
+## 3. Mejora Metodológica — C2/Option B: `autoDataStartSec`
+
+**Archivo:** `scratch/LoRaMESH-sim/mesh_dv_baseline.cc`  
+**Contexto:** El parámetro `dataStartSec=90s` (fijo) es insuficiente para N≥36 porque la convergencia DV en grids grandes requiere `diameter × beacon_interval` (hasta ~840s para N=64).  
+**Nota:** Esto **no afecta PDR** (los paquetes generados antes de que exista ruta quedan en queue y se reenvían cuando aparece la ruta). Sí afecta la latencia reportada.
+
+**Nuevo flag CLI:**
+```
+--autoDataStartSec=true   # Option B: escala por diámetro del grafo
+--autoDataStartSec=false  # Option A: mantiene dataStartSec=90s (default)
+```
+
+**Fórmula Option B:**
+```
+diameter    = 2 × (gridSide - 1)
+warmupHops  = floor(60s / beaconIntervalWarm)   = 1 para pueyo_paper_like
+remHops     = max(0, diameter - warmupHops)
+convSec     = 60 + remHops × beaconIntervalStable
+dataStartSec = ceil(convSec × 1.3)              # margen 30%
+```
+
+**`dataStartSec` resultante por N:**
+
+| N | Option A | Option B |
+|---|----------|----------|
+| 9 (3×3) | 90 s | 312 s |
+| 16 (4×4) | 90 s | 468 s |
+| 25 (5×5) | 90 s | 624 s |
+| 36 (6×6) | 90 s | 780 s |
+| 49 (7×7) | 90 s | 936 s |
+| 64 (8×8) | 90 s | 1092 s |
+
+---
+
+## 4. Script de Verificación Pre-Campaña: `smoke_verify.sh`
+
+**Ubicación:** `smoke_verify.sh` (raíz del repo)  
+**Uso:**
+```bash
+bash smoke_verify.sh             # completo: md5 + KPIs (~2 min)
+bash smoke_verify.sh --skip-md5  # solo KPIs
+bash smoke_verify.sh --verbose   # output completo del simulador
+```
+
+**Checks (N=9, grid 177m, stopSec=2100, rngRun=1):**
+| Check | Valor de referencia |
+|-------|---------------------|
+| md5 rx.csv | `84c7b7a72a910c415d7781792c9fa3c4` |
+| md5 tx.csv | `2b8f7c8171ce490a9a9f7c5b49ee7e6c` |
+| PDR | 0.5345 (938/1755) |
+| throughput_bps | 105.711 |
+| data_rx_any_hop | 1328 |
+| goodput_bps | 74.667 |
+| delay.avg_s | 0.154526 |
+| delay.count | 938 |
+
+---
+
+## 5. Alineación con Paper: Ecuaciones KPI
+
+| KPI | Ecuación implementada | Alineación |
+|-----|----------------------|------------|
+| **PDR** | `delivered_e2e / total_generated` | ✅ exacta |
+| **Throughput** | `any_hop_unicast_RX × payload_bits / active_sec` | ✅ exacta (post C4-fix) |
+| **Goodput** | `delivered_e2e × payload_bits / active_sec` | ✅ exacta |
+| **Latency** | `mean(t_rx_final - t_gen)` solo sobre entregados | ✅ exacta |
+
+**Configuración de tráfico (paper):**
+- Paquete: 27B total = 7B header + 20B payload (160 bits)
+- Por nodo: 100 paquetes × cada uno de los (N−1) destinos = `100×(N−1)` paquetes
+- Destinos en orden aleatorio (`--trafficMode=pueyo_all_to_all`)
+- 4 niveles de carga: Low=100s, Medium=10s, High=1s, Saturation=0.1s entre paquetes
+
+---
+
+## 6. Backups
+
+Todos los archivos modificados tienen backups automáticos con timestamp:
+```
+metrics_collector.h.bak-c4fix-20260420-100504
+metrics_collector.cc.bak-c4fix-20260420-100504
+mesh_dv_baseline.cc.bak-optionB-20260420-...
+```

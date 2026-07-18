@@ -139,6 +139,10 @@ MetricsCollector::RecordRx(uint32_t nodeId,
     event.energyFrac = energyFrac;
     event.isForwarded = isForwarded;
 
+    // C4-fix (paper throughput): count any-hop successful unicast RX.
+    // dst == 0xFFFF are broadcast beacons and are excluded per paper definition.
+    if (dst != 0xFFFF) { m_dataRxAnyHopCount++; }
+
     if (!m_essentialMetricsOnly)
     {
         m_rxEvents.push_back(event);
@@ -310,6 +314,18 @@ MetricsCollector::RecordOverhead(uint32_t nodeId,
     ev.seq = seq;
     ev.hops = hops;
     ev.sf = sf;
+    // §EssentialFix: contadores agregados SIEMPRE (chicos, van al JSON), aunque
+    // essentialOnly descarte el vector detallado (que solo se usaba para CSV).
+    if (kind == "beacon")
+    {
+        m_aggBeaconBytes += bytes;
+        m_aggBeaconCount++;
+    }
+    else
+    {
+        m_aggDataBytes += bytes;
+        m_aggDataCount++;
+    }
     if (!m_essentialMetricsOnly)
     {
         m_overheadEvents.push_back(ev);
@@ -799,6 +815,26 @@ MetricsCollector::RecordNodeDeath(uint32_t nodeId, double energyFrac, const std:
                                                  << " dead nodes at t=" << m_t50Cached << "s");
         }
     }
+
+    // Hook dinámico de parada por agotamiento total.
+    // Cuando todos los nodos están muertos, la red ya no puede transmitir nada;
+    // seguir simulando solo consume CPU sin aportar datos. Detenemos la simulación
+    // y dejamos que los exportadores escriban los JSON/CSV con el estado final.
+    // El techo absoluto (Simulator::Stop al stopSec configurado) sigue vigente
+    // si esto nunca se alcanza dentro del horizonte experimental.
+    if (m_stopOnFullDepletion && m_totalNodes > 0 &&
+        m_deadNodes.size() >= m_totalNodes)
+    {
+        if (!m_fullDepletionTriggered)
+        {
+            m_fullDepletionTriggered = true;
+            NS_LOG_INFO("Full network depletion ("
+                        << m_deadNodes.size() << "/" << m_totalNodes
+                        << " nodes dead) at t=" << event.timestamp.GetSeconds()
+                        << "s. Triggering Simulator::Stop().");
+            Simulator::Stop();
+        }
+    }
 }
 
 void
@@ -998,20 +1034,11 @@ MetricsCollector::ExportToJson(std::string prefix)
         }
     }
 
-    // Count overhead
-    uint32_t beaconBytes = 0;
-    uint32_t dataBytes = 0;
-    for (const auto& e : m_overheadEvents)
-    {
-        if (e.kind == "beacon")
-        {
-            beaconBytes += e.bytes;
-        }
-        else
-        {
-            dataBytes += e.bytes;
-        }
-    }
+    // §EssentialFix: usar contadores agregados (SIEMPRE válidos, no dependen
+    // de essentialOnly). Antes se iteraba m_overheadEvents que con essentialOnly
+    // queda vacío → bytes salían en 0 en el JSON.
+    const uint64_t beaconBytes = m_aggBeaconBytes;
+    const uint64_t dataBytes = m_aggDataBytes;
 
     // Aggregate runtime queue/CAD/duty/drop stats
     uint64_t txQueueLenEndTotal = 0;
@@ -1026,6 +1053,7 @@ MetricsCollector::ExportToJson(std::string prefix)
     uint64_t dropNoRouteRelay = 0;
     uint64_t dropTtlExpired = 0;
     uint64_t dropQueueOverflow = 0;
+    uint64_t dropMaxCsmaRetries = 0;
     uint64_t dropBacktrack = 0;
     uint64_t dropOther = 0;
     uint64_t beaconScheduled = 0;
@@ -1041,6 +1069,10 @@ MetricsCollector::ExportToJson(std::string prefix)
     uint64_t rxScanMissBeforeLock = 0;
     uint64_t rxPostLockInterferenceFail = 0;
     uint64_t rxNoMoreDemodDrops = 0;
+    uint64_t dataCollisionDrops = 0;
+    uint64_t beaconCollisionDrops = 0;
+    uint64_t dataBusyDrops = 0;
+    uint64_t beaconBusyDrops = 0;
     uint64_t pueyoSameSfOverlapEvents = 0;
     uint64_t pueyoDestructiveOverlapDrops = 0;
     uint64_t pueyoCaptureOrTimingSurvivals = 0;
@@ -1073,6 +1105,10 @@ MetricsCollector::ExportToJson(std::string prefix)
     uint64_t beaconTxAtDataStop = 0;
     uint64_t beaconRxAtDataStop = 0;
     uint64_t queuedPacketsAtDataStop = 0;
+    uint64_t originPendingAtStop = 0; // [B1]
+    uint64_t originPendingDuty = 0;   // §LossFine
+    uint64_t originPendingEnergy = 0; // §LossFine
+    uint64_t relayPendingEnd = 0;     // §LossFine
     std::vector<uint32_t> queueLensPerNode;
     queueLensPerNode.reserve(m_runtimeStatsByNode.size());
     for (const auto& kv : m_runtimeStatsByNode)
@@ -1090,6 +1126,7 @@ MetricsCollector::ExportToJson(std::string prefix)
         dropNoRouteRelay += s.dropNoRouteRelay;
         dropTtlExpired += s.dropTtlExpired;
         dropQueueOverflow += s.dropQueueOverflow;
+        dropMaxCsmaRetries += s.dropMaxCsmaRetries;
         dropBacktrack += s.dropBacktrack;
         dropOther += s.dropOther;
         beaconScheduled += s.beaconScheduled;
@@ -1105,6 +1142,10 @@ MetricsCollector::ExportToJson(std::string prefix)
         rxScanMissBeforeLock += s.rxScanMissBeforeLock;
         rxPostLockInterferenceFail += s.rxPostLockInterferenceFail;
         rxNoMoreDemodDrops += s.rxNoMoreDemodDrops;
+        dataCollisionDrops += s.dataCollisionDrops;
+        beaconCollisionDrops += s.beaconCollisionDrops;
+        dataBusyDrops += s.dataBusyDrops;
+        beaconBusyDrops += s.beaconBusyDrops;
         pueyoSameSfOverlapEvents += s.pueyoSameSfOverlapEvents;
         pueyoDestructiveOverlapDrops += s.pueyoDestructiveOverlapDrops;
         pueyoCaptureOrTimingSurvivals += s.pueyoCaptureOrTimingSurvivals;
@@ -1143,6 +1184,10 @@ MetricsCollector::ExportToJson(std::string prefix)
         beaconTxAtDataStop += s.beaconTxAtDataStop;
         beaconRxAtDataStop += s.beaconRxAtDataStop;
         queuedPacketsAtDataStop += s.queuedPacketsAtDataStop;
+        originPendingAtStop += s.originPendingAtStop; // [B1]
+        originPendingDuty += s.originPendingDuty;     // §LossFine
+        originPendingEnergy += s.originPendingEnergy; // §LossFine
+        relayPendingEnd += s.relayPendingEnd;         // §LossFine
         queueLensPerNode.push_back(s.txQueueLenEnd);
     }
     const double txQueueLenEndAvgNode =
@@ -1391,7 +1436,7 @@ MetricsCollector::ExportToJson(std::string prefix)
         }
     }
     const double throughputBps =
-        activeTrafficSec > 0.0 ? (static_cast<double>(totalDataTxLegacy) * payloadBits) / activeTrafficSec
+        activeTrafficSec > 0.0 ? (static_cast<double>(m_dataRxAnyHopCount) * payloadBits) / activeTrafficSec
                                : 0.0;
     const double goodputBps =
         activeTrafficSec > 0.0 ? (static_cast<double>(deliveredPackets) * payloadBits) / activeTrafficSec
@@ -1480,6 +1525,7 @@ MetricsCollector::ExportToJson(std::string prefix)
              << (m_runConfig.pueyoFloraLikeRx ? "true" : "false") << ",\n";
         file << "    \"enable_ns3_energy_framework\": "
              << (m_runConfig.enableNs3EnergyFramework ? "true" : "false") << ",\n";
+        file << "    \"battery_full_capacity_j\": " << m_runConfig.batteryFullCapacityJ << ",\n";
         file << "    \"shadowing_sigma_db\": " << m_runConfig.shadowingSigmaDb << ",\n";
         file << "    \"interference_model\": \"" << m_runConfig.interferenceModel << "\",\n";
         file << "    \"prop_model\": \"" << m_runConfig.propModel << "\",\n";
@@ -1589,6 +1635,7 @@ MetricsCollector::ExportToJson(std::string prefix)
          << ",\n";
     file << "    \"throughput_bps\": " << std::fixed << std::setprecision(3) << throughputBps
          << ",\n";
+    file << "    \"data_rx_any_hop_count\": " << m_dataRxAnyHopCount << ",\n";
     file << "    \"goodput_bps\": " << std::fixed << std::setprecision(3) << goodputBps << "\n";
     file << "  },\n";
     file << "  \"delay\": {\n";
@@ -1658,6 +1705,10 @@ MetricsCollector::ExportToJson(std::string prefix)
     file << "    \"rx_scan_miss_before_lock\": " << rxScanMissBeforeLock << ",\n";
     file << "    \"rx_post_lock_interference_fail\": " << rxPostLockInterferenceFail << ",\n";
     file << "    \"rx_no_more_demodulators\": " << rxNoMoreDemodDrops << ",\n";
+    file << "    \"data_collision_drops\": " << dataCollisionDrops << ",\n";
+    file << "    \"beacon_collision_drops\": " << beaconCollisionDrops << ",\n";
+    file << "    \"data_busy_drops\": " << dataBusyDrops << ",\n";
+    file << "    \"beacon_busy_drops\": " << beaconBusyDrops << ",\n";
     file << "    \"pueyo_same_sf_overlap_events\": " << pueyoSameSfOverlapEvents << ",\n";
     file << "    \"pueyo_destructive_overlap_drops\": " << pueyoDestructiveOverlapDrops << ",\n";
     file << "    \"pueyo_capture_or_timing_survivals\": " << pueyoCaptureOrTimingSurvivals
@@ -1766,6 +1817,10 @@ MetricsCollector::ExportToJson(std::string prefix)
          << txQueueLenEndP95Node << ",\n";
     file << "    \"txQueue_len_end_max_node\": " << txQueueLenEndMaxNode << ",\n";
     file << "    \"queued_packets_at_data_stop\": " << queuedPacketsAtDataStop << ",\n";
+    file << "    \"origin_pending_at_stop\": " << originPendingAtStop << ",\n"; // [B1]
+    file << "    \"origin_pending_duty\": " << originPendingDuty << ",\n"; // §LossFine
+    file << "    \"origin_pending_energy\": " << originPendingEnergy << ",\n"; // §LossFine
+    file << "    \"relay_pending_end\": " << relayPendingEnd << ",\n"; // §LossFine
     file << "    \"cad_busy_events\": " << cadBusyEvents << ",\n";
     file << "    \"cad_busy_events_local_power\": " << cadBusyEventsLocalPower << ",\n";
     file << "    \"cad_busy_events_oracle\": " << cadBusyEventsOracle << ",\n";
@@ -1779,6 +1834,7 @@ MetricsCollector::ExportToJson(std::string prefix)
     file << "    \"drop_no_route_relay\": " << dropNoRouteRelay << ",\n";
     file << "    \"drop_ttl_expired\": " << dropTtlExpired << ",\n";
     file << "    \"drop_queue_overflow\": " << dropQueueOverflow << ",\n";
+    file << "    \"drop_max_csma_retries\": " << dropMaxCsmaRetries << ",\n";
     file << "    \"drop_backtrack\": " << dropBacktrack << ",\n";
     file << "    \"drop_other\": " << dropOther << "\n";
     file << "  },\n";

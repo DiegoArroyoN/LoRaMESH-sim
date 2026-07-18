@@ -142,7 +142,7 @@ NormalizeWireFormat(std::string value)
 
 constexpr double kBatteryMvMin = 3000.0;
 constexpr double kBatteryMvMax = 4200.0;
-constexpr uint32_t kPueyoBeaconHeaderBytes = 5;
+constexpr uint32_t kPueyoBeaconHeaderBytes = 6;  // 6B: 5 base + 1 SoC (DC dropped)
 constexpr uint32_t kPueyoBeaconEntryBytes = 3;
 
 void
@@ -204,6 +204,28 @@ BatteryMvToEnergyFraction(uint16_t battMv)
     const double frac = (mv - kBatteryMvMin) / (kBatteryMvMax - kBatteryMvMin);
     return std::clamp(frac, 0.0, 1.0);
 }
+
+// §SoC-wire helpers ──────────────────────────────────────────────────────────
+// Convert a normalised energy fraction [0,1] to the 1-byte SoC field (0-100).
+// 0xFF is the "unknown / N/A" sentinel → receiver treats as full battery.
+inline uint8_t
+FractionToSoC8(double frac)
+{
+    return static_cast<uint8_t>(std::clamp(std::round(frac * 100.0), 0.0, 100.0));
+}
+
+// Convert a received SoC byte back to an energy fraction [0,1].
+// 0xFF = unknown → treat as 1.0 (full), so Ψ(b_j) = 0 (no penalty).
+inline double
+SoC8ToFraction(uint8_t soc)
+{
+    if (soc == 0xFF)
+    {
+        return 1.0;
+    }
+    return std::clamp(static_cast<double>(soc) / 100.0, 0.0, 1.0);
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 double
 Percentile95Double(std::vector<double> values)
@@ -344,6 +366,16 @@ MeshDvApp::GetTypeId()
                           DoubleValue(0.5),
                           MakeDoubleAccessor(&MeshDvApp::m_dataPeriodJitterMax),
                           MakeDoubleChecker<double>(0.0))
+            .AddAttribute("DataPeriodJitterSymmetric",
+                          "If true, apply zero-mean jitter to successive data periods.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&MeshDvApp::m_dataPeriodJitterSymmetric),
+                          MakeBooleanChecker())
+            .AddAttribute("DataStartPhaseMaxSec",
+                          "Initial per-node random phase offset added before the first data packet.",
+                          DoubleValue(0.0),
+                          MakeDoubleAccessor(&MeshDvApp::m_dataStartPhaseMaxSec),
+                          MakeDoubleChecker<double>(0.0))
             .AddAttribute("DataPayloadSizeBytes",
                           "Application payload size [bytes] for generated unicast data packets.",
                           UintegerValue(20),
@@ -374,6 +406,16 @@ MeshDvApp::GetTypeId()
                           DoubleValue(0.0),
                           MakeDoubleAccessor(&MeshDvApp::m_dataSlotJitterSec),
                           MakeDoubleChecker<double>(0.0))
+            .AddAttribute("DataStartPhaseOnly",
+                          "If true, data slots are applied only to the first generated packet.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&MeshDvApp::m_dataStartPhaseOnly),
+                          MakeBooleanChecker())
+            .AddAttribute("DataFixedPhaseCadence",
+                          "If true, preserve the node phase on every data period.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&MeshDvApp::m_dataFixedPhaseCadence),
+                          MakeBooleanChecker())
             .AddAttribute("PrioritizeBeacons",
                           "If true, enqueue DV beacons ahead of data in CSMA queue.",
                           BooleanValue(true),
@@ -399,6 +441,19 @@ MeshDvApp::GetTypeId()
                           DoubleValue(1.0),
                           MakeDoubleAccessor(&MeshDvApp::m_dataBackoffFactor),
                           MakeDoubleChecker<double>(0.0))
+            .AddAttribute("CsmaMaxRetries",
+                          "Maximum CSMA/CAD retries per TX queue entry before dropping. "
+                          "Entry is popped from the head when retries exceed this limit on "
+                          "sustained CAD-busy outcomes; counted as drop_max_csma_retries.",
+                          UintegerValue(8),
+                          MakeUintegerAccessor(&MeshDvApp::m_csmaMaxRetries),
+                          MakeUintegerChecker<uint32_t>(1))
+            .AddAttribute("CsmaTxQueueMax",
+                          "Maximum TX queue depth for CSMA/CAD path. On overflow the oldest "
+                          "non-beacon entry is dropped (counted as drop_queue_overflow).",
+                          UintegerValue(32),
+                          MakeUintegerAccessor(&MeshDvApp::m_csmaTxQueueMax),
+                          MakeUintegerChecker<uint32_t>(1))
             .AddAttribute("EnableControlGuard",
                           "Delay data transmissions shortly after DV beacon activity.",
                           BooleanValue(false),
@@ -408,6 +463,36 @@ MeshDvApp::GetTypeId()
                           "Guard window (seconds) after DV TX/RX before starting data TX.",
                           DoubleValue(0.0),
                           MakeDoubleAccessor(&MeshDvApp::m_controlGuardSec),
+                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute("StudyForwardSpreadEnable",
+                          "Study-only: spread relay forwarding attempts over a deterministic delay window.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&MeshDvApp::m_studyForwardSpreadEnable),
+                          MakeBooleanChecker())
+            .AddAttribute("StudyForwardBaseDelayMs",
+                          "Study-only: base relay forwarding delay in milliseconds.",
+                          DoubleValue(10.0),
+                          MakeDoubleAccessor(&MeshDvApp::m_studyForwardBaseDelayMs),
+                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute("StudyForwardSpreadMs",
+                          "Study-only: extra deterministic relay forwarding spread window in milliseconds.",
+                          DoubleValue(240.0),
+                          MakeDoubleAccessor(&MeshDvApp::m_studyForwardSpreadMs),
+                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute("StudySuperframeEnable",
+                          "Study-only: enforce a lightweight control/data superframe at dequeue time.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&MeshDvApp::m_studySuperframeEnable),
+                          MakeBooleanChecker())
+            .AddAttribute("StudySuperframePeriodSec",
+                          "Study-only: superframe period in seconds.",
+                          DoubleValue(1.0),
+                          MakeDoubleAccessor(&MeshDvApp::m_studySuperframePeriodSec),
+                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute("StudySuperframeCtrlWindowSec",
+                          "Study-only: control-only window length inside each superframe period (seconds).",
+                          DoubleValue(0.2),
+                          MakeDoubleAccessor(&MeshDvApp::m_studySuperframeCtrlWindowSec),
                           MakeDoubleChecker<double>(0.0))
             .AddAttribute("EnableDvFlooding",
                           "Enable explicit flooding of received DV beacons.",
@@ -922,6 +1007,8 @@ MeshDvApp::ScheduleExtraDvBeacons(const std::string& reason)
     if (!m_rng)
     {
         m_rng = CreateObject<UniformRandomVariable>();
+        // [B4] Stream determinista por-nodo (coherente con StartApplication).
+        m_rng->SetStream(static_cast<int64_t>(1000000) + static_cast<int64_t>(GetNode()->GetId()));
     }
 
     const Time sinceLast =
@@ -1248,10 +1335,22 @@ MeshDvApp::BuildAndSendDvPueyo(uint8_t sf)
 
     Ptr<Packet> p = Create<Packet>(payload.data(), payload.size());
 
+    // §DC-wire: presupuesto de DC restante del emisor [0-100]; 0xFF si MAC no disponible.
+    uint8_t dcRem8 = 0xFF;
+    if (m_mac)
+    {
+        const double dcLim = m_mac->GetDutyCycleLimit();
+        const double dcUsed = m_mac->GetDutyCycleUsed();
+        const double dcFrac = (dcLim > 0.0) ? std::clamp(1.0 - dcUsed / dcLim, 0.0, 1.0) : 1.0;
+        dcRem8 = static_cast<uint8_t>(std::round(dcFrac * 100.0));
+    }
+
     BeaconWireHeaderPueyo hdr;
     hdr.SetSrc(myId);
     hdr.SetDst(0xFFFF);
     hdr.SetFlagsTtl(PackFlagsTtlV2(WirePacketTypeV2::BEACON, 0));
+    hdr.SetSoC(FractionToSoC8(GetEnergyFraction()));  // §SoC-wire
+    hdr.SetDcRemaining(dcRem8);  // §DC-wire
     p->AddHeader(hdr);
 
     MeshMetricTag traceTag;
@@ -1265,6 +1364,7 @@ MeshDvApp::BuildAndSendDvPueyo(uint8_t sf)
     traceTag.SetToaUs(ComputeLoRaToAUs(beaconSf, m_bw, m_cr, p->GetSize()));
     traceTag.SetBatt_mV(GetBatteryVoltageMv());
     traceTag.SetScoreX100(0);
+    traceTag.SetDcRemaining(dcRem8);  // §DC-wire
     p->AddPacketTag(traceTag);
 
     if (m_routing)
@@ -1323,6 +1423,16 @@ MeshDvApp::BuildAndSendDvV2(uint8_t sf)
 
     Ptr<Packet> p = Create<Packet>(payload.data(), payload.size());
 
+    // §DC-wire: presupuesto de DC restante del emisor [0-100]; 0xFF si MAC no disponible.
+    uint8_t dcRem8 = 0xFF;
+    if (m_mac)
+    {
+        const double dcLim = m_mac->GetDutyCycleLimit();
+        const double dcUsed = m_mac->GetDutyCycleUsed();
+        const double dcFrac = (dcLim > 0.0) ? std::clamp(1.0 - dcUsed / dcLim, 0.0, 1.0) : 1.0;
+        dcRem8 = static_cast<uint8_t>(std::round(dcFrac * 100.0));
+    }
+
     BeaconWireHeaderV2 hdr;
     hdr.SetSrc(myId);
     hdr.SetDst(0xFFFF);
@@ -1330,6 +1440,8 @@ MeshDvApp::BuildAndSendDvV2(uint8_t sf)
     // rp_counter is assigned/committed only on real TX (right before dev->Send succeeds).
     // Here we keep BEACON type and use a placeholder counter.
     hdr.SetFlagsTtl(PackFlagsTtlV2(WirePacketTypeV2::BEACON, 0));
+    hdr.SetSoC(FractionToSoC8(GetEnergyFraction()));  // §SoC-wire
+    hdr.SetDcRemaining(dcRem8);  // §DC-wire
     p->AddHeader(hdr);
 
     MeshMetricTag traceTag;
@@ -1343,6 +1455,7 @@ MeshDvApp::BuildAndSendDvV2(uint8_t sf)
     traceTag.SetToaUs(ComputeLoRaToAUs(beaconSf, m_bw, m_cr, p->GetSize()));
     traceTag.SetBatt_mV(GetBatteryVoltageMv());
     traceTag.SetScoreX100(0);
+    traceTag.SetDcRemaining(dcRem8);  // §DC-wire
     p->AddPacketTag(traceTag);
 
     if (m_routing)
@@ -1363,6 +1476,34 @@ MeshDvApp::BuildAndSendDvV2(uint8_t sf)
 }
 
 // Inicializa timers, callbacks y generación de tráfico.
+void
+MeshDvApp::OnPhyCollisionDrop(Ptr<const Packet> packet, uint32_t /*nodeId*/)
+{
+    MeshMetricTag tag;
+    if (packet->PeekPacketTag(tag) && tag.GetDst() == 0xFFFF)
+    {
+        ++m_beaconCollisionDrops;
+    }
+    else
+    {
+        ++m_dataCollisionDrops;
+    }
+}
+
+void
+MeshDvApp::OnPhyBusyDrop(Ptr<const Packet> packet, uint32_t /*nodeId*/)
+{
+    MeshMetricTag tag;
+    if (packet->PeekPacketTag(tag) && tag.GetDst() == 0xFFFF)
+    {
+        ++m_beaconBusyDrops;
+    }
+    else
+    {
+        ++m_dataBusyDrops;
+    }
+}
+
 void
 MeshDvApp::StartApplication()
 {
@@ -1419,6 +1560,9 @@ MeshDvApp::StartApplication()
 
     // RNG debe estar disponible antes de cualquier CAD/CSMA.
     m_rng = CreateObject<UniformRandomVariable>();
+    // [B4] Stream determinista por-nodo para reproducibilidad al variar N.
+    // Rango app: 1_000_000 + nodeId (colisión libre para N<=65535).
+    m_rng->SetStream(static_cast<int64_t>(1000000) + static_cast<int64_t>(GetNode()->GetId()));
     ResetStrictRoutingDataBudgets();
     ResetStrictForwardLocalBudgets();
     UpdateDataPeriod();
@@ -1433,7 +1577,6 @@ MeshDvApp::StartApplication()
     m_mac->SetDutyCycleWindow(Hours(1));
     m_mac->SetCadDuration(m_cadDuration);
     m_mac->SetDifsCadCount(m_difsCadCount);
-    m_mac->SetBackoffWindow(m_backoffWindow);
 
     // CRÍTICO: enlazar CsmaCadMac con LoraPhy para CAD real.
     if (m_mac)
@@ -1459,6 +1602,20 @@ MeshDvApp::StartApplication()
                 continue;
             }
             m_mac->SetPhy(phy);
+            // Connect exact PHY drop counters (data vs beacon)
+            {
+                Ptr<ns3::lorawan::SimpleGatewayLoraPhy> sgPhy =
+                    DynamicCast<ns3::lorawan::SimpleGatewayLoraPhy>(phy);
+                if (sgPhy)
+                {
+                    sgPhy->TraceConnectWithoutContext(
+                        "LostPacketBecauseInterference",
+                        MakeCallback(&MeshDvApp::OnPhyCollisionDrop, this));
+                    sgPhy->TraceConnectWithoutContext(
+                        "LostPacketBecauseNoMoreReceivers",
+                        MakeCallback(&MeshDvApp::OnPhyBusyDrop, this));
+                }
+            }
             phyLinked = true;
             break; // enlazar solo una vez
         }
@@ -1555,15 +1712,19 @@ MeshDvApp::StartApplication()
     // Programar generación de datos (controlada por TrafficMode)
     const double dataDelay = std::max(0.0, m_dataStartTimeSec);
     const double dataJitterMax = std::max(0.0, m_dataPeriodJitterMax);
-    const double dataJitter = m_rng ? m_rng->GetValue(0.0, dataJitterMax) : 0.0;
+    const double dataJitter =
+        (!m_dataPeriodJitterSymmetric && m_rng) ? m_rng->GetValue(0.0, dataJitterMax) : 0.0;
+    const double dataStartPhaseMax = std::max(0.0, m_dataStartPhaseMaxSec);
+    const double dataStartPhase = m_rng ? m_rng->GetValue(0.0, dataStartPhaseMax) : 0.0;
     m_dataStopLogged = false;
     if (!m_dataDestinations.empty())
     {
-        Time dataStartDelay = Seconds(dataDelay + dataJitter);
+        Time dataStartDelay = Seconds(dataDelay + dataStartPhase + dataJitter);
         if (m_enableDataSlots && m_dataSlotPeriodSec > 0.0)
         {
             dataStartDelay = ComputeNextDataSlotDelay(dataStartDelay);
         }
+        m_nextDataNominalTimeSec = (Simulator::Now() + dataStartDelay).GetSeconds();
         const double firstDataTimeSec = (Simulator::Now() + dataStartDelay).GetSeconds();
         if (m_dataStopTimeSec >= 0.0 && firstDataTimeSec >= m_dataStopTimeSec)
         {
@@ -1611,9 +1772,17 @@ MeshDvApp::StartApplication()
 
 // Cancela eventos y reporta estadísticas cuando se detiene la app.
 void
+MeshDvApp::ForceFinalFlush()
+{
+    StopApplication(); // §LossFine: reuse StopApplication reporting on early stop
+}
+
+void
 MeshDvApp::StopApplication()
 {
     NS_LOG_INFO("StopApplication(): node=" << GetNode()->GetId());
+    if (m_finalFlushed) { return; } // §LossFine
+    m_finalFlushed = true;
 
     if (m_evt.IsPending())
     {
@@ -1650,12 +1819,23 @@ MeshDvApp::StopApplication()
     if (!m_txQueue.empty())
     {
         const uint32_t myId = GetNode()->GetId();
+        const bool nodeDeadAtStop = (GetEnergyFraction() <= 1e-6); // §LossFine
         for (const auto& entry : m_txQueue)
         {
-            if (entry.tag.GetDst() == 0xFFFF || entry.tag.GetSrc() != myId)
+            if (entry.tag.GetDst() == 0xFFFF)
             {
                 continue;
             }
+            if (entry.tag.GetSrc() != myId)
+            {
+                m_relayPendingEnd++; // §LossFine: in-transit stuck at relay
+                continue;
+            }
+
+            // [B1] Paquete de origen mío aún pendiente al corte: se contabiliza
+            // para poder calcular PDR efectivo = delivered / (generated - originPending).
+            m_originPendingAtStop++;
+            if (nodeDeadAtStop) { m_originPendingEnergy++; } else { m_originPendingDuty++; } // §LossFine
 
             std::string reason = entry.pendingReason.empty() ? "queue_pending_end"
                                                              : entry.pendingReason;
@@ -1717,6 +1897,7 @@ MeshDvApp::StopApplication()
         runtimeStats.dropNoRouteRelay = m_dropNoRouteRelay;
         runtimeStats.dropTtlExpired = m_dropTtlExpired;
         runtimeStats.dropQueueOverflow = m_dropQueueOverflow;
+        runtimeStats.dropMaxCsmaRetries = m_dropMaxCsmaRetries;
         runtimeStats.dropBacktrack = m_dropBacktrack;
         runtimeStats.dropOther = m_dropOther;
         runtimeStats.beaconScheduled = m_beaconScheduled;
@@ -1753,6 +1934,10 @@ MeshDvApp::StopApplication()
         }
 
         runtimeStats.beaconRxOk = m_beaconRxOk;
+        runtimeStats.dataCollisionDrops = m_dataCollisionDrops;
+        runtimeStats.beaconCollisionDrops = m_beaconCollisionDrops;
+        runtimeStats.dataBusyDrops = m_dataBusyDrops;
+        runtimeStats.beaconBusyDrops = m_beaconBusyDrops;
         runtimeStats.firstUsableRouteTimeSec = m_firstUsableRouteTimeSec;
         runtimeStats.coverage80RouteTimeSec = m_coverage80RouteTimeSec;
         runtimeStats.routesAtDataStart = m_routesAtDataStart;
@@ -1765,6 +1950,10 @@ MeshDvApp::StopApplication()
         runtimeStats.beaconTxAtDataStop = m_beaconTxAtDataStop;
         runtimeStats.beaconRxAtDataStop = m_beaconRxAtDataStop;
         runtimeStats.queuedPacketsAtDataStop = m_queuedPacketsAtDataStop;
+        runtimeStats.originPendingAtStop = m_originPendingAtStop; // [B1]
+        runtimeStats.originPendingDuty = m_originPendingDuty;     // §LossFine
+        runtimeStats.originPendingEnergy = m_originPendingEnergy; // §LossFine
+        runtimeStats.relayPendingEnd = m_relayPendingEnd;         // §LossFine
         runtimeStats.sfLinkSamples = m_sfLinkSamples;
         runtimeStats.sfLinkObservedMismatch = m_sfLinkObservedMismatch;
         if (m_routing)
@@ -2206,8 +2395,8 @@ MeshDvApp::L2Receive(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, co
                   << " hopsPlanned=" << unsigned(route->hops) << " nextHop=" << route->nextHop
                   << " reason=route_found");
 
-    // Forward datos con delay para evitar colisiones
-    Simulator::Schedule(MilliSeconds(10 + (myId % 5)), &MeshDvApp::ForwardWithTtl, this, p, newTag);
+    // Forward datos con delay para evitar colisiones.
+    Simulator::Schedule(ComputeStudyForwardDelay(newTag), &MeshDvApp::ForwardWithTtl, this, p, newTag);
 
     return true;
 }
@@ -2226,12 +2415,15 @@ MeshDvApp::ForwardWithTtl(Ptr<const Packet> pIn, const MeshMetricTag& inTag)
     // ========================================================================
     if (myId == dst)
     {
-        if (myId == m_collectorNodeId) // Si soy el GW
+        // [B5] Antes: solo contaba si myId == m_collectorNodeId (rompía PDR en
+        // pueyo_all_to_all con múltiples destinos). Ahora cuenta siempre que
+        // soy destino final, alineado con el path pueyo7b (mesh_dv_app.cc:4660+).
         {
             m_dataPacketsDelivered++;
-            NS_LOG_INFO(">>> DATA DELIVERED to GW: src=" << inTag.GetSrc()
-                                                         << " seq=" << inTag.GetSeq()
-                                                         << " hops=" << (int)inTag.GetHops());
+            NS_LOG_INFO(">>> DATA DELIVERED: src=" << inTag.GetSrc()
+                                                  << " dst=" << inTag.GetDst()
+                                                  << " seq=" << inTag.GetSeq()
+                                                  << " hops=" << (int)inTag.GetHops());
 
             // Registrar entrega final (no forward).
             LogRxEvent(inTag.GetSrc(),
@@ -2853,8 +3045,10 @@ MeshDvApp::TryGetBestRecentSf(const NeighborLinkInfo& link, Time now, uint8_t* o
 uint8_t
 MeshDvApp::ComputeMinSfBySensitivity(double rxPowerDbm) const
 {
-    // SX1276-like sensitivity table at 125 kHz BW for SF7..SF12.
-    static const double kSensitivityDbm[6] = {-123.0, -126.0, -129.0, -132.0, -133.0, -136.0};
+    // SX1276 sensitivity table at 125 kHz BW for SF7..SF12.
+    // §sens-fix: alineada con EndDeviceLoraPhy::sensitivity (PHY de recepcion real)
+    // y con la Tabla 3 de Pueyo-Centelles 2024. Antes estaba 1 dB desalineada del PHY.
+    static const double kSensitivityDbm[6] = {-124.0, -127.0, -130.0, -133.0, -135.0, -137.0};
     const double margin = m_sfLinkMarginDb;
     for (uint8_t sf = 7; sf <= 12; ++sf)
     {
@@ -3363,7 +3557,38 @@ MeshDvApp::SendWithCSMA(Ptr<Packet> packet,
     entry.deferCount = 0;
     entry.lastStateChange = Simulator::Now();
 
-    const bool strictSchedulerActive = (!m_csmaEnabled && m_usePueyoStrictQueueScheduler);
+    // CSMA/CAD queue cap: if full, drop the oldest non-beacon entry (preserve control plane).
+    // The in-air head (m_txBusy + pendingReason==tx_attempt_air) is never evicted.
+    if (m_txQueue.size() >= m_csmaTxQueueMax)
+    {
+        bool evicted = false;
+        for (auto it = m_txQueue.begin(); it != m_txQueue.end(); ++it)
+        {
+            const bool isBeacon = (it->tag.GetDst() == 0xFFFF);
+            const bool isInAirHead = (it == m_txQueue.begin() && m_txBusy &&
+                                      it->pendingReason == "tx_attempt_air");
+            if (!isBeacon && !isInAirHead)
+            {
+                NS_LOG_WARN("CSMA: tx queue cap reached (" << m_txQueue.size()
+                            << "), dropping oldest data entry seq=" << it->tag.GetSeq());
+                m_txQueue.erase(it);
+                m_dropQueueOverflow++;
+                evicted = true;
+                break;
+            }
+        }
+        if (!evicted)
+        {
+            // Only beacons or in-air head — drop the incoming packet itself.
+            NS_LOG_WARN("CSMA: tx queue cap reached (" << m_txQueue.size()
+                        << "), no evictable entry; dropping incoming packet seq="
+                        << entry.tag.GetSeq());
+            m_dropQueueOverflow++;
+            return;
+        }
+    }
+
+    const bool strictSchedulerActive = m_usePueyoStrictQueueScheduler;
 
     if (strictSchedulerActive)
     {
@@ -3473,7 +3698,7 @@ MeshDvApp::ProcessTxQueue()
         return;
     }
 
-    if (!m_csmaEnabled && m_usePueyoStrictQueueScheduler && m_txQueue.size() > 1)
+    if (m_usePueyoStrictQueueScheduler && m_txQueue.size() > 1)
     {
         std::size_t strictIdx = 0;
         if (SelectStrictQueueHead(&strictIdx))
@@ -3531,6 +3756,19 @@ MeshDvApp::ProcessTxQueue()
     }
 
     TxQueueEntry& entry = m_txQueue.front();
+    Time studySuperframeWait = Seconds(0);
+    std::string studySuperframeReason;
+    if (ComputeStudySuperframeWait(entry, &studySuperframeWait, &studySuperframeReason))
+    {
+        setPendingReason(entry, studySuperframeReason.c_str());
+        entry.deferCount++;
+        if (!m_backoffEvt.IsPending())
+        {
+            m_backoffEvt =
+                Simulator::Schedule(studySuperframeWait, &MeshDvApp::ProcessTxQueue, this);
+        }
+        return;
+    }
     if (m_enableControlGuard && entry.tag.GetDst() != 0xFFFF)
     {
         const Time lastDvActivity =
@@ -3589,8 +3827,21 @@ MeshDvApp::ProcessTxQueue()
         NS_LOG_INFO("CSMA: Canal ocupado detectado, aplicando backoff");
         m_backoffCount++;
         m_cadBusyEvents++;
+
+        // CSMA/CAD retry cap: bound per-packet retries on sustained busy channel.
+        entry.retries++;
+        if (entry.retries > m_csmaMaxRetries)
+        {
+            NS_LOG_WARN("CSMA: max retries (" << m_csmaMaxRetries
+                        << ") exceeded, dropping seq=" << entry.tag.GetSeq()
+                        << " dst=0x" << std::hex << entry.tag.GetDst() << std::dec);
+            m_dropMaxCsmaRetries++;
+            m_txQueue.pop_front();
+            ProcessTxQueue();
+            return;
+        }
         uint32_t backoffSlots =
-            m_mac ? m_mac->GetBackoffSlots() : m_rng->GetInteger(0, (1 << m_backoffWindow) - 1);
+            m_mac ? m_mac->GetBackoffSlots() : m_rng->GetInteger(0, 63);
         const bool isControl = (entry.tag.GetDst() == 0xFFFF);
         const double factor = isControl ? m_controlBackoffFactor : m_dataBackoffFactor;
         const uint32_t scaledSlots = (factor <= 0.0)
@@ -3699,7 +3950,20 @@ MeshDvApp::ProcessTxQueue()
                 beaconHdr.SetFlagsTtl(
                     PackFlagsTtlV2(WirePacketTypeV2::BEACON, entry.beaconRpCounter));
                 Ptr<Packet> rebuilt = beaconPayload->Copy();
-                rebuilt->AddHeader(beaconHdr);
+                if (m_wireFormat == "pueyo7b")
+                {
+                    // §wire-fix: emit a real 5B pueyo header on air (was V2 7B)
+                    BeaconWireHeaderPueyo phRebuild;
+                    phRebuild.SetSrc(beaconHdr.GetSrc());
+                    phRebuild.SetDst(beaconHdr.GetDst());
+                    phRebuild.SetFlagsTtl(beaconHdr.GetFlagsTtl());
+                    phRebuild.SetSoC(beaconHdr.GetSoC());  // 6B-fix: propagate SoC through rebuild
+                    rebuilt->AddHeader(phRebuild);
+                }
+                else
+                {
+                    rebuilt->AddHeader(beaconHdr);
+                }
                 p = rebuilt;
             }
             else
@@ -3725,7 +3989,6 @@ MeshDvApp::ProcessTxQueue()
                                                 << " sf=" << unsigned(entry.tag.GetSf()));
         if (m_mac)
         {
-            m_mac->NotifyTxResult(ok);
         }
 
         NS_LOG_INFO("CSMA: TX ok=" << ok);
@@ -4032,6 +4295,7 @@ MeshDvApp::BuildNeighborLinkInfo(const MeshMetricTag& tag,
     link.toaUs = toaUs;
     // REMOVED: link.rssiDbm - receptor obtiene de PHY
     link.batt_mV = tag.GetBatt_mV();
+    link.dc_remaining = tag.GetDcRemaining();  // §DC-aware: DC del vecino emisor
     loramesh::LinkStats stats;
     stats.toaUs = toaUs;
     stats.hops = link.hops;
@@ -4260,6 +4524,8 @@ MeshDvApp::ParseBeaconWirePacketPueyo(Ptr<const Packet> p,
     outHdr->SetSrc(hdr.GetSrc());
     outHdr->SetDst(hdr.GetDst());
     outHdr->SetFlagsTtl(hdr.GetFlagsTtl());
+    outHdr->SetSoC(hdr.GetSoC());  // §SoC-wire: propagate to v2 output header
+    outHdr->SetDcRemaining(hdr.GetDcRemaining());  // §DC-wire: propagate to v2 output header
     if (outPayload)
     {
         *outPayload = copy;
@@ -4489,14 +4755,16 @@ MeshDvApp::L2ReceiveV2(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
         link.hops = 1;
         link.sf = linkSf;
         link.toaUs = toaUsNeighbor;
-        link.batt_mV = 0;
+        const double rxEnergyFrac = SoC8ToFraction(beaconHdr.GetSoC());  // §SoC-wire fix
+        link.batt_mV = static_cast<uint16_t>(EnergyFractionToBatteryMv(rxEnergyFrac));
+        link.dc_remaining = beaconHdr.GetDcRemaining();  // §DC-wire fix: was defaulting to 0xFF
         loramesh::LinkStats stats;
         stats.toaUs = toaUsNeighbor;
         stats.hops = 1;
         stats.sf = rxSf;
         stats.snrDb = 0.0;
-        stats.batteryMv = 0;
-        stats.energyFraction = 1.0;
+        stats.batteryMv = static_cast<double>(link.batt_mV);
+        stats.energyFraction = rxEnergyFrac;  // §SoC-wire fix: was hardcoded 1.0
         const double cost = m_compositeMetric.ComputeLinkCost(myId, src, stats);
         link.scoreX100 =
             static_cast<uint16_t>(std::round(std::clamp(1.0 - cost, 0.0, 1.0) * 100.0));
@@ -4924,6 +5192,75 @@ MeshDvApp::ComputeNextDataSlotDelay(Time baseDelay)
 }
 
 // Genera tráfico de datos hacia el gateway cuando corresponde.
+Time
+MeshDvApp::ComputeStudyForwardDelay(const MeshMetricTag& tag) const
+{
+    const double baseMs = std::max(0.0, m_studyForwardBaseDelayMs);
+    if (!m_studyForwardSpreadEnable)
+    {
+        return MilliSeconds(baseMs + static_cast<double>(GetNode()->GetId() % 5));
+    }
+
+    const double spreadMs = std::max(0.0, m_studyForwardSpreadMs);
+    const uint32_t src = tag.GetSrc();
+    const uint32_t dst = tag.GetDst();
+    const uint32_t seq = tag.GetSeq();
+    const uint32_t nodeId = GetNode()->GetId();
+    const uint32_t salt = (nodeId * 1103515245u) ^ (src * 2654435761u) ^ (dst * 2246822519u) ^
+                          (seq * 3266489917u);
+    const double extraMs =
+        (spreadMs <= 0.0) ? 0.0 : std::fmod(static_cast<double>(salt), spreadMs + 1.0);
+    return MilliSeconds(baseMs + extraMs);
+}
+
+bool
+MeshDvApp::ComputeStudySuperframeWait(const TxQueueEntry& entry,
+                                      Time* outWait,
+                                      std::string* outReason) const
+{
+    if (!m_studySuperframeEnable || m_studySuperframePeriodSec <= 0.0)
+    {
+        return false;
+    }
+
+    const double period = m_studySuperframePeriodSec;
+    const double ctrlWindow = std::min(std::max(0.0, m_studySuperframeCtrlWindowSec), period);
+    const bool isControl = (entry.tag.GetDst() == 0xFFFF);
+    const double now = Simulator::Now().GetSeconds();
+    const double phase = std::fmod(now, period);
+
+    double waitSec = 0.0;
+    std::string reason;
+    if (isControl)
+    {
+        if (phase >= ctrlWindow)
+        {
+            waitSec = period - phase;
+            reason = "study_superframe_ctrl_wait";
+        }
+    }
+    else if (phase < ctrlWindow)
+    {
+        waitSec = ctrlWindow - phase;
+        reason = "study_superframe_data_wait";
+    }
+
+    if (waitSec <= 0.0)
+    {
+        return false;
+    }
+
+    if (outWait)
+    {
+        *outWait = Seconds(waitSec);
+    }
+    if (outReason)
+    {
+        *outReason = reason;
+    }
+    return true;
+}
+
 void
 MeshDvApp::GenerateDataTraffic()
 {
@@ -4971,12 +5308,44 @@ MeshDvApp::GenerateDataTraffic()
     TrackActiveDestination(dst);
     SendDataPacket(dst);
 
-    const double jitterMax = std::max(0.0, m_dataPeriodJitterMax);
-    const double jitter = m_rng ? m_rng->GetValue(0.0, jitterMax) : 0.0;
-    Time nextDelay = m_dataGenerationPeriod + Seconds(jitter);
-    if (m_enableDataSlots && m_dataSlotPeriodSec > 0.0)
+    Time nextDelay = Seconds(0);
+    if (m_enableDataSlots && !m_dataStartPhaseOnly && m_dataFixedPhaseCadence)
     {
-        nextDelay = ComputeNextDataSlotDelay(nextDelay);
+        const double periodSec = m_dataGenerationPeriod.GetSeconds();
+        if (m_nextDataNominalTimeSec < 0.0)
+        {
+            m_nextDataNominalTimeSec = Simulator::Now().GetSeconds();
+        }
+        m_nextDataNominalTimeSec += periodSec;
+        const double jitterLimit =
+            std::min(std::max(0.0, m_dataSlotJitterSec), std::max(0.0, periodSec) * 0.49);
+        const double jitter =
+            (m_rng && jitterLimit > 0.0) ? m_rng->GetValue(-jitterLimit, jitterLimit) : 0.0;
+        double sendTime = m_nextDataNominalTimeSec + jitter;
+        if (sendTime < Simulator::Now().GetSeconds())
+        {
+            sendTime = m_nextDataNominalTimeSec;
+        }
+        nextDelay = Seconds(sendTime) - Simulator::Now();
+        if (nextDelay < Seconds(0))
+        {
+            nextDelay = Seconds(0);
+        }
+    }
+    else
+    {
+        const double jitterMax = std::max(0.0, m_dataPeriodJitterMax);
+        double jitter = 0.0;
+        if (m_rng && jitterMax > 0.0)
+        {
+            jitter = m_dataPeriodJitterSymmetric ? m_rng->GetValue(-jitterMax, jitterMax)
+                                                 : m_rng->GetValue(0.0, jitterMax);
+        }
+        nextDelay = m_dataGenerationPeriod + Seconds(jitter);
+        if (m_enableDataSlots && !m_dataStartPhaseOnly && m_dataSlotPeriodSec > 0.0)
+        {
+            nextDelay = ComputeNextDataSlotDelay(nextDelay);
+        }
     }
     const double nextEventSec = (Simulator::Now() + nextDelay).GetSeconds();
     if (m_dataStopTimeSec >= 0.0 && nextEventSec >= m_dataStopTimeSec)

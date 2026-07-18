@@ -53,7 +53,6 @@ class CsmaCadMac : public Object
     Time GetDutyCycleWindow() const;
     void SetCadDuration(Time duration);
     void SetDifsCadCount(uint8_t count);
-    void SetBackoffWindow(uint8_t window);
     void SetMaxBackoffSlots(uint32_t slots);
     uint32_t GetMaxBackoffSlots() const;
     void SetMaxBackoffSlotsAbs(uint32_t slots);
@@ -63,6 +62,20 @@ class CsmaCadMac : public Object
     void SetCadContext(uint8_t sf, uint32_t bwHz);
     void UpdateTypicalDataToaSeconds(double toaSeconds);
     void UpdateTypicalCtrlToaSeconds(double toaSeconds);
+    /**
+     * \brief Success/failure callback to reset or increment the failure counter.
+     *
+     * Currently UNUSED in this build: LoRa broadcast has no link-layer ACK,
+     * so "tx success" is not an observable MAC-layer event. The previous
+     * caller in mesh_dv_app.cc was removed in §7.2 of FIXES_AND_METHODOLOGY
+     * because it was being invoked unconditionally on every PHY tx start,
+     * which produced a spurious m_failures=0 even when the frame was lost.
+     *
+     * Reserved for a future unicast-with-ACK MAC. In the meantime, the
+     * m_failures counter is managed exclusively by PerformChannelAssessment()
+     * (increment on CAD busy, reset on CAD clean) — see §8.5 of
+     * FIXES_AND_METHODOLOGY.md for the design rationale.
+     */
     void NotifyTxResult(bool success);
     uint32_t GetFailureCount() const;
     uint32_t GetLastBackoffSlots() const;
@@ -95,14 +108,12 @@ class CsmaCadMac : public Object
     double m_dutyCycleLimit;
     Time m_cadDuration;
     uint8_t m_difsCadCount;
-    uint8_t m_backoffWindow;
     std::deque<std::pair<Time, Time>> m_txHistory;
     std::deque<bool> m_cadHistory;
     uint32_t m_cadHistoryWindow;
     uint32_t m_minBackoffSlots;
     uint32_t m_maxBackoffSlots;
     uint32_t m_maxBackoffSlotsAbs;
-    bool m_maxBackoffSlotsExplicit;
     uint32_t m_backoffStep;
     uint32_t m_failures;
     uint32_t m_lastBackoffSlots;

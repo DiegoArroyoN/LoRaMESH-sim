@@ -28,20 +28,20 @@ LoRaDeviceEnergyModel::GetTypeId()
             .SetGroupName("Energy")
             .AddConstructor<LoRaDeviceEnergyModel>()
             .AddAttribute("TxCurrentA",
-                          "The current draw in Amperes during TX mode",
-                          DoubleValue(0.100), // 100 mA @ 14dBm (SX1276 Table 6, PA_BOOST)
+                          "TX current [A]. SX1276/77/78/79 DS: 120 mA at +20 dBm PA_BOOST.",
+                          DoubleValue(0.120), // 120 mA @ +20 dBm PA_BOOST [SX1276/77/78/79 DS, IDD_TXLORA]
                           MakeDoubleAccessor(&LoRaDeviceEnergyModel::SetTxCurrentA,
                                              &LoRaDeviceEnergyModel::GetTxCurrentA),
                           MakeDoubleChecker<double>())
             .AddAttribute("AutoTxCurrentFromPower",
                           "If true, TX current is auto-adjusted from txPowerDbm using anchor values.",
-                          BooleanValue(true),
+                          BooleanValue(false), // 20 dBm only; no interpolation needed
                           MakeBooleanAccessor(&LoRaDeviceEnergyModel::SetAutoTxCurrentFromPower,
                                               &LoRaDeviceEnergyModel::GetAutoTxCurrentFromPower),
                           MakeBooleanChecker())
             .AddAttribute("TxCurrentAt14dBmA",
-                          "Anchor TX current [A] at 14 dBm.",
-                          DoubleValue(0.100),
+                          "Anchor TX current [A] at 14 dBm (unused: sim operates at 20 dBm only).",
+                          DoubleValue(0.120), // set equal to 20 dBm anchor; unused in practice
                           MakeDoubleAccessor(&LoRaDeviceEnergyModel::SetTxCurrentAt14dBmA,
                                              &LoRaDeviceEnergyModel::GetTxCurrentAt14dBmA),
                           MakeDoubleChecker<double>(0.0))
@@ -53,25 +53,25 @@ LoRaDeviceEnergyModel::GetTypeId()
                           MakeDoubleChecker<double>(0.0))
             .AddAttribute("RxCurrentA",
                           "The current draw in Amperes during RX mode",
-                          DoubleValue(0.011), // 11 mA
+                          DoubleValue(0.0103), // 10.3 mA, LoRa BW=125 kHz [SX1276/77/78/79 DS, IDD_RXLORA]
                           MakeDoubleAccessor(&LoRaDeviceEnergyModel::SetRxCurrentA,
                                              &LoRaDeviceEnergyModel::GetRxCurrentA),
                           MakeDoubleChecker<double>())
             .AddAttribute("CadCurrentA",
                           "The current draw in Amperes during CAD mode",
-                          DoubleValue(0.011), // 11 mA (similar to RX)
+                          DoubleValue(0.0103), // 10.3 mA, same RX circuitry [SX1276/77/78/79 DS]
                           MakeDoubleAccessor(&LoRaDeviceEnergyModel::SetCadCurrentA,
                                              &LoRaDeviceEnergyModel::GetCadCurrentA),
                           MakeDoubleChecker<double>())
             .AddAttribute("IdleCurrentA",
                           "The current draw in Amperes during IDLE mode",
-                          DoubleValue(0.001), // 1 mA
+                          DoubleValue(0.0016), // 1.6 mA standby [SX1276/77/78/79 DS, IDD_STDB]
                           MakeDoubleAccessor(&LoRaDeviceEnergyModel::SetIdleCurrentA,
                                              &LoRaDeviceEnergyModel::GetIdleCurrentA),
                           MakeDoubleChecker<double>())
             .AddAttribute("SleepCurrentA",
                           "The current draw in Amperes during SLEEP mode",
-                          DoubleValue(0.0000002), // 0.2 µA
+                          DoubleValue(0.0000002), // 0.2 uA [SX1276/77/78/79 DS, IDD_SLEEP]
                           MakeDoubleAccessor(&LoRaDeviceEnergyModel::SetSleepCurrentA,
                                              &LoRaDeviceEnergyModel::GetSleepCurrentA),
                           MakeDoubleChecker<double>())
@@ -86,14 +86,14 @@ LoRaDeviceEnergyModel::GetTypeId()
 LoRaDeviceEnergyModel::LoRaDeviceEnergyModel()
     : m_source(nullptr),
       m_node(nullptr),
-      m_txCurrentA(0.100),
-      m_rxCurrentA(0.011),
-      m_cadCurrentA(0.011),
-      m_idleCurrentA(0.001),
-      m_sleepCurrentA(0.0000002),
-      m_autoTxCurrentFromPower(true),
-      m_txCurrentAt14dBmA(0.100),
-      m_txCurrentAt20dBmA(0.120),
+      m_txCurrentA(0.120),         // 120 mA @ +20 dBm PA_BOOST [SX1276/77/78/79 DS]
+      m_rxCurrentA(0.0103),        //  10.3 mA LoRa BW=125 kHz   [SX1276/77/78/79 DS]
+      m_cadCurrentA(0.0103),       //  10.3 mA (same RX circuits) [SX1276/77/78/79 DS]
+      m_idleCurrentA(0.0016),      //   1.6 mA standby            [SX1276/77/78/79 DS]
+      m_sleepCurrentA(0.0000002),  //   0.2 uA sleep              [SX1276/77/78/79 DS]
+      m_autoTxCurrentFromPower(false), // 20 dBm only, no interpolation
+      m_txCurrentAt14dBmA(0.120),  // unused (sim uses 20 dBm only)
+      m_txCurrentAt20dBmA(0.120),  // 120 mA @ +20 dBm PA_BOOST [SX1276/77/78/79 DS]
       m_lastTxPowerDbm(14.0),
       m_currentState(LoRaRadioState::IDLE),
       m_lastUpdateTime(Seconds(0)),

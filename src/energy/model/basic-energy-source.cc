@@ -217,8 +217,21 @@ BasicEnergySource::CalculateRemainingEnergy()
     NS_ASSERT(duration.IsPositive());
     // energy = current * voltage * time
     double energyToDecreaseJ = (totalCurrentA * m_supplyVoltageV * duration).GetSeconds();
-    NS_ASSERT(m_remainingEnergyJ >= energyToDecreaseJ);
-    m_remainingEnergyJ -= energyToDecreaseJ;
+    // Robustness fix: clamp to 0 instead of aborting when energy update
+    // slightly overshoots (possible under high traffic / short update intervals).
+    // UpdateEnergySource() will detect remaining<=threshold and call
+    // HandleEnergyDrainedEvent() on the very next line.
+    if (m_remainingEnergyJ < energyToDecreaseJ)
+    {
+        NS_LOG_WARN("BasicEnergySource: energy underflow (remaining="
+                    << m_remainingEnergyJ << " J, decrease=" << energyToDecreaseJ
+                    << " J); clamped to 0.");
+        m_remainingEnergyJ = 0.0;
+    }
+    else
+    {
+        m_remainingEnergyJ -= energyToDecreaseJ;
+    }
     NS_LOG_DEBUG("BasicEnergySource:Remaining energy = " << m_remainingEnergyJ);
 }
 

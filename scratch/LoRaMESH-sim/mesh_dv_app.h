@@ -100,6 +100,7 @@ class MeshDvApp : public Application
 
     void StartApplication() override;
     void StopApplication() override;
+    void ForceFinalFlush(); // §LossFine: flush final stats on early (death-hook) stop
 
   private:
     struct NeighborLinkInfo;
@@ -177,6 +178,8 @@ class MeshDvApp : public Application
     void BootstrapLinkAddrTableFromRx();
     void CountDropNoRouteSrc();
     void CountDropNoRouteRelay();
+    void OnPhyCollisionDrop(Ptr<const Packet> packet, uint32_t nodeId);
+    void OnPhyBusyDrop(Ptr<const Packet> packet, uint32_t nodeId);
 
     void SetEnableDvBroadcast(bool enable)
     {
@@ -312,8 +315,10 @@ class MeshDvApp : public Application
 
     uint8_t m_difsCadCount{3};
     Time m_cadDuration{MilliSeconds(5.5)};
-    uint8_t m_backoffWindow{8};
     uint8_t m_maxRetries{5};
+    // CSMA/CAD policy: bound retries on sustained busy channel and cap queue depth.
+    uint32_t m_csmaMaxRetries{8};
+    uint32_t m_csmaTxQueueMax{32};
 
     std::deque<TxQueueEntry> m_txQueue;
     Ptr<UniformRandomVariable> m_rng;
@@ -380,10 +385,15 @@ class MeshDvApp : public Application
     EventId m_dataGenerationEvt;
     Time m_dataGenerationPeriod{Seconds(10)}; // Se actualiza según TrafficLoad
     double m_dataPeriodJitterMax{0.5};        // Jitter en segundos
+    bool m_dataPeriodJitterSymmetric{false};  // Jitter de media cero en periodos sucesivos
+    double m_dataStartPhaseMaxSec{0.0};       // Fase inicial aleatoria [0,max]
     bool m_enableDataSlots{false};                   // Habilita micro-slots locales
     double m_dataSlotPeriodSec{0.0};                 // Periodo de slots para datos [s]
     double m_dataSlotJitterSec{0.0};                 // Jitter +/- dentro del slot [s]
     double m_dataSlotOffsetSec{0.0};                 // Offset fijo por nodo [s]
+    bool m_dataStartPhaseOnly{false};                // Usa slots solo para el primer envio
+    bool m_dataFixedPhaseCadence{false};             // Mantiene la fase fija en cada periodo
+    double m_nextDataNominalTimeSec{-1.0};           // Proximo tiempo nominal de generacion
     uint32_t m_dataPayloadSize{20};                  // 20 bytes por paquete
     uint32_t m_dataSeqPerNode{0};                    // Secuencia de datos por nodo
     uint32_t m_dataPacketsGenerated{0};              // Contador de datos generados
@@ -399,8 +409,13 @@ class MeshDvApp : public Application
     uint64_t m_dropNoRouteRelay{0};
     uint64_t m_dropTtlExpired{0};
     uint64_t m_dropQueueOverflow{0};
+    uint64_t m_dropMaxCsmaRetries{0};
     uint64_t m_dropBacktrack{0};
     uint64_t m_dropOther{0};
+    uint64_t m_dataCollisionDrops{0};
+    uint64_t m_beaconCollisionDrops{0};
+    uint64_t m_dataBusyDrops{0};
+    uint64_t m_beaconBusyDrops{0};
     uint64_t m_beaconScheduled{0};
     uint64_t m_beaconTxSent{0};
     uint64_t m_beaconRxOk{0};
@@ -421,6 +436,13 @@ class MeshDvApp : public Application
     uint64_t m_beaconTxAtDataStop{0};
     uint64_t m_beaconRxAtDataStop{0};
     uint64_t m_queuedPacketsAtDataStop{0};
+    // [B1] Paquetes que yo originé pero que seguían en mi txQueue al StopApplication.
+    // Se excluyen del denominador de PDR efectivo para no deflactar por cortes artificiales.
+    uint64_t m_originPendingAtStop{0};
+    uint64_t m_originPendingDuty{0};   // §LossFine: origin pending, node alive (duty-starved)
+    uint64_t m_originPendingEnergy{0}; // §LossFine: origin pending, node dead (energy)
+    uint64_t m_relayPendingEnd{0};     // §LossFine: in-transit pending at relay queue
+    bool m_finalFlushed{false};        // §LossFine: idempotency guard
     double m_beaconDelaySumSec{0.0};
     std::vector<double> m_beaconDelaySamplesSec;
     std::unordered_map<uint32_t, Time> m_beaconScheduledAtBySeq;
@@ -464,7 +486,7 @@ class MeshDvApp : public Application
         m_seenData;                       // {src,dst,seq} -> info
     Time m_seenDataWindow{Seconds(60)};   // 60 segundos
     Time m_seenPacketWindow{Minutes(10)}; // Ventana para deduplicación (solo sink)
-    Time m_dedupWindow{Seconds(600)};     // Ventana para deduplicación dataplane v2 (seq16)
+    Time m_dedupWindow{Seconds(86400)};   // [B2] 24h default: evita purgas en runs paper_like; CLI puede bajar
     double m_routeTimeoutFactor{6.0};     // Default ajustado para escenarios con duty cycle activo
     double m_sfMarginDb{2.0};
     std::map<std::tuple<uint32_t, uint32_t, uint32_t>, Time> m_deliveredSet; // solo sink (con TTL)
@@ -483,6 +505,12 @@ class MeshDvApp : public Application
     double m_dataBackoffFactor{1.0};
     bool m_enableControlGuard{false};
     double m_controlGuardSec{0.0};
+    bool m_studyForwardSpreadEnable{false};
+    double m_studyForwardBaseDelayMs{10.0};
+    double m_studyForwardSpreadMs{240.0};
+    bool m_studySuperframeEnable{false};
+    double m_studySuperframePeriodSec{1.0};
+    double m_studySuperframeCtrlWindowSec{0.2};
     Time m_lastDvTxTime{Seconds(0)};
     Time m_lastDvRxTime{Seconds(0)};
 
@@ -492,6 +520,10 @@ class MeshDvApp : public Application
     void SendDataPacketPueyo7b(uint32_t dst);
     void CleanOldSeenData();
     Time ComputeNextDataSlotDelay(Time baseDelay);
+    Time ComputeStudyForwardDelay(const MeshMetricTag& tag) const;
+    bool ComputeStudySuperframeWait(const TxQueueEntry& entry,
+                                    Time* outWait,
+                                    std::string* outReason) const;
 
     void SchedulePeriodicDump();
     void DumpRoute(uint32_t dst, const std::string& tag);

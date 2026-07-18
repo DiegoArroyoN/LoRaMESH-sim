@@ -192,6 +192,7 @@ class MetricsCollector
         bool enableSfScanRx{true};
         bool pueyoFloraLikeRx{false};
         bool enableNs3EnergyFramework{false};
+        double batteryFullCapacityJ{3888.0}; // 300 mAh @ 3.6V (thesis node budget)
         double shadowingSigmaDb{3.57};
         double txPowerDbm{0.0};
         uint32_t channelCount{1};
@@ -213,6 +214,7 @@ class MetricsCollector
         uint64_t dropNoRouteRelay{0};
         uint64_t dropTtlExpired{0};
         uint64_t dropQueueOverflow{0};
+        uint64_t dropMaxCsmaRetries{0};
         uint64_t dropBacktrack{0};
         uint64_t dropOther{0};
         uint64_t beaconScheduled{0};
@@ -228,6 +230,10 @@ class MetricsCollector
         uint64_t rxScanMissBeforeLock{0};
         uint64_t rxPostLockInterferenceFail{0};
         uint64_t rxNoMoreDemodDrops{0};
+        uint64_t dataCollisionDrops{0};
+        uint64_t beaconCollisionDrops{0};
+        uint64_t dataBusyDrops{0};
+        uint64_t beaconBusyDrops{0};
         uint64_t pueyoSameSfOverlapEvents{0};
         uint64_t pueyoDestructiveOverlapDrops{0};
         uint64_t pueyoCaptureOrTimingSurvivals{0};
@@ -251,6 +257,10 @@ class MetricsCollector
         uint64_t beaconTxAtDataStop{0};
         uint64_t beaconRxAtDataStop{0};
         uint64_t queuedPacketsAtDataStop{0};
+        uint64_t originPendingAtStop{0}; // [B1] origin packets still in tx queue at stop
+        uint64_t originPendingDuty{0};   // §LossFine
+        uint64_t originPendingEnergy{0}; // §LossFine
+        uint64_t relayPendingEnd{0};     // §LossFine
         uint64_t sfLinkSamples{0};
         uint64_t sfLinkObservedMismatch{0};
         uint64_t routesTotal{0};
@@ -408,6 +418,13 @@ class MetricsCollector
         m_endWindowSec = windowSec;
     }
 
+    // Hook dinámico: detener Simulator cuando todos los nodos hayan muerto.
+    // El techo Simulator::Stop(stopSec) sigue vigente como salvaguarda.
+    void SetStopOnFullDepletion(bool value)
+    {
+        m_stopOnFullDepletion = value;
+    }
+
     void SetWireFormatMetadata(const std::string& wireFormat,
                                uint32_t dataHeaderBytes,
                                uint32_t beaconHeaderBytes,
@@ -441,6 +458,7 @@ class MetricsCollector
   private:
     std::vector<TxEvent> m_txEvents;
     std::vector<RxEvent> m_rxEvents;
+    uint32_t m_dataRxAnyHopCount{0}; // C4-fix: paper throughput = any-hop unicast RX
     std::vector<RouteEvent> m_routeEvents;
     std::vector<RouteEvent> m_routeUsedEvents;
     std::vector<QuantizationSample> m_quantizationSamples;
@@ -467,6 +485,14 @@ class MetricsCollector
     uint64_t m_routeExpireEvents{0};
     uint64_t m_routePurgeEvents{0};
     uint64_t m_routeUsedEventsCount{0};
+    // §EssentialFix: contadores agregados de overhead que se llenan SIEMPRE
+    // (independientes del flag essentialOnly que sólo afecta los vectores detallados).
+    // Usados por el JSON export para que beacon_bytes/data_bytes no salgan en 0
+    // cuando essentialOnly=true (que descarta m_overheadEvents).
+    uint64_t m_aggBeaconBytes{0};
+    uint64_t m_aggDataBytes{0};
+    uint64_t m_aggBeaconCount{0};
+    uint64_t m_aggDataCount{0};
 
     // FIX D1: Flush periódico
     EventId m_flushEvent;
@@ -475,6 +501,10 @@ class MetricsCollector
     uint32_t m_flushCount{0};
     bool m_appendMode{false}; // Después del primer flush, usar append
     bool m_essentialMetricsOnly{false};
+
+    // Hook dinámico de parada por agotamiento total
+    bool m_stopOnFullDepletion{false};
+    bool m_fullDepletionTriggered{false};
 
     // THESIS METRICS: T50 and FND
     std::vector<NodeDeathEvent> m_nodeDeathEvents;

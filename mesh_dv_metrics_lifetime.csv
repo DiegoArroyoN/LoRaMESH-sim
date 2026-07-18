@@ -1,0 +1,6 @@
+metric,value_s
+fnd_s,-1
+t50_s,-1
+dead_nodes,0
+
+timestamp(s),nodeId,energyFrac,reason

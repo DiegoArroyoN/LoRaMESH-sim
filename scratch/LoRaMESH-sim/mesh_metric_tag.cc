@@ -30,7 +30,7 @@ MeshMetricTag::GetInstanceTypeId() const
 uint32_t
 MeshMetricTag::GetSerializedSize() const
 {
-    return 23;
+    return 24;  // era 23; +1 byte §DC-wire (m_dcRemaining)
 }
 
 void
@@ -47,6 +47,7 @@ MeshMetricTag::Serialize(TagBuffer i) const
     i.WriteU16(m_scoreX100);
     i.WriteU16(m_prevHop);
     i.WriteU16(m_expectedNextHop);
+    i.WriteU8(m_dcRemaining);  // §DC-wire
 }
 
 void
@@ -63,6 +64,7 @@ MeshMetricTag::Deserialize(TagBuffer i)
     m_scoreX100 = i.ReadU16();
     m_prevHop = i.ReadU16();
     m_expectedNextHop = i.ReadU16();
+    m_dcRemaining = i.ReadU8();  // §DC-wire
 }
 
 void
@@ -71,7 +73,8 @@ MeshMetricTag::Print(std::ostream& os) const
     os << "src=" << m_src << " dst=" << m_dst << " seq=" << m_seq << " ttl=" << unsigned(m_ttl)
        << " hops=" << unsigned(m_hops) << " sf=" << unsigned(m_sf)
        << " toaUs=" << m_toaUs << " batt=" << m_batt_mV << " score=" << m_scoreX100
-       << " prevHop=" << m_prevHop << " expNextHop=" << m_expectedNextHop;
+       << " prevHop=" << m_prevHop << " expNextHop=" << m_expectedNextHop
+       << " dcRem=" << unsigned(m_dcRemaining);
 }
 
 void

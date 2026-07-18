@@ -35,6 +35,8 @@ BeaconWireHeaderV2::Serialize(Buffer::Iterator i) const
     i.WriteU16(m_src);
     i.WriteU16(m_dst);
     i.WriteU8(m_flagsTtl);
+    i.WriteU8(m_soc);          // §SoC-wire: byte 6
+    i.WriteU8(m_dcRemaining);  // §DC-wire: byte 7
 }
 
 uint32_t
@@ -43,6 +45,8 @@ BeaconWireHeaderV2::Deserialize(Buffer::Iterator i)
     m_src = i.ReadU16();
     m_dst = i.ReadU16();
     m_flagsTtl = i.ReadU8();
+    m_soc = i.ReadU8();          // §SoC-wire: byte 6
+    m_dcRemaining = i.ReadU8();  // §DC-wire: byte 7
     return kSerializedSize;
 }
 
@@ -51,7 +55,9 @@ BeaconWireHeaderV2::Print(std::ostream& os) const
 {
     os << "src=" << m_src << " dst=" << m_dst
        << " type=" << static_cast<uint32_t>(GetPacketTypeV2(m_flagsTtl))
-       << " ttl=" << static_cast<uint32_t>(GetTtlFromFlagsV2(m_flagsTtl));
+       << " ttl=" << static_cast<uint32_t>(GetTtlFromFlagsV2(m_flagsTtl))
+       << " soc=" << static_cast<uint32_t>(m_soc)
+       << " dc_remaining=" << static_cast<uint32_t>(m_dcRemaining);
 }
 
 void
@@ -104,4 +110,3 @@ BeaconWireHeaderV2::DeserializeDvEntries(const uint8_t* in,
 }
 
 } // namespace ns3
-

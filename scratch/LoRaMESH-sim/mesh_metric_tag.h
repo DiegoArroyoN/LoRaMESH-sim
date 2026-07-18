@@ -55,9 +55,11 @@ class MeshMetricTag : public Tag
     void SetToaUs(uint32_t v)       { m_toaUs = v; }
     void SetBatt_mV(uint16_t v)     { m_batt_mV = v; }
     void SetScoreX100(uint16_t v)   { m_scoreX100 = v; }
+    void SetDcRemaining(uint8_t v)  { m_dcRemaining = v; }   // §DC-wire
     uint32_t GetToaUs() const       { return m_toaUs; }
     uint16_t GetBatt_mV() const     { return m_batt_mV; }
     uint16_t GetScoreX100() const   { return m_scoreX100; }
+    uint8_t  GetDcRemaining() const { return m_dcRemaining; } // §DC-wire
 
     void SetPrevHop(uint16_t v)
     {
@@ -150,7 +152,7 @@ class MeshMetricTag : public Tag
 
   private:
     // Layout OTA:
-    // src(2)+dst(2)+seq(4)+ttl(1)+hops(1)+sf(1)+toaUs(4)+batt(2)+score(2)+prevHop(2)+expNextHop(2)
+    // src(2)+dst(2)+seq(4)+ttl(1)+hops(1)+sf(1)+toaUs(4)+batt(2)+score(2)+prevHop(2)+expNextHop(2)+dcRem(1)
     uint16_t m_src = 0;
     uint16_t m_dst = 0;
     uint32_t m_seq = 0;
@@ -162,6 +164,7 @@ class MeshMetricTag : public Tag
     uint16_t m_scoreX100 = 100;
     uint16_t m_prevHop = 0xFFFF;
     uint16_t m_expectedNextHop = 0;
+    uint8_t m_dcRemaining = 0xFF;  // §DC-wire: DC restante del emisor 0-100; 0xFF = N/A
 };
 
 } // namespace ns3

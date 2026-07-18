@@ -133,7 +133,7 @@ CsmaCadMac::GetTypeId()
                                           "sf_bw"))
             .AddAttribute("CadSenseMarginDb",
                           "Margin [dB] above sensitivity to declare CAD busy in local_power mode.",
-                          DoubleValue(0.0),
+                          DoubleValue(3.0),  // Lowered from 6.0; see PerformChannelAssessment / FIXES_AND_METHODOLOGY.md §8.7 item 1.
                           MakeDoubleAccessor(&CsmaCadMac::m_cadSenseMarginDb),
                           MakeDoubleChecker<double>());
     return tid;
@@ -145,12 +145,10 @@ CsmaCadMac::CsmaCadMac()
       m_dutyCycleLimit(0.01),
       m_cadDuration(MilliSeconds(5.5)),
       m_difsCadCount(3),
-      m_backoffWindow(8),
       m_cadHistoryWindow(20),
       m_minBackoffSlots(4),
       m_maxBackoffSlots(kDefaultMaxBackoffSlots),
       m_maxBackoffSlotsAbs(kDefaultMaxBackoffSlotsAbs),
-      m_maxBackoffSlotsExplicit(false),
       m_backoffStep(4),
       m_failures(0),
       m_lastBackoffSlots(0),
@@ -166,7 +164,7 @@ CsmaCadMac::CsmaCadMac()
       m_cadSymbols(2),
       m_cadSf(9),
       m_cadBandwidthHz(125000),
-      m_cadSenseMarginDb(0.0),
+      m_cadSenseMarginDb(3.0),  // ctor default mirrors AddAttribute
       m_cadBusyEventsLocalPower(0),
       m_cadBusyEventsOracle(0)
 {
@@ -295,22 +293,9 @@ CsmaCadMac::SetDifsCadCount(uint8_t count)
 }
 
 void
-CsmaCadMac::SetBackoffWindow(uint8_t window)
-{
-    m_backoffWindow = window;
-    const uint32_t legacyMax = (1u << m_backoffWindow) - 1;
-    // No sobrescribir MaxBackoffSlots si se configuró explícitamente.
-    if (!m_maxBackoffSlotsExplicit && legacyMax > m_maxBackoffSlots)
-    {
-        m_maxBackoffSlots = legacyMax;
-    }
-}
-
-void
 CsmaCadMac::SetMaxBackoffSlots(uint32_t slots)
 {
     m_maxBackoffSlots = std::max<uint32_t>(1, slots);
-    m_maxBackoffSlotsExplicit = (slots != kDefaultMaxBackoffSlots);
 }
 
 uint32_t
@@ -379,6 +364,10 @@ CsmaCadMac::UpdateToaEma(double& emaSeconds, double toaSeconds)
     emaSeconds = alpha * toaSeconds + (1.0 - alpha) * emaSeconds;
 }
 
+// Reserved hook for a future unicast-with-ACK MAC. See header for context.
+// In the current LoRa broadcast build this method has no callers; m_failures
+// is managed by PerformChannelAssessment() instead. Kept (rather than deleted)
+// so that an ACK-aware MAC can wire it back without re-introducing the API.
 void
 CsmaCadMac::NotifyTxResult(bool success)
 {
@@ -475,10 +464,22 @@ CsmaCadMac::PerformChannelAssessment()
                     << " load=" << GetCadLoad());
         return true;
     }
-    if (m_failures > 0)
-    {
-        m_failures--;
-    }
+    // Reset m_failures on clean CAD.
+    //
+    // NOTE: this is NOT strict 802.11 semantics (which resets the contention
+    // window on ACK reception, not on CCA-clean). The "B1 fix" label used in
+    // §7.1 of FIXES_AND_METHODOLOGY.md was imprecise. The actual adaptive
+    // behaviour under sustained load comes from `loadSlots` in
+    // ComputeBackoffWindowSlots() via GetCadLoad(), which keeps the window in
+    // the ~30+ slot range when the channel is busy most of the time.
+    //
+    // m_failures here is only a short-term escalator during a burst of
+    // consecutive busy samples; it collapses to 0 as soon as one CAD probe
+    // sees a clean channel. Long-term "memory of congestion" lives in the
+    // load estimator, not in this counter. See §8.5 of FIXES_AND_METHODOLOGY
+    // for the design discussion and the alternative (gradual decrement) that
+    // was considered.
+    m_failures = 0;
     const uint32_t windowSlots = ComputeBackoffWindowSlots();
     NS_LOG_INFO("CAD_RESULT detail: node="
                 << nodeId << " time=" << Simulator::Now().GetSeconds()

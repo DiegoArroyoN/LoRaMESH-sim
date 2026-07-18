@@ -1,0 +1,313 @@
+# Fixes y Metodología — Simulador LoRa Mesh DV (NS-3)
+**Fecha:** 2026-04-20  
+**Referencia:** Pueyo-Centelles 2024, "A Minimalistic Distance-Vector Routing Protocol for LoRa Mesh Networks", IEEE Access 2024  
+**Repo:** `/home/diego/sim/LoRaMESH-sim-frozen-20260327/`
+
+---
+
+## 1. Fixes de Validez (B1–B5)
+
+### B1 — Contador `origin_pending_at_stop`
+**Archivo:** `scratch/LoRaMESH-sim/mesh_dv_app.h`, `mesh_dv_app.cc`, `metrics_collector.h`, `metrics_collector.cc`  
+**Problema:** No había forma de saber cuántos paquetes origen quedaban en cola al terminar la simulación.  
+**Fix:** Se añadió `uint64_t m_originPendingAtStop{0}` incrementado en `StopApplication()` sobre paquetes aún pendientes de transmitir. Se exporta en `runtime_stats.origin_pending_at_stop` del JSON de resumen.  
+**Semántica:** `m_dataPacketsGenerated` NO cambia — sigue contando paquetes generados en memoria. `originPendingAtStop` es un contador diagnóstico opcional para post-proceso.
+
+### B2 — `dedupWindow` 86400s (24h)
+**Archivo:** `scratch/LoRaMESH-sim/mesh_dv_app.h` y `mesh_dv_baseline.cc`  
+**Problema:** Valor por defecto era 600s. En simulaciones largas (Low load, N grande), las ventanas de deduplicación se purgaban antes de terminar la simulación, causando que paquetes duplicados tardíos se contaran como entregas nuevas → PDR inflado artificialmente.  
+**Fix:** Default cambiado a 86400s (> cualquier `stopSec` planeado). El PDR resultante (~53% en N=9 seed=1) es el valor real; el anterior ~77% era falso.
+
+### B4 — `SetStream` por nodo para reproducibilidad RNG
+**Archivo:** `scratch/LoRaMESH-sim/mesh_dv_app.cc`, `src/loramesh/model/loramesh-routing-dv.cc`  
+**Problema:** Los RNGs no tenían stream fijo por nodo, por lo que añadir/quitar nodos cambiaba los resultados de todos los demás.  
+**Fix:**
+- `MeshDvApp`: `m_rng->SetStream(1000000 + nodeId)`
+- `LoRaMeshRoutingDv`: `m_rng->SetStream(2000000 + nodeId)`  
+**Efecto:** Tres corridas con `rngRun=1` producen hashes md5 idénticos; `rngRun=2` produce hashes distintos → reproducibilidad verificada.
+
+### B5 — Bug de conteo e2e en `ForwardWithTtl` (solo protocolo v1)
+**Archivo:** `scratch/LoRaMESH-sim/mesh_dv_app.cc`  
+**Problema:** El conteo de paquetes entregados e2e estaba gateado con `if (myId == m_collectorNodeId)`, ignorando entregas en nodos no-colector.  
+**Fix:** Se eliminó el gate; todos los nodos incrementan el contador e2e cuando son el destino final. Solo afecta a `wireFormat=v1` (legacy); pueyo7b no se ve afectado.
+
+---
+
+## 2. Fix de Métrica — C4: Fórmula Throughput
+
+**Archivo:** `scratch/LoRaMESH-sim/metrics_collector.h`, `metrics_collector.cc`  
+**Problema:** `throughput_bps` usaba `totalDataTxLegacy` (intentos de TX = 2145 para N=9) en lugar de recepciones unicast exitosas de cualquier hop.  
+**Definición paper (Pueyo 2024):**
+> "Throughput: cantidad total de datos válidos (solo payload) transmitidos por cualquier nodo y recibidos correctamente (sin colisiones) por el destinatario indicado en la cabecera del mensaje."
+
+**Fix:**
+1. Añadido `uint32_t m_dataRxAnyHopCount{0}` en `MetricsCollector` (privado)
+2. Incrementado en `RecordRx()` ANTES del gate `essentialMetricsOnly`, filtrado a `dst != 0xFFFF` (excluye beacons broadcast)
+3. Fórmula: `throughputBps = (m_dataRxAnyHopCount × payloadBits) / activeTrafficSec`
+4. Exportado en JSON bajo `throughput.data_rx_any_hop_count`
+
+**Resultado verificado (N=9, grid 177m, stopSec=2100, rngRun=1):**
+
+| KPI | Antes | Después | Paper |
+|-----|-------|---------|-------|
+| throughput_bps | 170.746 | **105.711** | any-hop RX × payload / t |
+| goodput_bps | 74.667 | 74.667 | e2e × payload / t ✓ |
+| PDR | 0.5345 | 0.5345 | delivered/generated ✓ |
+| delay.avg_s | 0.1545 | 0.1545 | avg sobre entregados ✓ |
+
+---
+
+## 3. Mejora Metodológica — C2/Option B: `autoDataStartSec`
+
+**Archivo:** `scratch/LoRaMESH-sim/mesh_dv_baseline.cc`  
+**Contexto:** El parámetro `dataStartSec=90s` (fijo) es insuficiente para N≥36 porque la convergencia DV en grids grandes requiere `diameter × beacon_interval` (hasta ~840s para N=64).  
+**Nota:** Esto **no afecta PDR** (los paquetes generados antes de que exista ruta quedan en queue y se reenvían cuando aparece la ruta). Sí afecta la latencia reportada.
+
+**Nuevo flag CLI:**
+```
+--autoDataStartSec=true   # Option B: escala por diámetro del grafo
+--autoDataStartSec=false  # Option A: mantiene dataStartSec=90s (default)
+```
+
+**Fórmula Option B:**
+```
+diameter    = 2 × (gridSide - 1)
+warmupHops  = floor(60s / beaconIntervalWarm)   = 1 para pueyo_paper_like
+remHops     = max(0, diameter - warmupHops)
+convSec     = 60 + remHops × beaconIntervalStable
+dataStartSec = ceil(convSec × 1.3)              # margen 30%
+```
+
+**`dataStartSec` resultante por N:**
+
+| N | Option A | Option B |
+|---|----------|----------|
+| 9 (3×3) | 90 s | 312 s |
+| 16 (4×4) | 90 s | 468 s |
+| 25 (5×5) | 90 s | 624 s |
+| 36 (6×6) | 90 s | 780 s |
+| 49 (7×7) | 90 s | 936 s |
+| 64 (8×8) | 90 s | 1092 s |
+
+---
+
+## 4. Script de Verificación Pre-Campaña: `smoke_verify.sh`
+
+**Ubicación:** `smoke_verify.sh` (raíz del repo)  
+**Uso:**
+```bash
+bash smoke_verify.sh             # completo: md5 + KPIs (~2 min)
+bash smoke_verify.sh --skip-md5  # solo KPIs
+bash smoke_verify.sh --verbose   # output completo del simulador
+```
+
+**Checks (N=9, grid 177m, stopSec=2100, rngRun=1):**
+| Check | Valor de referencia |
+|-------|---------------------|
+| md5 rx.csv | `84c7b7a72a910c415d7781792c9fa3c4` |
+| md5 tx.csv | `2b8f7c8171ce490a9a9f7c5b49ee7e6c` |
+| PDR | 0.5345 (938/1755) |
+| throughput_bps | 105.711 |
+| data_rx_any_hop | 1328 |
+| goodput_bps | 74.667 |
+| delay.avg_s | 0.154526 |
+| delay.count | 938 |
+
+---
+
+## 5. Alineación con Paper: Ecuaciones KPI
+
+| KPI | Ecuación implementada | Alineación |
+|-----|----------------------|------------|
+| **PDR** | `delivered_e2e / total_generated` | ✅ exacta |
+| **Throughput** | `any_hop_unicast_RX × payload_bits / active_sec` | ✅ exacta (post C4-fix) |
+| **Goodput** | `delivered_e2e × payload_bits / active_sec` | ✅ exacta |
+| **Latency** | `mean(t_rx_final - t_gen)` solo sobre entregados | ✅ exacta |
+
+**Configuración de tráfico (paper):**
+- Paquete: 27B total = 7B header + 20B payload (160 bits)
+- Por nodo: 100 paquetes × cada uno de los (N−1) destinos = `100×(N−1)` paquetes
+- Destinos en orden aleatorio (`--trafficMode=pueyo_all_to_all`)
+- 4 niveles de carga: Low=100s, Medium=10s, High=1s, Saturation=0.1s entre paquetes
+
+---
+
+## 6. Backups
+
+Todos los archivos modificados tienen backups automáticos con timestamp:
+```
+metrics_collector.h.bak-c4fix-20260420-100504
+metrics_collector.cc.bak-c4fix-20260420-100504
+mesh_dv_baseline.cc.bak-optionB-20260420-...
+```
+
+---
+
+## 7. CSMA/CAD con backoff — Fixes y perfil nuevo (2026-04-24)
+
+**Archivos tocados:**
+- `src/loramesh/model/loramesh-mac-csma-cad.{h,cc}`
+- `scratch/LoRaMESH-sim/mesh_dv_app.{h,cc}`
+- `scratch/LoRaMESH-sim/mesh_dv_baseline.cc`
+- `scratch/LoRaMESH-sim/metrics_collector.{h,cc}`
+- `plot_loss_v4.py`
+
+**Motivación:**
+El MAC `CsmaCadMac` existente (1) dejaba `CadSenseMarginDb=0` (CAD decide sobre el nivel exacto de sensibilidad SX1276, hipersensible a fluctuaciones de ruido), (2) decrementaba `m_failures` de uno en uno tras CAD limpia en lugar de resetearse como 802.11, (3) exponía la API muerta `SetBackoffWindow` / `m_backoffWindow` que ya no controlaba nada pero aún era llamada desde `MeshDvApp` inicializando un miembro huérfano, y (4) al faltar una política de reintentos máximos + tope de cola en el cliente CSMA, un paquete podía quedar atascado indefinidamente en la cabeza de `m_txQueue` si el canal se saturaba (Head-Of-Line blocking sin contabilidad).
+
+### 7.1 — MAC (`loramesh-mac-csma-cad.{h,cc}`)
+
+- **`CadSenseMarginDb` default 0 → 6 dB.** Siguiendo la práctica de radios LoRa reales que añaden 3-6 dB de margen sobre la sensibilidad del SX1276 para evitar dispararse con ruido cuasi-al-suelo. La atribución sigue siendo configurable por CLI (`--cadSenseMarginDb`).
+- **Reset de `m_failures` tras CAD limpia.** Se reemplazó
+  ```cpp
+  if (m_failures > 0) { m_failures--; }
+  ```
+  por
+  ```cpp
+  // B1 fix (802.11-style): reset failures on clean CAD, not gradual decrement.
+  m_failures = 0;
+  ```
+  El contador `m_failures` rige la ventana lineal de backoff (`ComputeBackoffWindowSlots`), por lo que mantener decrementos graduales impedía que la ventana volviese al mínimo incluso en canales súbitamente libres — lo contrario de la semántica DIFS/802.11.
+- **API muerta eliminada.** `void SetBackoffWindow(uint8_t)`, miembro `uint8_t m_backoffWindow`, y flag obsoleto `bool m_maxBackoffSlotsExplicit` se removieron de header y ctor. La ventana máxima ahora se configura solo por `SetMaxBackoffSlots` (o el default 64).
+
+### 7.2 — App (`mesh_dv_app.{h,cc}`)
+
+- **Queue cap con evicción FIFO de datos (no-beacon).** Antes de `push_back`/`push_front` en `SendWithCSMA`, si `m_txQueue.size() >= m_csmaTxQueueMax` se busca la primera entrada de datos no-cabeza-en-aire y se desaloja, incrementando `m_dropQueueOverflow`. Si solo hay beacons o la cabeza está transmitiendo, el paquete nuevo se descarta.
+- **Máximo de reintentos CSMA por entrada.** En la rama `channelBusy` de `ProcessTxQueue`, `entry.retries++` antes de programar el backoff; cuando `entry.retries > m_csmaMaxRetries` se hace `pop_front()` + `ProcessTxQueue()` y se incrementa `m_dropMaxCsmaRetries`. Antes, la retries++ nunca ocurría en esta rama (solo se reseteaba a 0 en `SendWithCSMA`), por lo que un paquete podía quedar atascado en la cabeza indefinidamente.
+- **Se eliminó `m_mac->SetBackoffWindow(m_backoffWindow);`** (ya no existe) y **`m_mac->NotifyTxResult(ok);`** (duplicaba el reset que ya hace el CAD limpia; se eliminó para mantener una única fuente de verdad para `m_failures`).
+- **Fallback `(1 << m_backoffWindow) - 1`** (solo activo si `m_mac=nullptr`, algo que no pasa en prod pero queda el camino) se reemplazó por `m_rng->GetInteger(0, 63)`, que es equivalente a 64 slots fijos (default de `kDefaultMaxBackoffSlots`).
+- **Nuevos atributos (TypeId):**
+  ```
+  CsmaMaxRetries   (UintegerValue, default 8)  — m_csmaMaxRetries
+  CsmaTxQueueMax   (UintegerValue, default 32) — m_csmaTxQueueMax
+  ```
+- **Nuevo contador:** `m_dropMaxCsmaRetries` → `RuntimeNodeStats::dropMaxCsmaRetries` → JSON `drops.drop_max_csma_retries`.
+
+### 7.3 — Métricas (`metrics_collector.{h,cc}`)
+
+Se añadió el campo `dropMaxCsmaRetries` en `RuntimeNodeStats`, se suma en el bucle por-nodo, y se emite en `"drops": { ..., "drop_max_csma_retries": N, ... }` del summary JSON entre `drop_queue_overflow` y `drop_backtrack`.
+
+### 7.4 — Baseline (`mesh_dv_baseline.cc`)
+
+- **CLI nuevos:**
+  ```
+  --cadSenseMarginDb=6.0
+  --csmaMaxRetries=8
+  --csmaTxQueueMax=32
+  ```
+- **Nuevo perfil `pueyo2024_paper_like_csmacad`**: espejo de `pueyo2024_paper_like` con la sola diferencia de `cfg.enableCsma = true`. Mantiene duty-cycle deshabilitado (equivalente a 100% de disponibilidad) para aislar el efecto del MAC. Mismo `routeMetricMode=toa_only`, `sfLinkMode=deterministic_sensitivity`, `sfMin=7 sfMax=8`, `pueyoFloraLikeRx=true`, `enableSfScanRx=false` que el perfil paper_like.
+- **Validador** del nuevo perfil replica las mismas aserciones que `pueyo2024_paper_like` excepto que exige `enableCsma=true`.
+- **`PurePueyoBaselineMode`** incluye ahora al nuevo perfil (es una variante de comparación Pueyo, no una propuesta composite).
+- **`SetDefaultFailSafe`** añadidos para `CsmaCadMac::CadSenseMarginDb`, `MeshDvApp::CsmaMaxRetries`, `MeshDvApp::CsmaTxQueueMax`.
+
+### 7.5 — Plot (`plot_loss_v4.py`)
+
+Nueva categoría `max_retries` con color `#D35400` y etiqueta "Max CSMA retries", entre `queue_full` y `other`. Consume `j['drops']['drop_max_csma_retries']`. Retrocompatible: si el JSON no trae el campo, se devuelve 0 y la categoría queda oculta por el threshold `ACTIVE_THRESHOLD=0.5%`.
+
+### 7.6 — Verificación (smoke runs, 2026-04-24)
+
+| Escenario | N | Tráfico | stopSec | PDR | `cad_busy_events` | `drop_max_csma_retries` |
+|---|---|---|---|---|---|---|
+| Grid 177m | 9 | low | 600 | 0.8000 | 0 | 0 |
+| Grid 177m | 36 | high | 900 | 0.0174 | 27 083 | 129 |
+
+El escenario de baja densidad casi nunca detecta canal ocupado (esperado: 9 nodos, 177 m spacing, baja tasa). El escenario denso satura el canal: el CAD dispara decenas de miles de veces, la política de `CsmaMaxRetries=8` descarta los paquetes que no logran salir en ese límite (129 drops), y el PDR baja drásticamente — comportamiento físicamente consistente con CSMA/CAD funcionando + duty 100% + SF7-8 en colisión-dominio único.
+
+### 7.7 — Uso (compatibilidad con campañas anteriores)
+
+Para replicar las 4 campañas Pueyo con el MAC propuesto basta sustituir en los scripts de campaña:
+```
+--profile=pueyo2024_paper_like
+```
+por
+```
+--profile=pueyo2024_paper_like_csmacad
+```
+Todo lo demás (grid size, spacing, traffic, stopSec, seeds) queda idéntico. El plot comparativo consumirá el mismo `mesh_dv_summary.json` y mostrará la nueva barra `max_retries` solo si aparece activa (>0.5% de paquetes generados).
+
+### 7.8 — Backups
+
+```
+src/loramesh/model/loramesh-mac-csma-cad.cc.bak-csmafix-20260424-011308
+scratch/LoRaMESH-sim/mesh_dv_baseline.cc.bak-csmafix-20260424-091015
+```
+
+## 8. Validación CSMA/CAD (2026-04-24) — resultado: **parche regresivo, C3 FAIL**
+
+La campaña de validación ejecutada el 2026-04-24 (81 runs totales) **refuta** la afirmación de §7 de que el parche CSMA/CAD funciona end-to-end. El MAC detecta canal ocupado correctamente (C5 PASS) pero **colisiona MÁS que ALOHA** bajo carga alta, y los tuning sweeps no pueden corregirlo. Diagnóstico raíz: dos defectos introducidos por el parche mismo + uno preexistente de diseño.
+
+### 8.1 — Resultados Fase 1 (36 runs, ALOHA vs CSMA comparativo)
+
+| Criterio | Veredicto | Detalle |
+|---|---|---|
+| C1 — sin crashes | ✅ PASS | 36/36 runs completos, 0 FAILED |
+| C2 — PDR low-load dentro ±15% | ✅ PASS | Δ máx 6.3% (N=25 low) |
+| **C3 — CSMA collisions < 80% de ALOHA (high)** | ❌ **FAIL** | N=9: 108.4%, N=25: 107.6%, N=49: 110.5% |
+| C4 — max_retries+qfull < 30% generado (high) | ✅ PASS | Máx 0.4% (N=49 high) |
+| C5 — CAD busy events > 0 (high) | ✅ PASS | 4946 (N=9) → 54821 (N=49) |
+
+**C3 FAIL es el hallazgo crítico**: el CAD detecta decenas de miles de eventos busy, pero el mecanismo de backoff no logra desincronizar las retransmisiones, produciendo MÁS colisiones que ALOHA puro.
+
+### 8.2 — Resultados Fases de tuning (45 runs, N=25 high)
+
+Baseline ALOHA N=25 high: `coll=94915 mean`. Baseline CSMA default: `coll=102095 (107.6% de ALOHA)`.
+
+| Fase | Barrido | Rango | Mejor config | Coll best | % ALOHA |
+|---|---|---|---|---|---|
+| 2A | CsmaMaxRetries | {4,8,16,32} | retries=4 | 100494 | 105.9% |
+| 2B | CsmaTxQueueMax | {16,32,64,128} | **todos idénticos** | 102095 | 107.6% |
+| 2C | CadSenseMarginDb | {3,6,9,12} | margin=12 dB | 95484 | 100.6% |
+| 3D | (cbf, dbf) | 3 combos | **todos idénticos** | 102095 | 107.6% |
+
+**Ningún barrido consigue C3 PASS.** Observaciones:
+- **Fase 2C trend**: margen alto → CAD ciego → degeneración a ALOHA (100.6%). Margen bajo (3 dB) → CAD hipersensible → retries_drop sube a 3156 y colisiones empeoran (111%).
+- **Fase 2B idéntico** (benigno): `qfull_drop=0` en todos — la cola nunca se llena con qmax≥16, así que su valor no importa.
+- **Fase 3D idéntico (BUG)**: el perfil `pueyo2024_paper_like_csmacad` fuerza `controlBackoffFactor=1.0, dataBackoffFactor=10.0` vía `applyPueyoComparableBase()` líneas 567-568 de `mesh_dv_baseline.cc`, después del CLI parse. Los `--controlBackoffFactor=X --dataBackoffFactor=Y` del sweep son clobbered silenciosamente.
+
+### 8.3 — Causas raíz
+
+**Defecto #1 — Reset agresivo de `m_failures` (regresión introducida por §7.1):**
+
+El cambio en `PerformChannelAssessment`:
+```cpp
+// antes (correcto para sostener backoff en congestión sostenida)
+if (m_failures > 0) m_failures--;
+
+// después (nuestra "B1 fix"):
+m_failures = 0;
+```
+provoca que la ventana de backoff oscile entre 4 (mínimo) y ~12 slots incluso bajo congestión sostenida: cada CAD limpio eventual (estadísticamente frecuente) resetea el contador a cero y colapsa la ventana al mínimo. La referencia a "semántica 802.11" en §7.1 es **incorrecta** — 802.11 reinicia la ventana en **transmisión exitosa**, NO en CAD limpio.
+
+**Defecto #2 — `NotifyTxResult` se volvió código muerto (introducido por §7.2):**
+
+`grep -rn "NotifyTxResult"` confirma: tras remover `m_mac->NotifyTxResult(ok)` de `mesh_dv_app.cc`, **ningún sitio llama al método**. Solo quedan la declaración (`loramesh-mac-csma-cad.h:65`) y la definición (`loramesh-mac-csma-cad.cc:368`). El reset success-driven del contador `m_failures` — que sí era el análogo correcto de 802.11 — está inactivo. La afirmación de §7.2 de que la llamada "duplicaba el reset que ya hace el CAD limpia" era una malinterpretación: el reset de CAD limpia es nuestro (defectuoso), y el de `NotifyTxResult` era el correcto que eliminamos.
+
+**Defecto #3 — `m_minBackoffSlots=4` hardcoded, inadecuado para escala mesh:**
+
+`ComputeBackoffWindowSlots()` parte de `min(m_minBackoffSlots + m_failures*m_backoffStep + loadSlots, maxSlots)`. Con `m_minBackoffSlots=4` hardcoded en ctor (línea 149), 49 nodos que observan el mismo evento busy compiten por 4 slots → colisión de reintento casi garantizada (por pigeon-hole). El componente `loadSlots` (GetCadLoad()×0.5×maxSlots) ayuda parcialmente bajo carga alta, pero no compensa la ventana mínima. CWmin típico en 802.11 es 15-31; para mesh con N>>10 debería ser ≥32.
+
+**Defecto #4 — Profile clobbering de cbf/dbf (preexistente):**
+
+`applyPueyoComparableBase()` fija `controlBackoffFactor=1.0, dataBackoffFactor=10.0` sin respetar los valores CLI. El validator de `pueyo2024_paper_like_csmacad` (línea 791) exige estos mismos valores, por lo que NO es posible sweep de cbf/dbf sin modificar el perfil o saltarse el validator. Este no es un bug del parche de §7 — es una restricción del framework Pueyo que heredamos — pero sí significa que **Fase 3D fue un experimento nulo**.
+
+### 8.4 — Parches correctivos propuestos (NO aplicados aún)
+
+1. **Revertir reset de `m_failures` en `PerformChannelAssessment`** — quitar `m_failures = 0;` del rama clean-CAD. Que el contador decremente gradualmente (como el código original) o que solo se reinicie en éxito (vía NotifyTxResult).
+2. **Restaurar `m_mac->NotifyTxResult(ok)` en `mesh_dv_app.cc`** en la rama de transmisión exitosa.
+3. **Subir `m_minBackoffSlots` a 16** (o exponerlo como CLI barreable). Opcionalmente reemplazar la fórmula lineal `failures*step` por BEB: `min(minSlots * 2^failures, maxSlots)`.
+4. **Desacoplar cbf/dbf del perfil** — sacarlos de `applyPueyoComparableBase()` y dejar que CLI los setee, O añadir un flag `--allowBackoffOverride` que desactive el validator.
+
+### 8.5 — Fase 4 (auditoría estática) — hallazgos adicionales no bloqueantes
+
+- Queue invariants en `SendWithCSMA`: dos loops de evicción (líneas ~3497 y ~3554) pero en ramas if/else mutuamente exclusivas — no hay double-count de `m_dropQueueOverflow`. ✅
+- Beacons (`dst=0xFFFF`) SÍ pasan por la cola CSMA y respetan el CAD; la rama FIFO los protege de evicción (no los descarta nunca) — comportamiento deseado. ✅
+- `drop_max_csma_retries` pipeline confirmado end-to-end: `mesh_dv_app.cc::m_dropMaxCsmaRetries++` → `RuntimeNodeStats` → accumulator en `metrics_collector.cc` → JSON emit. ✅ (empíricamente verificado: 111 drops en N=25 high seed1).
+- Coherencia `pueyoFloraLikeRx=true` + `enableCsma=true`: **no auditada** en esta campaña (agente Fase 4 cortado por caída SSH). Candidato a investigación futura dado que ambos modelos usan cálculos de sensibilidad potencialmente divergentes.
+
+### 8.6 — Conclusión
+
+El parche §7 **introdujo una regresión funcional** en el mecanismo de backoff del MAC CSMA/CAD al reemplazar el decremento gradual de `m_failures` por reset agresivo y al eliminar la llamada `NotifyTxResult` que era la única ruta de reset success-driven. Combinado con `m_minBackoffSlots=4` y el profile clobbering de cbf/dbf, el CSMA/CAD resultante **colisiona más que ALOHA** bajo escala mesh (N≥9).
+
+La afirmación en §7.6 de "comportamiento físicamente consistente con CSMA/CAD funcionando" basada en un smoke run N=36 fue insuficiente para detectar esto — el smoke solo verificaba que el pipeline emite contadores, no que el MAC reduzca colisiones vs ALOHA. Esta campaña comparativa es la primera que mide el efecto funcional del MAC.
+
+Antes de reclamar que el CSMA/CAD "funciona sin errores ni inconsistencias" es necesario: (a) aplicar los parches correctivos §8.4, (b) re-ejecutar Fase 1 y verificar C3 PASS, (c) re-ejecutar Fase 3D con profile desbloqueado para medir sensibilidad real de cbf/dbf.

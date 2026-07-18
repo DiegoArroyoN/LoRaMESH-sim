@@ -38,6 +38,10 @@ struct RouteEntry
     Time lastUpdate{Seconds(0)};
     Time expiryTime{Seconds(0)};
     Mac48Address nextHopMac;
+    // §DC-aware: DC restante [0-100] del next-hop de esta ruta (0xFF = N/A).
+    // Usado por el filtro de factibilidad: rutas cuyo next-hop tiene DC bajo
+    // se posponen frente a alternativas factibles (fallback si no las hay).
+    uint8_t nextHopDcRemaining{0xFF};
 };
 
 struct RouteAnnouncement
@@ -82,6 +86,8 @@ struct NeighborLinkInfo
     uint16_t batt_mV{0};
     uint16_t scoreX100{0};
     Mac48Address mac;
+    // §DC-aware: DC restante [0-100] del vecino emisor, leído del beacon (0xFF = N/A).
+    uint8_t dc_remaining{0xFF};
 };
 
 class RoutingDv : public Object
@@ -135,6 +141,9 @@ class RoutingDv : public Object
     void SetMaxRoutesPerDestination(uint32_t maxRoutesPerDestination);
     void SetMaxTotalRoutes(uint32_t maxTotalRoutes);
     void SetSinkNodeId(NodeId id);
+    // §DC-aware: filtro de factibilidad por presupuesto de duty cycle del next-hop.
+    void SetUseDcAwareRouting(bool enable);
+    void SetDcFeasibilityThreshold(uint8_t thresholdPct);
     void NotifyDestinationActive(NodeId dest);
     bool IsDestinationActive(NodeId dest) const;
     bool HasAnyRoute(NodeId dest) const;
@@ -175,8 +184,6 @@ class RoutingDv : public Object
     Time GetEffectiveTimeout(const RouteEntry& entry) const;
     void NotifyChange(const RouteEntry& entry, const std::string& action) const;
     DvMessage BuildDvMessage() const;
-    uint16_t CombineScores(uint16_t linkScoreX100, uint16_t pathScoreX100, uint8_t hops) const;
-    double CombineCost(uint16_t linkScoreX100, uint16_t pathScoreX100, uint8_t hops) const;
     uint16_t ScoreToCostX1000(uint16_t scoreX100) const;
     uint16_t ToaHopCostUnits(uint8_t sf) const;
     uint16_t ScoreToToaPathUnits(uint16_t scoreX100) const;
@@ -189,13 +196,32 @@ class RoutingDv : public Object
     uint32_t QuantizeCompositeMetric(double rawMetric) const;
     double DecodeCompositeMetric(uint16_t metric) const;
     double GetComparableMetric(const RouteEntry& entry) const;
+    // Thesis 4.2: ToA normalisation table per SF [us].
+    // SF7=143ms ... SF12=3293ms (Semtech SX1276, BW=125 kHz, CR=4/5, max payload 222 B).
+    static constexpr double kMaxToaUs[6] = {
+        143360.0,   // SF7
+        256512.0,   // SF8
+        462848.0,   // SF9
+        829440.0,   // SF10
+        1810432.0,  // SF11
+        3293184.0   // SF12
+    };
+
+    // SoC-wire helpers
+    /// Normalise measured ToA against the theoretical max for that SF -> T_hat in [0,1].
+    static double NormalizeToaUs(double toaUs, uint8_t sf);
+    /// Convert received batt_mV to energy fraction [0,1] (0 mV = unknown -> 1.0 = no penalty).
+    static double BattMvToEFrac(uint16_t battMv);
+    /// Thesis 4.2 single-link incremental cost: alpha*T_hat + beta + delta*Psi(b_j).
+    double ComputeThesisLinkCost(double toaUs, uint8_t sf, double neighborEFrac) const;
+
     double ComputeCompositeEnergyPenalty(double energyFraction) const;
-    double ComputeCompositeLinkIncrement(uint8_t sf) const;
-    double ComputeCompositeRawCost(uint32_t toaUnitsPath,
-                                   uint8_t hopsPath,
-                                   double energyFractionAdvertiser) const;
     double GetLocalEnergyFraction() const;
     bool IsRouteUsable(const RouteEntry& entry, uint8_t hopLimit) const;
+    /// §DC-aware: ¿el next-hop tiene presupuesto de DC por encima del umbral?
+    /// Si el filtro está desactivado, o no hay info del vecino, o el valor es
+    /// 0xFF (N/A), se considera factible (no penaliza por falta de información).
+    bool IsNextHopDcFeasible(NodeId nextHop) const;
     bool IsCandidateBetter(const RouteEntry& candidate, const RouteEntry& current, bool* tie) const;
     bool SelectWorseRouteToEvict(NodeId* outDest, bool* outBackup) const;
     void EnforceRouteTableLimits();
@@ -219,14 +245,14 @@ class RoutingDv : public Object
     AdvertRoutePolicy m_advertRoutePolicy{AdvertRoutePolicy::TOP_SCORE};
     MetricMode m_metricMode{MetricMode::COMPOSITE_SCORE};
     CostEncoding m_costEncoding{CostEncoding::COST255};
-    double m_compositeWToa{1.0};
-    double m_compositeWHop{1.0};
-    double m_compositeWEnergy{2.0};
-    double m_compositeCostStep{1.0};
-    double m_energyLo{0.20};
-    double m_energyHi{0.50};
-    double m_energyPow{3.0};
-    double m_energyMaxPenalty{50.0};
+    double m_compositeWToa{0.60};      // alpha: ToA weight (thesis 4.2)
+    double m_compositeWHop{0.15};      // beta:  fixed cost per hop (thesis 4.2)
+    double m_compositeWEnergy{0.25};   // delta: energy penalty weight (thesis 4.2)
+    double m_compositeCostStep{0.025}; // quantization step for COST255 byte
+    double m_energyLo{0.20};           // b_c critical threshold (thesis Eq.3)
+    double m_energyHi{0.50};           // b_w warning threshold  (thesis Eq.3)
+    double m_energyPow{2.0};           // p exponent             (thesis Eq.3)
+    double m_energyMaxPenalty{1.0};    // Psi_max = 1.0; scaled by m_compositeWEnergy
     uint32_t m_maxRoutesPerDestination{1};
     uint32_t m_maxTotalRoutes{1024};
     double m_activeTimeoutFactor{2.0};
@@ -234,6 +260,24 @@ class RoutingDv : public Object
     bool m_hasSink{false};
     NodeId m_sinkNodeId{0};
     bool m_pueyoValidationTrace{false};
+    // §BatBeacon: toggle — whether SoC from received beacons influences composite cost.
+    // true (default for CMP profiles): use real neighbor SoC, Psi(b_j) from beacon.
+    // false (TOA profiles or ablation): assume full battery, Psi(b_j)=0.
+    bool m_useBeaconSoC{true};
+    // §BatBeacon: minimum SoC change [0-50%] to trigger composite cost update.
+    // 0=no hysteresis (every beacon). Recommended 5 for CMP stability.
+    uint8_t m_socHysteresisPercent{0};
+    // §BatBeacon: last committed SoC [0-100] per neighbor for hysteresis tracking.
+    std::map<NodeId, uint8_t> m_lastNeighborSoC;
+    // §DC-aware: toggle — whether the routing applies the DC feasibility filter.
+    // false (default, TOA/CMP sin DC-aware): el routing ignora el DC del next-hop.
+    // true (DV-CL completo): rutas a través de next-hops con DC < umbral se posponen.
+    bool m_useDcAwareRouting{false};
+    // §DC-aware: umbral de factibilidad [0-100]. Un next-hop con dc_remaining por
+    // debajo de este umbral se considera "no factible" y se evita si hay alternativa.
+    uint8_t m_dcFeasibilityThreshold{20};
+    // §DC-aware: último dc_remaining [0-100] conocido por vecino directo (del beacon).
+    std::map<NodeId, uint8_t> m_neighborDcRemaining;
     RouteChangeCallback m_routeChangeCallback;
     FloodCallback m_floodCallback;
     LocalEnergyFractionCallback m_localEnergyFractionCallback;

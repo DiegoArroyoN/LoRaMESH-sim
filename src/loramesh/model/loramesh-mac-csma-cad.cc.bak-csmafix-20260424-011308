@@ -1,0 +1,662 @@
+#include "loramesh-mac-csma-cad.h"
+
+#include "ns3/boolean.h"
+#include "ns3/double.h"
+#include "ns3/enum.h"
+#include "ns3/log.h"
+#include "ns3/lora-channel.h"
+#include "ns3/lora-phy.h"
+#include "ns3/net-device.h"
+#include "ns3/node.h"
+#include "ns3/simulator.h"
+#include "ns3/uinteger.h"
+
+#include <algorithm>
+#include <cmath>
+
+namespace ns3
+{
+namespace loramesh
+{
+
+NS_LOG_COMPONENT_DEFINE("CsmaCadMac");
+NS_OBJECT_ENSURE_REGISTERED(CsmaCadMac);
+
+TypeId
+CsmaCadMac::GetTypeId()
+{
+    static TypeId tid =
+        TypeId("ns3::loramesh::CsmaCadMac")
+            .SetParent<Object>()
+            .AddConstructor<CsmaCadMac>()
+            .AddAttribute("MinBackoffSlots",
+                          "Minimum backoff window in slots (W_min).",
+                          UintegerValue(4),
+                          MakeUintegerAccessor(&CsmaCadMac::m_minBackoffSlots),
+                          MakeUintegerChecker<uint32_t>(1))
+            .AddAttribute("MaxBackoffSlots",
+                          "Maximum backoff window in slots (W_max) before ToA scaling.",
+                          UintegerValue(kDefaultMaxBackoffSlots),
+                          MakeUintegerAccessor(&CsmaCadMac::SetMaxBackoffSlots,
+                                               &CsmaCadMac::GetMaxBackoffSlots),
+                          MakeUintegerChecker<uint32_t>(1))
+            .AddAttribute("MaxBackoffSlotsAbs",
+                          "Hard cap for backoff window in slots.",
+                          UintegerValue(kDefaultMaxBackoffSlotsAbs),
+                          MakeUintegerAccessor(&CsmaCadMac::SetMaxBackoffSlotsAbs,
+                                               &CsmaCadMac::GetMaxBackoffSlotsAbs),
+                          MakeUintegerChecker<uint32_t>(1))
+            .AddAttribute("BackoffStep",
+                          "Linear backoff step in slots (Delta W) per failure.",
+                          UintegerValue(4),
+                          MakeUintegerAccessor(&CsmaCadMac::m_backoffStep),
+                          MakeUintegerChecker<uint32_t>(1))
+            .AddAttribute("CadHistoryWindow",
+                          "Number of CAD samples to estimate channel load.",
+                          UintegerValue(20),
+                          MakeUintegerAccessor(&CsmaCadMac::m_cadHistoryWindow),
+                          MakeUintegerChecker<uint32_t>(1))
+            .AddAttribute("CadLoadWeight",
+                          "Weight [0..1] applied to channel load in backoff window.",
+                          DoubleValue(0.5),
+                          MakeDoubleAccessor(&CsmaCadMac::m_loadWeight),
+                          MakeDoubleChecker<double>(0.0, 1.0))
+            .AddAttribute("ToaEmaDataSeconds",
+                          "Initial typical data ToA used to scale max backoff.",
+                          DoubleValue(0.2),
+                          MakeDoubleAccessor(&CsmaCadMac::m_toaEmaDataSeconds),
+                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute("ToaEmaCtrlSeconds",
+                          "Initial typical control ToA used when data ToA is unknown.",
+                          DoubleValue(0.2),
+                          MakeDoubleAccessor(&CsmaCadMac::m_toaEmaCtrlSeconds),
+                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute("ToaEmaAlpha",
+                          "EMA alpha for ToA tracking.",
+                          DoubleValue(0.2),
+                          MakeDoubleAccessor(&CsmaCadMac::m_toaEmaAlpha),
+                          MakeDoubleChecker<double>(0.0, 1.0))
+            .AddAttribute("ToaMaxFactor",
+                          "Multiplier for ToA-based backoff cap.",
+                          DoubleValue(2.0),
+                          MakeDoubleAccessor(&CsmaCadMac::m_toaMaxFactor),
+                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute(
+                "DutyCycleLimit",
+                "Duty cycle limit as fraction (0.01 = 1%).",
+                DoubleValue(0.01),
+                MakeDoubleAccessor(&CsmaCadMac::SetDutyCycleLimit, &CsmaCadMac::GetDutyCycleLimit),
+                MakeDoubleChecker<double>(0.0, 1.0))
+            .AddAttribute(
+                "DutyCycleWindow",
+                "Window of time for duty cycle enforcement.",
+                TimeValue(Hours(1)),
+                MakeTimeAccessor(&CsmaCadMac::SetDutyCycleWindow, &CsmaCadMac::GetDutyCycleWindow),
+                MakeTimeChecker())
+            .AddAttribute("DutyCycleEnabled",
+                          "Enable/disable duty cycle enforcement.",
+                          BooleanValue(true),
+                          MakeBooleanAccessor(&CsmaCadMac::m_dutyCycleEnabled),
+                          MakeBooleanChecker())
+            .AddAttribute("CadDecisionModel",
+                          "CAD busy decision model: oracle | local_power.",
+                          EnumValue(CsmaCadMac::CAD_LOCAL_POWER),
+                          MakeEnumAccessor<CsmaCadMac::CadDecisionModel>(
+                              &CsmaCadMac::m_cadDecisionModel),
+                          MakeEnumChecker(CsmaCadMac::CAD_ORACLE,
+                                          "oracle",
+                                          CsmaCadMac::CAD_LOCAL_POWER,
+                                          "local_power"))
+            .AddAttribute("CadSymbols",
+                          "Number of CAD symbols used for one CAD operation.",
+                          UintegerValue(2),
+                          MakeUintegerAccessor(&CsmaCadMac::m_cadSymbols),
+                          MakeUintegerChecker<uint8_t>(1, 32))
+            .AddAttribute("CadSf",
+                          "Spreading factor used by CAD sensing (SF-aware CAD).",
+                          UintegerValue(9),
+                          MakeUintegerAccessor(&CsmaCadMac::m_cadSf),
+                          MakeUintegerChecker<uint8_t>(7, 12))
+            .AddAttribute("CadBandwidthHz",
+                          "Bandwidth used by CAD timing and sensitivity context.",
+                          UintegerValue(125000),
+                          MakeUintegerAccessor(&CsmaCadMac::m_cadBandwidthHz),
+                          MakeUintegerChecker<uint32_t>(1))
+            .AddAttribute("CadDurationMode",
+                          "CAD duration mode: fixed | sf_bw.",
+                          EnumValue(CsmaCadMac::CAD_DURATION_SF_BW),
+                          MakeEnumAccessor<CsmaCadMac::CadDurationMode>(
+                              &CsmaCadMac::m_cadDurationMode),
+                          MakeEnumChecker(CsmaCadMac::CAD_DURATION_FIXED,
+                                          "fixed",
+                                          CsmaCadMac::CAD_DURATION_SF_BW,
+                                          "sf_bw"))
+            .AddAttribute("CadSenseMarginDb",
+                          "Margin [dB] above sensitivity to declare CAD busy in local_power mode.",
+                          DoubleValue(0.0),
+                          MakeDoubleAccessor(&CsmaCadMac::m_cadSenseMarginDb),
+                          MakeDoubleChecker<double>());
+    return tid;
+}
+
+CsmaCadMac::CsmaCadMac()
+    : m_rng(CreateObject<UniformRandomVariable>()),
+      m_dutyCycleWindow(Hours(1)),
+      m_dutyCycleLimit(0.01),
+      m_cadDuration(MilliSeconds(5.5)),
+      m_difsCadCount(3),
+      m_backoffWindow(8),
+      m_cadHistoryWindow(20),
+      m_minBackoffSlots(4),
+      m_maxBackoffSlots(kDefaultMaxBackoffSlots),
+      m_maxBackoffSlotsAbs(kDefaultMaxBackoffSlotsAbs),
+      m_maxBackoffSlotsExplicit(false),
+      m_backoffStep(4),
+      m_failures(0),
+      m_lastBackoffSlots(0),
+      m_lastBackoffWindowSlots(0),
+      m_loadWeight(0.5),
+      m_toaEmaDataSeconds(0.2),
+      m_toaEmaCtrlSeconds(0.2),
+      m_toaEmaAlpha(0.2),
+      m_toaMaxFactor(2.0),
+      m_dutyCycleEnabled(true),
+      m_cadDecisionModel(CAD_LOCAL_POWER),
+      m_cadDurationMode(CAD_DURATION_SF_BW),
+      m_cadSymbols(2),
+      m_cadSf(9),
+      m_cadBandwidthHz(125000),
+      m_cadSenseMarginDb(0.0),
+      m_cadBusyEventsLocalPower(0),
+      m_cadBusyEventsOracle(0)
+{
+}
+
+bool
+CsmaCadMac::CanTransmitNow()
+{
+    return CanTransmitNow(0.0);
+}
+
+bool
+CsmaCadMac::CanTransmitNow(double toaSeconds)
+{
+    // If duty cycle is disabled, always allow transmission
+    if (!m_dutyCycleEnabled)
+    {
+        return true;
+    }
+
+    CleanOldTxHistory();
+    const double dutyCycle = GetDutyCycleUsed();
+    double projected = dutyCycle;
+    if (toaSeconds > 0.0 && m_dutyCycleWindow.GetSeconds() > 0.0)
+    {
+        projected += toaSeconds / m_dutyCycleWindow.GetSeconds();
+    }
+
+    const bool allowed = projected <= m_dutyCycleLimit;
+    if (!allowed)
+    {
+        NS_LOG_WARN("CsmaCadMac: DUTY limit exceeded current="
+                    << dutyCycle * 100.0 << "% projected=" << projected * 100.0
+                    << "% limit=" << m_dutyCycleLimit * 100.0 << "%");
+    }
+    return allowed;
+}
+
+void
+CsmaCadMac::NotifyTxStart(double toaSeconds)
+{
+    CleanOldTxHistory();
+    const Time now = Simulator::Now();
+    const Time duration = Seconds(toaSeconds);
+    m_txHistory.emplace_back(now, duration);
+    NS_LOG_DEBUG("CsmaCadMac: TX recorded duration=" << duration.GetSeconds() << "s dc="
+                                                     << GetDutyCycleUsed() * 100.0 << "%");
+}
+
+void
+CsmaCadMac::NotifyRxStart(double durationSeconds)
+{
+    NS_LOG_DEBUG("CsmaCadMac: RX duration=" << durationSeconds << "s");
+    (void)durationSeconds;
+}
+
+uint32_t
+CsmaCadMac::GetBackoffSlots()
+{
+    const uint32_t effectiveWindow = ComputeBackoffWindowSlots();
+    m_lastBackoffWindowSlots = effectiveWindow;
+    m_lastBackoffSlots = m_rng->GetInteger(0, effectiveWindow - 1);
+    return m_lastBackoffSlots;
+}
+
+double
+CsmaCadMac::GetDutyCycleUsed()
+{
+    CleanOldTxHistory();
+    if (m_txHistory.empty() || m_dutyCycleWindow.IsZero())
+    {
+        return 0.0;
+    }
+
+    const Time now = Simulator::Now();
+    const Time windowStart = now - m_dutyCycleWindow;
+    Time total{Seconds(0)};
+    for (const auto& record : m_txHistory)
+    {
+        const Time txStart = record.first;
+        const Time txEnd = record.first + record.second;
+        const Time overlapStart = std::max(txStart, windowStart);
+        const Time overlapEnd = std::min(txEnd, now);
+        if (overlapEnd > overlapStart)
+        {
+            total += overlapEnd - overlapStart;
+        }
+    }
+    return total.GetSeconds() / m_dutyCycleWindow.GetSeconds();
+}
+
+double
+CsmaCadMac::GetDutyCycleLimit() const
+{
+    return m_dutyCycleLimit;
+}
+
+void
+CsmaCadMac::SetDutyCycleLimit(double limit)
+{
+    m_dutyCycleLimit = std::clamp(limit, 0.0, 1.0);
+}
+
+void
+CsmaCadMac::SetDutyCycleWindow(Time window)
+{
+    m_dutyCycleWindow = window;
+}
+
+Time
+CsmaCadMac::GetDutyCycleWindow() const
+{
+    return m_dutyCycleWindow;
+}
+
+void
+CsmaCadMac::SetCadDuration(Time duration)
+{
+    m_cadDuration = duration;
+}
+
+void
+CsmaCadMac::SetDifsCadCount(uint8_t count)
+{
+    m_difsCadCount = count;
+}
+
+void
+CsmaCadMac::SetBackoffWindow(uint8_t window)
+{
+    m_backoffWindow = window;
+    const uint32_t legacyMax = (1u << m_backoffWindow) - 1;
+    // No sobrescribir MaxBackoffSlots si se configuró explícitamente.
+    if (!m_maxBackoffSlotsExplicit && legacyMax > m_maxBackoffSlots)
+    {
+        m_maxBackoffSlots = legacyMax;
+    }
+}
+
+void
+CsmaCadMac::SetMaxBackoffSlots(uint32_t slots)
+{
+    m_maxBackoffSlots = std::max<uint32_t>(1, slots);
+    m_maxBackoffSlotsExplicit = (slots != kDefaultMaxBackoffSlots);
+}
+
+uint32_t
+CsmaCadMac::GetMaxBackoffSlots() const
+{
+    return m_maxBackoffSlots;
+}
+
+void
+CsmaCadMac::SetMaxBackoffSlotsAbs(uint32_t slots)
+{
+    m_maxBackoffSlotsAbs = std::max<uint32_t>(1, slots);
+}
+
+uint32_t
+CsmaCadMac::GetMaxBackoffSlotsAbs() const
+{
+    return m_maxBackoffSlotsAbs;
+}
+
+void
+CsmaCadMac::SetRandomStream(Ptr<UniformRandomVariable> rng)
+{
+    m_rng = rng ? rng : CreateObject<UniformRandomVariable>();
+}
+
+void
+CsmaCadMac::SetPhy(Ptr<lorawan::LoraPhy> phy)
+{
+    m_phy = phy;
+}
+
+void
+CsmaCadMac::SetCadContext(uint8_t sf, uint32_t bwHz)
+{
+    if (sf >= 7 && sf <= 12)
+    {
+        m_cadSf = sf;
+    }
+    if (bwHz > 0)
+    {
+        m_cadBandwidthHz = bwHz;
+    }
+}
+
+void
+CsmaCadMac::UpdateTypicalDataToaSeconds(double toaSeconds)
+{
+    UpdateToaEma(m_toaEmaDataSeconds, toaSeconds);
+}
+
+void
+CsmaCadMac::UpdateTypicalCtrlToaSeconds(double toaSeconds)
+{
+    UpdateToaEma(m_toaEmaCtrlSeconds, toaSeconds);
+}
+
+void
+CsmaCadMac::UpdateToaEma(double& emaSeconds, double toaSeconds)
+{
+    if (toaSeconds <= 0.0)
+    {
+        return;
+    }
+    const double alpha = std::clamp(m_toaEmaAlpha, 0.0, 1.0);
+    emaSeconds = alpha * toaSeconds + (1.0 - alpha) * emaSeconds;
+}
+
+void
+CsmaCadMac::NotifyTxResult(bool success)
+{
+    if (success)
+    {
+        m_failures = 0;
+    }
+    else
+    {
+        m_failures++;
+    }
+}
+
+uint32_t
+CsmaCadMac::GetFailureCount() const
+{
+    return m_failures;
+}
+
+uint32_t
+CsmaCadMac::GetLastBackoffSlots() const
+{
+    return m_lastBackoffSlots;
+}
+
+uint32_t
+CsmaCadMac::GetLastBackoffWindowSlots() const
+{
+    return m_lastBackoffWindowSlots;
+}
+
+double
+CsmaCadMac::GetCadLoadEstimate() const
+{
+    return GetCadLoad();
+}
+
+uint64_t
+CsmaCadMac::GetCadBusyEventsLocalPower() const
+{
+    return m_cadBusyEventsLocalPower;
+}
+
+uint64_t
+CsmaCadMac::GetCadBusyEventsOracle() const
+{
+    return m_cadBusyEventsOracle;
+}
+
+Time
+CsmaCadMac::GetCadDuration() const
+{
+    if (m_cadDurationMode == CAD_DURATION_SF_BW)
+    {
+        return ComputeCadDurationFromContext();
+    }
+    return m_cadDuration;
+}
+
+uint8_t
+CsmaCadMac::GetDifsCadCount() const
+{
+    return m_difsCadCount;
+}
+
+bool
+CsmaCadMac::PerformChannelAssessment()
+{
+    const uint32_t nodeId =
+        (m_phy && m_phy->GetDevice() && m_phy->GetDevice()->GetNode())
+            ? m_phy->GetDevice()->GetNode()->GetId()
+            : 0xFFFFFFFFu;
+    bool busy = false;
+    const Time cadDuration = GetCadDuration();
+    for (uint8_t i = 0; i < m_difsCadCount; ++i)
+    {
+        const Time sampleTime = Simulator::Now() + (cadDuration * i);
+        if (PerformCadOnce(sampleTime))
+        {
+            NS_LOG_INFO("CsmaCadMac: CAD busy node="
+                        << nodeId << " attempt=" << unsigned(i)
+                        << " sampleTime=" << sampleTime.GetSeconds());
+            busy = true;
+            break;
+        }
+    }
+    if (busy)
+    {
+        m_failures++;
+        const uint32_t windowSlots = ComputeBackoffWindowSlots();
+        NS_LOG_INFO("CAD_RESULT detail: node="
+                    << nodeId << " time=" << Simulator::Now().GetSeconds()
+                    << "s busy=1 failures=" << m_failures << " windowSlots=" << windowSlots
+                    << " load=" << GetCadLoad());
+        return true;
+    }
+    if (m_failures > 0)
+    {
+        m_failures--;
+    }
+    const uint32_t windowSlots = ComputeBackoffWindowSlots();
+    NS_LOG_INFO("CAD_RESULT detail: node="
+                << nodeId << " time=" << Simulator::Now().GetSeconds()
+                << "s busy=0 failures=" << m_failures << " windowSlots=" << windowSlots
+                << " load=" << GetCadLoad());
+    return false;
+}
+
+bool
+CsmaCadMac::PerformCadOnce(Time sampleTime)
+{
+    Ptr<lorawan::LoraChannel> channel = m_phy ? m_phy->GetChannel() : nullptr;
+    if (!channel)
+    {
+        NS_LOG_WARN("CsmaCadMac: no PHY/channel attached, CAD defaults to busy");
+        RecordCadResult(true);
+        return true;
+    }
+
+    const auto events = channel->GetTxEvents(sampleTime);
+    for (const auto& ev : events)
+    {
+        if (ev.endTime <= sampleTime)
+        {
+            continue;
+        }
+
+        if (m_phy && !m_phy->IsOnFrequency(ev.frequencyHz))
+        {
+            continue;
+        }
+
+        if (m_cadDecisionModel == CAD_ORACLE)
+        {
+            NS_LOG_DEBUG("CsmaCadMac: CAD(oracle) busy by active tx on freq="
+                         << ev.frequencyHz << " sf=" << unsigned(ev.sf));
+            m_cadBusyEventsOracle++;
+            RecordCadResult(true);
+            return true;
+        }
+
+        if (ev.sf != m_cadSf)
+        {
+            continue;
+        }
+
+        if (!m_phy || !ev.sender)
+        {
+            NS_LOG_WARN("CsmaCadMac: missing PHY/sender for local_power CAD, fallback busy");
+            m_cadBusyEventsLocalPower++;
+            RecordCadResult(true);
+            return true;
+        }
+
+        Ptr<MobilityModel> senderMobility = ev.sender->GetMobility();
+        Ptr<MobilityModel> myMobility = m_phy->GetMobility();
+        if (!senderMobility || !myMobility)
+        {
+            NS_LOG_WARN("CsmaCadMac: missing mobility for local_power CAD, fallback busy");
+            m_cadBusyEventsLocalPower++;
+            RecordCadResult(true);
+            return true;
+        }
+
+        const double prxDbm = channel->GetRxPower(ev.txPowerDbm, senderMobility, myMobility);
+        const double thresholdDbm = GetCadSensitivityDbm(m_cadSf) + m_cadSenseMarginDb;
+        if (prxDbm >= thresholdDbm)
+        {
+            NS_LOG_DEBUG("CsmaCadMac: CAD(local_power) busy freq="
+                         << ev.frequencyHz << " sf=" << unsigned(ev.sf)
+                         << " prx=" << prxDbm << "dBm thr=" << thresholdDbm << "dBm");
+            m_cadBusyEventsLocalPower++;
+            RecordCadResult(true);
+            return true;
+        }
+    }
+    NS_LOG_DEBUG("CsmaCadMac: CAD result busy=false");
+    RecordCadResult(false);
+    return false;
+}
+
+void
+CsmaCadMac::CleanOldTxHistory()
+{
+    if (m_txHistory.empty())
+    {
+        return;
+    }
+
+    const Time threshold = Simulator::Now() - m_dutyCycleWindow;
+    while (!m_txHistory.empty() && (m_txHistory.front().first + m_txHistory.front().second) <= threshold)
+    {
+        m_txHistory.pop_front();
+    }
+}
+
+void
+CsmaCadMac::RecordCadResult(bool busy)
+{
+    m_cadHistory.push_back(busy);
+    while (m_cadHistory.size() > m_cadHistoryWindow)
+    {
+        m_cadHistory.pop_front();
+    }
+}
+
+double
+CsmaCadMac::GetCadLoad() const
+{
+    if (m_cadHistory.empty())
+    {
+        return 0.0;
+    }
+    uint32_t busyCount = 0;
+    for (bool busy : m_cadHistory)
+    {
+        if (busy)
+        {
+            busyCount++;
+        }
+    }
+    return static_cast<double>(busyCount) / static_cast<double>(m_cadHistory.size());
+}
+
+uint32_t
+CsmaCadMac::ComputeBackoffWindowSlots() const
+{
+    const uint32_t maxSlots = ComputeMaxBackoffSlots();
+    const uint32_t loadSlots =
+        static_cast<uint32_t>(std::round(GetCadLoad() * m_loadWeight * maxSlots));
+    const uint32_t window =
+        std::min(m_minBackoffSlots + (m_failures * m_backoffStep) + loadSlots, maxSlots);
+    return std::max<uint32_t>(1, window);
+}
+
+uint32_t
+CsmaCadMac::ComputeMaxBackoffSlots() const
+{
+    uint32_t maxSlots = std::max<uint32_t>(m_minBackoffSlots, m_maxBackoffSlots);
+    double toaSeconds = m_toaEmaDataSeconds;
+    if (toaSeconds <= 0.0)
+    {
+        toaSeconds = m_toaEmaCtrlSeconds;
+    }
+    const Time cadDuration = GetCadDuration();
+    if (cadDuration.IsPositive() && toaSeconds > 0.0 && m_toaMaxFactor > 0.0)
+    {
+        const double slotSeconds = cadDuration.GetSeconds();
+        const double toaSlots = (toaSeconds * m_toaMaxFactor) / slotSeconds;
+        const uint32_t toaSlotsRounded = static_cast<uint32_t>(std::ceil(toaSlots));
+        maxSlots = std::max(maxSlots, toaSlotsRounded);
+    }
+    const uint32_t hardCap = std::max<uint32_t>(m_minBackoffSlots, m_maxBackoffSlotsAbs);
+    maxSlots = std::min(maxSlots, hardCap);
+    return std::max<uint32_t>(1, maxSlots);
+}
+
+Time
+CsmaCadMac::ComputeCadDurationFromContext() const
+{
+    const uint8_t sf = std::min<uint8_t>(12, std::max<uint8_t>(7, m_cadSf));
+    const uint8_t symbols = std::max<uint8_t>(1, m_cadSymbols);
+    const uint32_t bwHz = std::max<uint32_t>(1, m_cadBandwidthHz);
+    const double tSymSec = std::pow(2.0, static_cast<int>(sf)) / static_cast<double>(bwHz);
+    return Seconds(std::max(1e-6, tSymSec * static_cast<double>(symbols)));
+}
+
+double
+CsmaCadMac::GetCadSensitivityDbm(uint8_t sf) const
+{
+    // SX1276 sensitivity (dBm) for SF7..SF12 @125kHz.
+    static const double kSensitivity[6] = {-123.0, -126.0, -129.0, -132.0, -133.0, -136.0};
+    if (sf < 7 || sf > 12)
+    {
+        return kSensitivity[0];
+    }
+    return kSensitivity[sf - 7];
+}
+
+} // namespace loramesh
+} // namespace ns3

@@ -37,13 +37,17 @@ struct LinkStats
 /**
  * \brief Composite metric for LoRaMesh routing decisions.
  *
- * Implements the formula from Diego Arroyo's paper:
- * Cost = α·ToA_norm + β·Hop_norm + γ·SNR_penalty + δ·Battery_penalty
+ * Implements the formula from Diego Arroyo's thesis (§4.2):
+ *   ΔC_ij = α·T̂_ij + β + δ·Ψ(b_j)
  *
  * Where:
- * - ToA is normalized against max ToA for the given SF (Semtech/LoRa Alliance values)
- * - SNR penalty uses link quality thresholds (better than RSSI)
- * - Battery penalty uses non-linear asymptotic function to protect low-battery nodes
+ * - T̂_ij is the ToA normalized against the max ToA for the given SF.
+ * - β is a FIXED cost per hop (accumulated hop-by-hop in DV); NOT hop/H_max.
+ * - Ψ(b_j) is a piecewise energy penalty: 0 when b≥b_w, 1 when b≤b_c,
+ *   power-law in between (Eq.3 of thesis).
+ *
+ * Weights (thesis §4.2, Table): α=0.60, β=0.15, δ=0.25 (α+β+δ=1).
+ * Energy penalty thresholds: b_w=0.50, b_c=0.20, p=2.
  */
 class CompositeMetric
 {
@@ -63,8 +67,14 @@ class CompositeMetric
     /// SNR-based link quality penalty using Semtech thresholds per SF
     double SnrPenalty(double snrDb, uint8_t sf) const;
 
-    /// Non-linear battery penalty using asymptotic formula from paper: 1/(ε + E²)
+    /// Piecewise energy penalty Ψ(b_j) per thesis Eq.3:
+    ///   Ψ=0 if b≥b_w; Ψ=1 if b≤b_c; power-law in between.
     double BatteryPenalty(double energyFraction, double batteryMv) const;
+
+    // Thesis §4.2 energy penalty thresholds
+    static constexpr double kEnergyWarningThreshold  = 0.50; // b_w
+    static constexpr double kEnergyCriticalThreshold = 0.20; // b_c
+    static constexpr double kEnergyPenaltyExponent   = 2.0;  // p
 
     // Max ToA values per SF in microseconds (Semtech SX1276 datasheet, BW=125kHz, CR=4/5, max
     // payload 222B) These are reference values for normalization, based on EU868 regulations

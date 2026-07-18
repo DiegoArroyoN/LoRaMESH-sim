@@ -1,108 +1,156 @@
 # LoRaMESH-sim
 
-Simulador LoRa Mesh sobre ns-3 para campañas DV, CSMA/CAD, duty-cycle y análisis E2E.
+Simulador LoRa mesh sobre ns-3 para campa?as comparables con Pueyo-Centelles y para estudios controlados de MAC, routing, energ?a y contenci?n PHY.
 
-## Estado operativo actual
+## Qu? documento leer primero
 
-- Default operativo:
-  - `profile=pueyo2024_paper_like`
-  - `wireFormat=pueyo7b`
-- Soporte legacy conservado:
-  - `profile=extended`
-  - `wireFormat=v2`
+Este repositorio ya no debe usarse con un solo documento para todo. La separaci?n correcta es:
 
-- **RX Multi-SF por detección** (`SimpleGatewayLoraPhy`):
-  - Barrido SF (`SfScanMin..SfScanMax`) con dwell `CadSymbols * Tsym(SF,BW)`.
-  - Lock de recepción solo tras detección (no lock inmediato por `trueSF`).
-  - **Single-demod**: un paquete a la vez.
-- **CAD CSMA/LBT no-oracle** (`CsmaCadMac`):
-  - Modelo default `CadDecisionModel=local_power`.
-  - Busy por potencia local recibida (`GetRxPower`) + filtro SF/frecuencia.
-  - Duración CAD default `CadDurationMode=sf_bw` (dependiente de SF/BW).
-- **Beacons DV latest-only** (`MeshDvApp`):
-  - Default `BeaconLatestOnly=true`.
-  - En cola se conserva el beacon más reciente; beacons viejos pendientes se reemplazan.
+- `README.md`
+  - punto de entrada
+  - mapa documental
+  - comandos m?nimos de build y ejecuci?n
+- `AI_OPERATOR_GUIDE.md`
+  - gu?a operativa completa para otra IA o para trabajo remoto reproducible
+  - campa?as, rutas, comandos, m?tricas, pitfalls, checklist
+- `FSD_LLD_Simulador_LoRaMESH.md`
+  - arquitectura y dise?o del simulador
+  - componentes, perfiles, PHY, MAC, routing, wire formats, supuestos f?sicos
 
-## Qué contiene este repositorio
+Si otra IA va a trabajar con el simulador, el orden correcto es:
 
-- Escenario principal: `mesh_dv_baseline.cc`
-- Lógica de aplicación/routing local: `mesh_dv_app.cc/.h`
-- NetDevice mesh: `mesh_lora_net_device.cc/.h`
-- Métricas y exportación: `metrics_collector.cc/.h`
-- Formatos on-air activos:
-  - comparable Pueyo:
-    - `data_wire_header_pueyo7b.*`
-    - `beacon_wire_header_pueyo.*`
-  - legado generico:
-    - `data_wire_header_v2.*`
-    - `beacon_wire_header_v2.*`
-- Scripts de campañas: `run_*.py`, `run_*.sh`
-- Documentación técnica: `FSD_LLD_Simulador_LoRaMESH.md`
+1. leer `AI_OPERATOR_GUIDE.md`
+2. leer `FSD_LLD_Simulador_LoRaMESH.md`
+3. si hay contexto experimental activo, leer el handoff remoto vigente
 
-## Prerrequisitos
+Regla r?pida:
 
-Este repositorio está pensado para ejecutarse **dentro de un árbol ns-3**.
+- estado de campa?as, comandos y operaci?n remota: `AI_OPERATOR_GUIDE.md`
+- arquitectura, perfiles y dise?o interno: `FSD_LLD_Simulador_LoRaMESH.md`
 
-Requisitos mínimos:
+## Secuencia recomendada de trabajo
 
-- ns-3 compilable (recomendado ns-3-dev/ns-3.45+)
-- Módulos disponibles en tu árbol:
-  - `src/lorawan`
-  - `src/loramesh`
+Para evitar errores metodologicos o de operacion, la secuencia correcta es:
 
-Si falta `src/loramesh`, el escenario no compilará.
+1. confirmar host, repo activo y commit
+2. verificar si hay `tmux` o campa?as activas
+3. leer la semantica del baseline en `AI_OPERATOR_GUIDE.md`
+4. si hay duda de arquitectura o de un contador, ir al `FSD`
+5. si se cambia codigo:
+   - editar
+   - compilar solo el target necesario
+   - correr un smoke test corto
+   - recien despues lanzar una campa?a
 
-## Instalación recomendada
+## Entorno operativo actual
 
-Desde la raíz de ns-3:
+- host remoto: `ns3-remote`
+- repo activo: `/home/diego/sim/current-ns3`
+- repo congelado real: `/home/diego/sim/LoRaMESH-sim-frozen-20260327`
+- commit freeze: `bed544a`
+- tag: `loramesh-sim-frozen-20260327`
 
-```bash
-cd scratch
-git clone https://github.com/DiegoArroyoN/LoRaMESH-sim.git LoRaMESH-sim
-cd ..
-./ns3 build
+Baseline principal actual:
+
+- `profile = pueyo2024_paper_like`
+- `topology = pueyo_grid`
+- `trafficMode = pueyo_all_to_all`
+- `100` paquetes por par origen-destino
+- cargas:
+  - `low = 100 s`
+  - `medium = 10 s`
+  - `high = 1 s`
+  - `saturation = 0.1 s`
+- baseline paper-like estricto:
+  - `SF7-8`
+  - `enable_csma = false`
+  - `enable_duty = false`
+  - `pueyoFloraLikeRx = true`
+  - `EnableSfScanRx = false`
+
+## Quick start
+
+### Conexi?n remota
+
+Desde este entorno Windows conviene desactivar multiplexing al usar SSH:
+
+```powershell
+ssh.exe -o ControlMaster=no -o ControlPath=none ns3-remote
 ```
 
-## Ejecución rápida
+### Build recomendado
 
-Desde la raíz de ns-3:
+Desde la ra?z de ns-3 en el remoto:
 
 ```bash
-./ns3 run "scratch/LoRaMESH-sim/mesh_dv_baseline --profile=pueyo2024_paper_like --nEd=9 --nodePlacementMode=pueyo_grid --pueyoGridSpacingM=177 --trafficLoad=low --dataStartSec=300 --dataStopSec=3900 --stopSec=4500 --pdrEndWindowSec=600"
+cd /home/diego/sim/current-ns3
+cmake --build build -j 1 --target ns3-dev-mesh_dv_baseline-default
 ```
 
-## Salidas
+No se recomienda usar build global si no es necesario. Puede fallar por targets ajenos al escenario.
 
-Cada corrida genera `mesh_dv_summary.json` y CSV de métricas en el directorio de ejecución.
-Los scripts de campaña (`run_*.py`) guardan resultados en `validation_results/` (ignorado por git).
+### Corrida r?pida
 
-## Parámetros relevantes
+```bash
+cd /home/diego/sim/current-ns3
+./ns3 run "scratch/LoRaMESH-sim/mesh_dv_baseline --profile=pueyo2024_paper_like --nEd=9 --nodePlacementMode=pueyo_grid --pueyoGridSpacingM=177 --trafficLoad=low --dataStartSec=300 --dataStopSec=39400 --stopSec=40000 --pdrEndWindowSec=600"
+```
 
-- `--profile=pueyo2024_paper_like`
-- `--wireFormat=pueyo7b`
-- `--enableCsma=true|false`
-- `--enableDuty=true|false`
-- `--dutyLimit=0.01`
-- `--dutyWindowSec=3600`
-- `--trafficLoad=low|medium|high|saturation`
-- `--beaconIntervalWarmSec`, `--beaconIntervalStableSec`
-- `--routeTimeoutFactor`
-- `--rngRun=<seed>`
+### Verificaci?n r?pida de una campa?a
 
-Si necesitas reproducir campañas legacy o de ingenieria internas, `extended` y `v2` siguen soportados, pero ya no son el camino operativo recomendado.
+```bash
+find /home/diego/sim/current-ns3/scratch/LoRaMESH-sim/validation_results/<campana> -name row.json | wc -l
+```
 
-Parámetros nuevos relevantes (atributos internos):
+## D?nde quedan los resultados
 
-- `ns3::SimpleGatewayLoraPhy::EnableSfScanRx=true`
-- `ns3::SimpleGatewayLoraPhy::SfScanCadSymbols=2`
-- `ns3::loramesh::CsmaCadMac::CadDecisionModel=local_power`
-- `ns3::loramesh::CsmaCadMac::CadDurationMode=sf_bw`
-- `ns3::MeshDvApp::BeaconLatestOnly=true`
+- corridas y campa?as activas:
+  - `/home/diego/sim/current-ns3/scratch/LoRaMESH-sim/validation_results`
+- archivo principal consolidado:
+  - `/home/diego/sim/results_archive/pueyo2024_paper_like_campaigns_20260406`
 
-## Compartir con otra persona
+## Qu? no hacer
 
-Comparte este link:
+- no usar `PeriodicFlush`
+- no convertir el baseline en TDMA
+- no introducir m?s `reception_paths`
+- no asumir que el cuello principal es routing
+- no interpretar `eventos por paquete generado` como si fueran porcentajes de paquetes
 
-- `https://github.com/DiegoArroyoN/LoRaMESH-sim`
+## Troubleshooting minimo
 
-Y pídele ejecutar exactamente los pasos de **Instalación recomendada** y **Ejecución rápida**.
+- si `ssh` falla de forma intermitente:
+  - usar `ssh.exe -o ControlMaster=no -o ControlPath=none ns3-remote`
+- si `scp` falla en este Windows:
+  - usar `ssh.exe ... "cat archivo"` y redirigir localmente
+- si una campa?a parece terminada pero hay duda:
+  - contar `row.json`
+- si el build global falla:
+  - compilar solo `ns3-dev-mesh_dv_baseline-default`
+- si aparece `generated_count < workload_target`:
+  - no interpretarlo como p?rdida PHY; revisar primero el cierre temporal de generaci?n
+
+## Diagn?stico t?cnico resumido
+
+En el baseline actual, el problema dominante es PHY/canal compartido:
+
+- `rx_no_more_demodulators`
+  - receptor ocupado cuando llega otra transmisi?n
+- `rx_post_lock_interference_fail`
+  - interferencia despu?s de que una se?al ya hab?a hecho lock
+- `pueyo_same_sf_overlap_events`
+  - s?ntoma fuerte de solapamiento same-SF
+
+En el baseline paper-like, un nodo solo puede recibir un paquete a la vez. Por eso la contenci?n temporal del canal domina mucho m?s que `drop_no_route`.
+
+## Estado de documentaci?n
+
+Este `README` es un mapa de entrada y no intenta duplicar el FSD.
+
+Para trabajo serio con el simulador:
+
+- operaci?n y campa?as:
+  - `AI_OPERATOR_GUIDE.md`
+- arquitectura y dise?o:
+  - `FSD_LLD_Simulador_LoRaMESH.md`
+
