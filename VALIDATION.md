@@ -35,6 +35,19 @@ Validation" del paper y la respuesta preempaquetada a revisores.
 - **Test:** `contrib/dv-cl/test/dv-cl-test-suite.cc`
   (`DvClMetricAnalyticTestCase`).
 
+## 2026-07-17 — Módulo contrib/dv-cl compila y su suite pasa en ns-3.46 (PASS)
+
+- **Qué:** `contrib/dv-cl` colocado en un árbol ns-3.46.1-dev (WSL
+  Ubuntu, gcc 13.3), configurado con
+  `./ns3 configure --enable-tests --enable-examples --enable-modules=dv-cl`.
+- **Resultado:** compila sin warnings propios;
+  `test-runner --suite=dv-cl` → **PASS** (2/2 TestCases: golden ToA +
+  métrica analítica/monotonicidad); el ejemplo `dv-cl-toa-example`
+  corre e imprime el barrido de batería reproduciendo la Ψ por tramos
+  (plano ≥bHi, rampa cuadrática, saturación ≤bLo).
+- Es el smoke del Gate 5: estructura de módulo estándar verificada
+  contra instalación limpia.
+
 ## Hallazgos de auditoría abiertos (F0.2)
 
 1. **Dualidad de métricas en el árbol de campaña.** El árbol frozen
@@ -57,7 +70,14 @@ Validation" del paper y la respuesta preempaquetada a revisores.
    normalización no afecta el ranking (solo la escala de ToA_hat), pero
    el comentario es incorrecto. Mantener los valores por paridad de
    comportamiento con las campañas; corregir la documentación.
-3. **Episodio del wire del beacon (2026-06/07).** El header pueyo7b
+3. **Integración loramesh rota en el árbol WSL ns-3-dev (preexistente).**
+   El `~/ns3/ns-3-dev` de WSL ya traía `src/loramesh` + `scratch/LoRaMESH-sim`
+   integrados, con dependencia invertida: `libns3-dev-loramesh.so` referencia
+   símbolos definidos en scratch (`ns3::MeshDvApp`, `ns3::lorawan::MeshLoraNetDevice`)
+   → el link de ejecutables falla. Anti-patrón que el port a `contrib/dv-cl`
+   elimina (la librería no puede depender de scratch). No bloquea a dv-cl
+   (validado aislado con `--enable-modules=dv-cl`).
+4. **Episodio del wire del beacon (2026-06/07).** El header pueyo7b
    nunca viajaba al aire: el rebuild de TX re-emitía un header V2
    gemelo byte-a-byte (7B). Reducirlo a 5B corrió las entradas DV 2
    bytes (PDR colapsado en todas las variantes); el fix posterior
