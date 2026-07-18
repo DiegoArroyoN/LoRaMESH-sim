@@ -10,7 +10,7 @@ Two independent implementations of the LoRa time-on-air:
 
 The script compares them over the full grid SF7-12 x BW{125,250} x
 CR{1..4} x payload{1..255} x DE{on,off} x CRC{on,off} x IH{on,off}
-(24480 combos), asserts exact agreement, checks two published anchor
+(7296 sampled combos), asserts exact agreement, checks two published anchor
 values, and emits a golden table (toa_golden.csv) consumed by the ns-3
 TestSuite (test/dv-cl-test-suite.cc).
 
