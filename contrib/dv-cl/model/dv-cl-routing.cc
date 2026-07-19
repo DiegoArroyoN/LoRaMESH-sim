@@ -70,17 +70,20 @@ DvClRouting::GetTypeId()
             .AddAttribute("CompositeWToa",
                           "Weight alpha applied to normalised T_hat in composite_score mode.",
                           DoubleValue(0.60),
-                          MakeDoubleAccessor(&DvClRouting::m_compositeWToa),
+                          MakeDoubleAccessor(&DvClRouting::SetAttrWToa,
+                                             &DvClRouting::GetAttrWToa),
                           MakeDoubleChecker<double>(0.0))
             .AddAttribute("CompositeWHop",
                           "Fixed per-hop cost beta added once per link in composite_score mode.",
                           DoubleValue(0.15),
-                          MakeDoubleAccessor(&DvClRouting::m_compositeWHop),
+                          MakeDoubleAccessor(&DvClRouting::SetAttrWHop,
+                                             &DvClRouting::GetAttrWHop),
                           MakeDoubleChecker<double>(0.0))
             .AddAttribute("CompositeWEnergy",
                           "Energy penalty weight delta in composite_score mode (thesis 4.2).",
                           DoubleValue(0.25),
-                          MakeDoubleAccessor(&DvClRouting::m_compositeWEnergy),
+                          MakeDoubleAccessor(&DvClRouting::SetAttrWEnergy,
+                                             &DvClRouting::GetAttrWEnergy),
                           MakeDoubleChecker<double>(0.0))
             .AddAttribute("CompositeCostStep",
                           "Scalar step to quantize composite raw cost into a COST255 byte.",
@@ -90,22 +93,26 @@ DvClRouting::GetTypeId()
             .AddAttribute("EnergyLo",
                           "Lower energy threshold for composite energy penalty.",
                           DoubleValue(0.20),
-                          MakeDoubleAccessor(&DvClRouting::m_energyLo),
+                          MakeDoubleAccessor(&DvClRouting::SetAttrEnergyLo,
+                                             &DvClRouting::GetAttrEnergyLo),
                           MakeDoubleChecker<double>(0.0, 1.0))
             .AddAttribute("EnergyHi",
                           "Upper energy threshold for composite energy penalty.",
                           DoubleValue(0.50),
-                          MakeDoubleAccessor(&DvClRouting::m_energyHi),
+                          MakeDoubleAccessor(&DvClRouting::SetAttrEnergyHi,
+                                             &DvClRouting::GetAttrEnergyHi),
                           MakeDoubleChecker<double>(0.0, 1.0))
             .AddAttribute("EnergyPow",
                           "Exponent p in piecewise energy penalty Psi (thesis Eq.3).",
                           DoubleValue(2.0),
-                          MakeDoubleAccessor(&DvClRouting::m_energyPow),
+                          MakeDoubleAccessor(&DvClRouting::SetAttrEnergyPow,
+                                             &DvClRouting::GetAttrEnergyPow),
                           MakeDoubleChecker<double>(0.0))
             .AddAttribute("EnergyMaxPenalty",
                           "Psi_max: maximum piecewise penalty before scaling by CompositeWEnergy.",
                           DoubleValue(1.0),
-                          MakeDoubleAccessor(&DvClRouting::m_energyMaxPenalty),
+                          MakeDoubleAccessor(&DvClRouting::SetAttrEnergyMaxPenalty,
+                                             &DvClRouting::GetAttrEnergyMaxPenalty),
                           MakeDoubleChecker<double>(0.0))
             .AddAttribute("MaxRoutesPerDestination",
                           "Maximum number of route candidates stored per destination.",
@@ -160,6 +167,28 @@ DvClRouting::GetTypeId()
 DvClRouting::DvClRouting()
 {
     m_rng = CreateObject<UniformRandomVariable>();
+    m_metric = CreateObject<DvClCompositeMetric>(); // F6.1 default metric
+}
+
+void
+DvClRouting::SetMetric(Ptr<DvClRoutingMetric> metric)
+{
+    if (metric)
+    {
+        m_metric = metric;
+    }
+}
+
+Ptr<DvClRoutingMetric>
+DvClRouting::GetMetric() const
+{
+    return m_metric;
+}
+
+DvClCompositeMetric*
+DvClRouting::BuiltinMetricOrNull() const
+{
+    return dynamic_cast<DvClCompositeMetric*>(PeekPointer(m_metric));
 }
 
 void
@@ -672,18 +701,6 @@ DvClRouting::GetLocalEnergyFraction() const
 }
 
 // SoC-wire: out-of-class definition required for C++14 ODR with static constexpr arrays.
-constexpr double DvClRouting::kMaxToaUs[6];
-
-double
-DvClRouting::NormalizeToaUs(double toaUs, uint8_t sf)
-{
-    // T_hat_ij = ToA_ij / ToA_max(SF)  in [0, 1]  -- thesis 4.2
-    const uint8_t sfClamped = std::clamp<uint8_t>(sf, 7, 12);
-    const size_t idx = static_cast<size_t>(sfClamped - 7);
-    const double maxToaForSf = kMaxToaUs[idx];
-    return std::min(toaUs / maxToaForSf, 1.0);
-}
-
 double
 DvClRouting::BattMvToEFrac(uint16_t battMv)
 {
@@ -701,42 +718,13 @@ DvClRouting::BattMvToEFrac(uint16_t battMv)
 double
 DvClRouting::ComputeThesisLinkCost(double toaUs, uint8_t sf, double neighborEFrac) const
 {
-    // Thesis 4.2: incremental link cost  Delta_C_ij = alpha*T_hat_ij + beta + delta*Psi(b_j)
-    //   alpha = m_compositeWToa   (0.60)  -- ToA normalisation weight
-    //   beta  = m_compositeWHop   (0.15)  -- fixed per-hop constant (NOT multiplied by hops)
-    //   delta = m_compositeWEnergy (0.25) -- energy penalty weight
-    //   Psi(b_j) = piecewise penalty [0,1] on NEXT-HOP battery b_j
-    const double toaNorm    = NormalizeToaUs(toaUs, sf);              // T_hat in [0,1]
-    const double toaCost    = m_compositeWToa * toaNorm;               // alpha * T_hat
-    const double hopCost    = m_compositeWHop;                         // beta (constant)
-    const double energyCost = ComputeCompositeEnergyPenalty(neighborEFrac); // delta*Psi(b_j)
-    return toaCost + hopCost + energyCost;
-}
-
-double
-DvClRouting::ComputeCompositeEnergyPenalty(double energyFraction) const
-{
-    if (!std::isfinite(energyFraction) || energyFraction < 0.0)
-    {
-        return 0.0;
-    }
-
-    const double lo = std::clamp(std::min(m_energyLo, m_energyHi), 0.0, 1.0);
-    const double hi = std::clamp(std::max(m_energyLo, m_energyHi), 0.0, 1.0);
-    const double e = std::clamp(energyFraction, 0.0, 1.0);
-    if (e >= hi)
-    {
-        return 0.0;
-    }
-    if (e <= lo)
-    {
-        return m_compositeWEnergy * m_energyMaxPenalty;
-    }
-
-    const double denom = std::max(hi - lo, 1e-9);
-    const double x = std::clamp((hi - e) / denom, 0.0, 1.0);
-    const double penalty = m_energyMaxPenalty * std::pow(x, m_energyPow);
-    return m_compositeWEnergy * penalty;
+    // F6.1: delegated to the pluggable metric (default DvClCompositeMetric
+    // implements the thesis formula alpha*T_hat + beta + delta*Psi(b_j)).
+    LinkInputs in;
+    in.toaUs = toaUs;
+    in.sf = sf;
+    in.energyFraction = neighborEFrac;
+    return m_metric->ComputeLinkCost(in);
 }
 
 uint32_t
@@ -2016,6 +2004,196 @@ DvClRouting::BuildDvMessage() const
         msg.entries.push_back(entry);
     }
     return msg;
+}
+
+
+void
+DvClRouting::SetAttrWToa(double v)
+{
+    auto* m = BuiltinMetricOrNull();
+    if (m)
+    {
+        m->SetAttribute("WToa", DoubleValue(v));
+    }
+    else
+    {
+        NS_LOG_WARN("legacy attribute ignored: a custom metric is plugged");
+    }
+}
+
+double
+DvClRouting::GetAttrWToa() const
+{
+    auto* m = BuiltinMetricOrNull();
+    if (!m)
+    {
+        return 0.0;
+    }
+    DoubleValue v;
+    m->GetAttribute("WToa", v);
+    return v.Get();
+}
+
+void
+DvClRouting::SetAttrWHop(double v)
+{
+    auto* m = BuiltinMetricOrNull();
+    if (m)
+    {
+        m->SetAttribute("WHop", DoubleValue(v));
+    }
+    else
+    {
+        NS_LOG_WARN("legacy attribute ignored: a custom metric is plugged");
+    }
+}
+
+double
+DvClRouting::GetAttrWHop() const
+{
+    auto* m = BuiltinMetricOrNull();
+    if (!m)
+    {
+        return 0.0;
+    }
+    DoubleValue v;
+    m->GetAttribute("WHop", v);
+    return v.Get();
+}
+
+void
+DvClRouting::SetAttrWEnergy(double v)
+{
+    auto* m = BuiltinMetricOrNull();
+    if (m)
+    {
+        m->SetAttribute("WEnergy", DoubleValue(v));
+    }
+    else
+    {
+        NS_LOG_WARN("legacy attribute ignored: a custom metric is plugged");
+    }
+}
+
+double
+DvClRouting::GetAttrWEnergy() const
+{
+    auto* m = BuiltinMetricOrNull();
+    if (!m)
+    {
+        return 0.0;
+    }
+    DoubleValue v;
+    m->GetAttribute("WEnergy", v);
+    return v.Get();
+}
+
+void
+DvClRouting::SetAttrEnergyLo(double v)
+{
+    auto* m = BuiltinMetricOrNull();
+    if (m)
+    {
+        m->SetAttribute("EnergyLo", DoubleValue(v));
+    }
+    else
+    {
+        NS_LOG_WARN("legacy attribute ignored: a custom metric is plugged");
+    }
+}
+
+double
+DvClRouting::GetAttrEnergyLo() const
+{
+    auto* m = BuiltinMetricOrNull();
+    if (!m)
+    {
+        return 0.0;
+    }
+    DoubleValue v;
+    m->GetAttribute("EnergyLo", v);
+    return v.Get();
+}
+
+void
+DvClRouting::SetAttrEnergyHi(double v)
+{
+    auto* m = BuiltinMetricOrNull();
+    if (m)
+    {
+        m->SetAttribute("EnergyHi", DoubleValue(v));
+    }
+    else
+    {
+        NS_LOG_WARN("legacy attribute ignored: a custom metric is plugged");
+    }
+}
+
+double
+DvClRouting::GetAttrEnergyHi() const
+{
+    auto* m = BuiltinMetricOrNull();
+    if (!m)
+    {
+        return 0.0;
+    }
+    DoubleValue v;
+    m->GetAttribute("EnergyHi", v);
+    return v.Get();
+}
+
+void
+DvClRouting::SetAttrEnergyPow(double v)
+{
+    auto* m = BuiltinMetricOrNull();
+    if (m)
+    {
+        m->SetAttribute("EnergyPow", DoubleValue(v));
+    }
+    else
+    {
+        NS_LOG_WARN("legacy attribute ignored: a custom metric is plugged");
+    }
+}
+
+double
+DvClRouting::GetAttrEnergyPow() const
+{
+    auto* m = BuiltinMetricOrNull();
+    if (!m)
+    {
+        return 0.0;
+    }
+    DoubleValue v;
+    m->GetAttribute("EnergyPow", v);
+    return v.Get();
+}
+
+void
+DvClRouting::SetAttrEnergyMaxPenalty(double v)
+{
+    auto* m = BuiltinMetricOrNull();
+    if (m)
+    {
+        m->SetAttribute("EnergyMaxPenalty", DoubleValue(v));
+    }
+    else
+    {
+        NS_LOG_WARN("legacy attribute ignored: a custom metric is plugged");
+    }
+}
+
+double
+DvClRouting::GetAttrEnergyMaxPenalty() const
+{
+    auto* m = BuiltinMetricOrNull();
+    if (!m)
+    {
+        return 0.0;
+    }
+    DoubleValue v;
+    m->GetAttribute("EnergyMaxPenalty", v);
+    return v.Get();
 }
 
 } // namespace dvcl

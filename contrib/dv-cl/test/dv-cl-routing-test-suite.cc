@@ -1,8 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include "ns3/double.h"
 #include "ns3/dv-cl-routing.h"
 #include "ns3/simulator.h"
 #include "ns3/test.h"
+
+#include <algorithm>
 
 namespace ns3
 {
@@ -193,6 +196,130 @@ class DvClRoutingExpiryTestCase : public TestCase
     }
 };
 
+/// Test double: a metric that prices every link at a constant.
+class ConstMetric : public DvClRoutingMetric
+{
+  public:
+    explicit ConstMetric(double cost)
+        : m_cost(cost)
+    {
+    }
+
+    double ComputeLinkCost(const LinkInputs&) const override
+    {
+        return m_cost;
+    }
+
+  private:
+    double m_cost;
+};
+
+/// Mirror of DvClRouting::BattMvToEFrac for expected-value computation.
+static double
+EFrac(uint16_t mv)
+{
+    if (mv == 0)
+    {
+        return 1.0;
+    }
+    const double f = (static_cast<double>(mv) - 3000.0) / 1200.0;
+    return std::max(0.0, std::min(1.0, f));
+}
+
+/**
+ * \ingroup dv-cl
+ * F5 step 2b safety net: the installed direct-route rawMetric equals the
+ * standalone DvClCompositeMetric on identical inputs (exact doubles);
+ * the legacy routing attributes forward into the built-in metric; and a
+ * custom metric plugged through SetMetric drives the cost (F6.1 seam).
+ */
+class DvClRoutingMetricSeamTestCase : public TestCase
+{
+  public:
+    DvClRoutingMetricSeamTestCase()
+        : TestCase("dv-cl routing metric seam: numeric equivalence, attribute "
+                   "forwarding, custom metric")
+    {
+    }
+
+  private:
+    static double
+    InstalledDirectRaw(Ptr<DvClRouting> r, NodeId nb)
+    {
+        for (const auto& e : r->GetPrimaryRoutesSnapshot())
+        {
+            if (e.destination == nb)
+            {
+                return e.rawMetric;
+            }
+        }
+        return -1.0;
+    }
+
+    void DoRun() override
+    {
+        // (1) Numeric equivalence over a sweep of link inputs.
+        auto standalone = CreateObject<DvClCompositeMetric>();
+        uint32_t seq = 1;
+        const uint32_t toas[] = {25856, 102656, 143360, 500000};
+        const uint8_t sfs[] = {7, 9, 12};
+        const uint16_t mvs[] = {0, 3100, 3400, 3800, 4200};
+        for (uint32_t toa : toas)
+        {
+            for (uint8_t sf : sfs)
+            {
+                for (uint16_t mv : mvs)
+                {
+                    auto r = CreateObject<DvClRouting>();
+                    r->SetNodeId(0);
+                    NeighborLinkInfo l = Link(1, seq, toa, mv);
+                    l.sf = sf;
+                    r->UpdateFromDvMsg(Msg(1, seq, {}), l);
+                    ++seq;
+                    LinkInputs in;
+                    in.toaUs = toa;
+                    in.sf = sf;
+                    in.energyFraction = EFrac(mv);
+                    const double expected = standalone->ComputeLinkCost(in);
+                    const double got = InstalledDirectRaw(r, 1);
+                    NS_TEST_ASSERT_MSG_EQ_TOL(got, expected, 1e-12,
+                                              "rawMetric == metric at toa=" << toa
+                                                  << " sf=" << unsigned(sf) << " mv=" << mv);
+                }
+            }
+        }
+
+        // (2) Legacy attribute forwarding: WEnergy=0 removes the penalty.
+        {
+            auto r = CreateObject<DvClRouting>();
+            r->SetNodeId(0);
+            r->SetAttribute("CompositeWEnergy", DoubleValue(0.0));
+            r->UpdateFromDvMsg(Msg(1, 1, {}), Link(1, 1, 102656, 3100)); // low battery
+            LinkInputs in;
+            in.toaUs = 102656;
+            in.sf = 7;
+            in.energyFraction = 1.0; // no penalty expected
+            const double expected = standalone->ComputeLinkCost(in);
+            NS_TEST_ASSERT_MSG_EQ_TOL(InstalledDirectRaw(r, 1), expected, 1e-12,
+                                      "WEnergy=0 via legacy attribute kills the penalty");
+            DoubleValue back;
+            r->GetAttribute("CompositeWEnergy", back);
+            NS_TEST_ASSERT_MSG_EQ_TOL(back.Get(), 0.0, 1e-12, "attribute reads back");
+        }
+
+        // (3) Custom metric plugged through the seam drives the cost.
+        {
+            auto r = CreateObject<DvClRouting>();
+            r->SetNodeId(0);
+            r->SetMetric(CreateObject<ConstMetric>(0.42));
+            r->UpdateFromDvMsg(Msg(1, 1, {}), Link(1, 1, 102656));
+            NS_TEST_ASSERT_MSG_EQ_TOL(InstalledDirectRaw(r, 1), 0.42, 1e-12,
+                                      "custom metric prices the direct link");
+        }
+        Simulator::Destroy();
+    }
+};
+
 /**
  * \ingroup dv-cl
  * The dv-cl-routing test suite.
@@ -207,6 +334,7 @@ class DvClRoutingTestSuite : public TestSuite
         AddTestCase(new DvClRoutingPoisonTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClRoutingSwitchHysteresisTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClRoutingExpiryTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new DvClRoutingMetricSeamTestCase, TestCase::Duration::QUICK);
     }
 };
 

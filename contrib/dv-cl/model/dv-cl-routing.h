@@ -3,6 +3,8 @@
 #ifndef DV_CL_ROUTING_H
 #define DV_CL_ROUTING_H
 
+#include "dv-cl-metric.h"
+
 #include "ns3/callback.h"
 #include "ns3/mac48-address.h"
 #include "ns3/nstime.h"
@@ -153,6 +155,11 @@ class DvClRouting : public Object
     void SetRouteChangeCallback(RouteChangeCallback cb);
     void SetFloodCallback(FloodCallback cb);
     void SetLocalEnergyFractionCallback(LocalEnergyFractionCallback cb);
+    /// F6.1 pluggable-metric seam: replace the link-cost metric. The legacy
+    /// Composite*/Energy* attributes only reach the built-in
+    /// DvClCompositeMetric; a custom metric owns its own configuration.
+    void SetMetric(Ptr<DvClRoutingMetric> metric);
+    Ptr<DvClRoutingMetric> GetMetric() const;
 
     bool HasRoute(NodeId dest);              // Non-const: llama GetRoute()
     NodeId LookupNextHop(NodeId dest);       // Non-const: llama GetRoute()
@@ -198,26 +205,26 @@ class DvClRouting : public Object
     uint32_t QuantizeCompositeMetric(double rawMetric) const;
     double DecodeCompositeMetric(uint16_t metric) const;
     double GetComparableMetric(const RouteEntry& entry) const;
-    // Thesis 4.2: ToA normalisation table per SF [us].
-    // SF7=143ms ... SF12=3293ms (Semtech SX1276, BW=125 kHz, CR=4/5, max payload 222 B).
-    static constexpr double kMaxToaUs[6] = {
-        143360.0,   // SF7
-        256512.0,   // SF8
-        462848.0,   // SF9
-        829440.0,   // SF10
-        1810432.0,  // SF11
-        3293184.0   // SF12
-    };
-
-    // SoC-wire helpers
-    /// Normalise measured ToA against the theoretical max for that SF -> T_hat in [0,1].
-    static double NormalizeToaUs(double toaUs, uint8_t sf);
     /// Convert received batt_mV to energy fraction [0,1] (0 mV = unknown -> 1.0 = no penalty).
     static double BattMvToEFrac(uint16_t battMv);
-    /// Thesis 4.2 single-link incremental cost: alpha*T_hat + beta + delta*Psi(b_j).
+    /// Single-link incremental cost, delegated to the pluggable metric (F6.1).
     double ComputeThesisLinkCost(double toaUs, uint8_t sf, double neighborEFrac) const;
-
-    double ComputeCompositeEnergyPenalty(double energyFraction) const;
+    /// The built-in composite metric if that is what is plugged, else nullptr.
+    DvClCompositeMetric* BuiltinMetricOrNull() const;
+    void SetAttrWToa(double v);
+    double GetAttrWToa() const;
+    void SetAttrWHop(double v);
+    double GetAttrWHop() const;
+    void SetAttrWEnergy(double v);
+    double GetAttrWEnergy() const;
+    void SetAttrEnergyLo(double v);
+    double GetAttrEnergyLo() const;
+    void SetAttrEnergyHi(double v);
+    double GetAttrEnergyHi() const;
+    void SetAttrEnergyPow(double v);
+    double GetAttrEnergyPow() const;
+    void SetAttrEnergyMaxPenalty(double v);
+    double GetAttrEnergyMaxPenalty() const;
     double GetLocalEnergyFraction() const;
     bool IsRouteUsable(const RouteEntry& entry, uint8_t hopLimit) const;
     /// §DC-aware: ¿el next-hop tiene presupuesto de DC por encima del umbral?
@@ -247,14 +254,8 @@ class DvClRouting : public Object
     AdvertRoutePolicy m_advertRoutePolicy{AdvertRoutePolicy::TOP_SCORE};
     MetricMode m_metricMode{MetricMode::COMPOSITE_SCORE};
     CostEncoding m_costEncoding{CostEncoding::COST255};
-    double m_compositeWToa{0.60};      // alpha: ToA weight (thesis 4.2)
-    double m_compositeWHop{0.15};      // beta:  fixed cost per hop (thesis 4.2)
-    double m_compositeWEnergy{0.25};   // delta: energy penalty weight (thesis 4.2)
     double m_compositeCostStep{0.025}; // quantization step for COST255 byte
-    double m_energyLo{0.20};           // b_c critical threshold (thesis Eq.3)
-    double m_energyHi{0.50};           // b_w warning threshold  (thesis Eq.3)
-    double m_energyPow{2.0};           // p exponent             (thesis Eq.3)
-    double m_energyMaxPenalty{1.0};    // Psi_max = 1.0; scaled by m_compositeWEnergy
+    Ptr<DvClRoutingMetric> m_metric;   // F6.1: pluggable link-cost metric
     uint32_t m_maxRoutesPerDestination{1};
     uint32_t m_maxTotalRoutes{1024};
     double m_activeTimeoutFactor{2.0};
