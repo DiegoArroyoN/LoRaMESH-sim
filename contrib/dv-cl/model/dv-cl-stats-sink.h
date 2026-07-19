@@ -173,6 +173,17 @@ class DvClStatsSink : public Object
                             uint32_t txCount,
                             uint32_t backoffCount) = 0;
     virtual void RecordConnectivity(uint32_t nodeId, uint32_t destination, bool hasRoute) = 0;
+    /// End-to-end delay sample of a delivered/expired data packet.
+    virtual void RecordE2eDelay(uint32_t src,
+                                uint32_t dst,
+                                uint32_t seq,
+                                uint8_t hops,
+                                double delayFirstTxSec,
+                                uint32_t bytes,
+                                uint8_t sf,
+                                bool delivered) = 0;
+    /// Beacon scheduling-to-transmission delay sample, seconds.
+    virtual void RecordBeaconDelay(double delaySec) = 0;
     /// First-transmission time of a packet, or a negative value if unknown.
     virtual double GetFirstTxTime(uint32_t src, uint32_t dst, uint32_t seq) = 0;
 };

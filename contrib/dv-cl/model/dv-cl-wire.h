@@ -125,6 +125,7 @@ class DvClDataHeader : public Header
     uint16_t GetDst() const { return m_dst; }
     uint16_t GetVia() const { return m_via; }
     uint8_t GetFlagsTtl() const { return m_flagsTtl; }
+    uint8_t GetTtl() const { return UnpackTtl(m_flagsTtl); }
 
     uint32_t GetSerializedSize() const override;
     void Serialize(Buffer::Iterator start) const override;
