@@ -401,6 +401,15 @@ DvClLoraNetDevice::Send(Ptr<Packet> packet, const Address& dest, uint16_t protoc
     {
         m_mac->NotifyTxStart(txDuration.GetSeconds());
     }
+    if (m_energyModel && m_node)
+    {
+        double txCurrentMa = DvClLoraEnergyModel::EstimateTxCurrentA(txPowerDbm) * 1000.0;
+        if (m_loraEnergyModel)
+        {
+            txCurrentMa = m_loraEnergyModel->GetTxCurrentA() * 1000.0;
+        }
+        m_energyModel->UpdateEnergy(m_node->GetId(), txCurrentMa, txDuration.GetSeconds());
+    }
     NS_LOG_INFO("Node " << GetNode()->GetId() << " duración TX: " << txDuration.GetMilliSeconds()
                           << "ms"
                           << " (" << txDuration.GetSeconds() << "s)");
@@ -549,6 +558,10 @@ DvClLoraNetDevice::Receive(Ptr<const Packet> packet)
         if (m_mac)
         {
             m_mac->NotifyRxStart(duration);
+        }
+        if (m_energyModel && m_node)
+        {
+            m_energyModel->UpdateRxEnergy(m_node->GetId(), duration);
         }
     }
 

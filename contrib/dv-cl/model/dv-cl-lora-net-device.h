@@ -3,6 +3,7 @@
 #ifndef DV_CL_LORA_NET_DEVICE_H
 #define DV_CL_LORA_NET_DEVICE_H
 
+#include "dv-cl-energy-registry.h"
 #include "dv-cl-lora-energy-model.h"
 
 #include "ns3/lora-phy.h"
@@ -49,6 +50,16 @@ class DvClLoraNetDevice : public NetDevice
     Ptr<DvClCsmaCadMac> GetMac() const
     {
         return m_mac;
+    }
+
+    void SetEnergyModel(Ptr<DvClEnergyRegistry> energy)
+    {
+        m_energyModel = energy;
+    }
+
+    Ptr<DvClEnergyRegistry> GetEnergyModel() const
+    {
+        return m_energyModel;
     }
 
     double GetTxPowerDbm() const
@@ -136,6 +147,7 @@ class DvClLoraNetDevice : public NetDevice
     Ptr<lorawan::LoraPhy> m_phy;
     Ptr<Node> m_node;
     Ptr<DvClCsmaCadMac> m_mac;
+    Ptr<DvClEnergyRegistry> m_energyModel; //!< campaign energy engine (registry)
     Ptr<DvClLoraEnergyModel> m_loraEnergyModel; ///< ns-3 energy framework model
     double m_txPowerDbm{14.0};                    // Unified TX power for data/control.
     uint8_t m_preambleSymbols{8};                 // LoRa preamble symbols used on-air.
