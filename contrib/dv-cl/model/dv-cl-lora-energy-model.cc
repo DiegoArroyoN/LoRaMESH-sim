@@ -84,10 +84,13 @@ DvClLoraEnergyModel::GetTypeId()
                 MakeTraceSourceAccessor(&DvClLoraEnergyModel::m_totalEnergyConsumptionTrace),
                 "ns3::TracedValueCallback::Double");
         ;
-    tid.AddTraceSource("EnergyDepleted",
-                       "Node ran out of energy: (nodeId, remaining fraction).",
-                       MakeTraceSourceAccessor(&DvClLoraEnergyModel::m_energyDepletedTrace),
-                       "ns3::dvcl::DvClLoraEnergyModel::EnergyDepletedCallback");
+    static bool traceRegistered =
+        (tid.AddTraceSource("EnergyDepleted",
+                            "Node ran out of energy: (nodeId, remaining fraction).",
+                            MakeTraceSourceAccessor(&DvClLoraEnergyModel::m_energyDepletedTrace),
+                            "ns3::dvcl::DvClLoraEnergyModel::EnergyDepletedCallback"),
+         true);
+    (void)traceRegistered;
     return tid;
 }
 

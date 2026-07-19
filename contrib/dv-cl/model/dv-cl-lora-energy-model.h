@@ -92,17 +92,16 @@ class DvClLoraEnergyModel : public energy::DeviceEnergyModel
 
     DvClRadioState GetCurrentState() const;
     void SetNode(Ptr<Node> node);
+    /// Accumulated time spent in a radio state (F1.3b: per-state ledger).
+    Time GetTimeInState(DvClRadioState s) const;
+    /// Fired on energy depletion: (nodeId, remainingFraction).
+    typedef void (*EnergyDepletedCallback)(uint32_t nodeId, double remainingFraction);
     Ptr<Node> GetNode() const;
     double GetRemainingEnergyJ() const;
     double GetEnergyFraction() const;
     double GetSupplyVoltageV() const;
 
   private:
-    /// Accumulated time spent in a radio state (F1.3b: per-state ledger).
-    Time GetTimeInState(DvClRadioState s) const;
-    /// Fired on energy depletion: (nodeId, remainingFraction).
-    typedef void (*EnergyDepletedCallback)(uint32_t nodeId, double remainingFraction);
-
     double DoGetCurrentA() const override;
     void UpdateEnergyConsumption();
     Time m_stateTimes[8]{}; //!< per-state accumulated time, indexed by DvClRadioState
