@@ -166,6 +166,45 @@ Validation" del paper y la respuesta preempaquetada a revisores.
   márgenes, no vs baseline.
 - **Test:** `tools/validation/robustness_check_6b.py`.
 
+## 2026-07-18 — F1.3(b) Energía por estado, experimento discriminador (PASS con semántica establecida)
+
+- **Qué:** escenario trivial (N=4, ALOHA, sin DC, 2 h, sin muertes) con
+  la columna toaUs; forma cerrada E = V·[I_idle·(T−ΣToA) + I_tx·ΣToA]
+  bajo dos hipótesis de estado en reposo.
+- **Resultado:** idle=RX-continuo (10.3 mA) → error +178..+201 %
+  (descartada); **idle=standby (1.6 mA) → error +5.2..+8.6 %** en los 4
+  nodos. El radio reposa en standby; el término TX (V·I_tx·ΣToA, con
+  I_tx=120 mA @+20 dBm del datasheet) cuadra exacto. El residuo
+  (predicción > consumo) corresponde a intervalos de sleep (0.2 µA) no
+  modelados en la forma cerrada.
+- **Port TODO:** exponer tiempos por estado (tx/rx/standby/sleep/cad)
+  en las métricas para cerrar el balance E = Σ I_s·V·t_s al mJ.
+- **Test:** `/home/diego/sim/_f13b_f16.sh` (run con metadatos).
+
+## 2026-07-18 — F1.6 Test de simetría (PASS)
+
+- **Qué:** a2a N=9 grilla 3×3 (cmp_csma, sin DC, 10 semillas): el
+  consumo medio por nodo debe ser indistinguible dentro de cada clase
+  posicional (4 esquinas, 4 bordes, 1 centro).
+- **Resultado:** spread entre esquinas = 18.8 J vs σ entre semillas
+  177 J (ratio 0.11); bordes 39.9 J vs 154 J (0.26) — indistinguibles.
+  Orden entre clases físicamente correcto (esquina 1883 < borde ~2160 <
+  centro 2480 J: el centro reenvía más). Sin sesgos de orden de eventos
+  ni de inicialización.
+
+## 2026-07-18 — F2.4 Conservación de paquetes (PARCIAL — hallazgo)
+
+- **Verificado:** el ledger de entregados (`_delay.csv`) es consistente
+  3/3 goldens (filas = delivered del summary, sin duplicados src/dst/seq).
+- **Hallazgo:** no existe ledger de generados (delay solo registra
+  entregas) y los contadores de drops son **conteos de eventos** (una
+  misma trama puede contar en varios relays), de modo que
+  generados = entregados + Σdrops + no-admitidos NO es una identidad
+  (residuos de −1.8 % a −90 % según régimen). La conservación estricta
+  por paquete requiere loggear la generación y el destino final de cada
+  trama: **instrumentación del port** (assert de fin de corrida del
+  plan F2.4).
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
