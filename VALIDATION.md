@@ -129,16 +129,20 @@ Validation" del paper y la respuesta preempaquetada a revisores.
 - **Resultado:** conv 1.21 %, a2a 1.12 % (dcoff de referencia: 5.5 %) —
   supera el 1 % en ventana rodante, mientras el agregado clava
   ≤ 1.000 % exacto (55 600 nodos-run, F1.4a).
-- **Mecanismo (confirmado en código):** el MAC aplica presupuesto por
-  **ventana fija de 1 h** (`SetDutyCycleWindow(Hours(1))`,
-  `GetDutyCycleUsed/Limit`). Una ráfaga que cruza el borde de ventana
-  puede alcanzar hasta 2× teórico en ventana rodante; observado ≤ 1.21×.
-- **Disposición:** implementación literal defendible de ETSI EN 300 220
-  (duty definido por hora); la lectura rodante es más conservadora. Se
-  declara explícitamente en el paper ("presupuesto por ventana fija de
-  1 h"). Para el port del módulo: semántica configurable en
-  `RegionalProfile` (ventana fija | rodante | T_off por transmisión
-  estilo Semtech), con la rodante como default estricto.
+- **Mecanismo (REFINADO 2026-07-19 al portar el MAC):** la clase
+  `CsmaCadMac` implementa presupuesto **rodante por overlap** — usado =
+  Σ solape(tx, [now−1h, now])/1h, y la admisión pre-carga el ToA
+  proyectado (usado + toa/W ≤ 1 %). Semántica capturada como spec
+  ejecutable en la suite `dv-cl-mac` del módulo. La conclusión previa
+  ("ventana fija") era incorrecta.
+- **Implicación de los picos 1.21 %:** con gate rodante pre-cargado, un
+  excedente rodante solo puede venir de un camino de TX que **no pasa
+  por la admisión con su ToA** (candidato: plano de control/beacons o
+  el overload sin argumento de `CanTransmitNow`). Investigar y cerrar
+  en el paso 5 del port (app): todo TX debe pre-cargar su ToA.
+- **Disposición:** el agregado ≤ 1.000 % exacto (F1.4a) sigue siendo el
+  claim verificado del paper; el detalle del camino que se salta la
+  pre-carga se documenta y corrige en el módulo.
 
 ## 2026-07-18 — F1.5 Convergencia DV vs Bellman-Ford offline (PASS)
 
