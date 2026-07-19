@@ -140,6 +140,32 @@ Validation" del paper y la respuesta preempaquetada a revisores.
   `RegionalProfile` (ventana fija | rodante | T_off por transmisión
   estilo Semtech), con la rodante como default estricto.
 
+## 2026-07-18 — F1.5 Convergencia DV vs Bellman-Ford offline (PASS)
+
+- **Qué:** run a2a N=9 grid (cmp_csma, dcoff, 2 h) con
+  `enableMetricsEssentialOnly=false`; reconstrucción de la tabla de
+  rutas final y del grafo de enlaces directos desde
+  `mesh_dv_metrics_routes.csv`; caminos mínimos por Bellman-Ford
+  independiente (puro Python) sobre ese grafo; comparación del costo de
+  la ruta elegida por el simulador contra el óptimo con tolerancia
+  = histéresis (0.05) + holgura de cuantización (0.02 por salto).
+- **Resultado:** **64/64 pares (nodo,destino) dentro de tolerancia
+  (100 %)**. El DV converge al óptimo de su propia métrica.
+- **Test:** `tools/validation/bf_check.py` (+ `run_with_metadata.sh`).
+
+## 2026-07-18 — Claim de robustez re-verificado sobre campañas 6B (PASS)
+
+- **Qué:** el claim del paper ("en ninguna celda la línea base supera
+  significativamente a DV-CL") contra los re-runs 6B de los barridos
+  shadow-σ / exponente de path-loss / modelo de interferencia
+  (manifests 2026-07-05), Welch por celda.
+- **Resultado:** 33 celdas comparadas — DV-CL > base significativo en
+  30/33; **base > DV-CL significativo en 0/33**. Claim sostenido en 6B.
+  El barrido de margen CAD no produce comparaciones vs ALOHA por diseño
+  (solo corre variantes CSMA); su claim es de estabilidad across
+  márgenes, no vs baseline.
+- **Test:** `tools/validation/robustness_check_6b.py`.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
