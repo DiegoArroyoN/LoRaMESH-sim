@@ -209,6 +209,63 @@ Validation" del paper y la respuesta preempaquetada a revisores.
   trama: **instrumentación del port** (assert de fin de corrida del
   plan F2.4).
 
+## 2026-07-20 — F5 paso 7: equivalencia módulo vs binario de campaña (PASS)
+
+El módulo `contrib/dv-cl` reproduce el binario de campaña **evento por
+evento**: `tx.csv`, `rx.csv` y `routes.csv` byte-idénticos corriendo ambos
+sobre la misma base ns-3 (árbol override del servidor), perfil
+`proposal_pueyo_like_csmacad`, 9 nodos en grilla, rngRun=1
+(pdr=0.6914, gen=81, dlv=56, fwd=28).
+
+La equivalencia se re-verificó tras cada paso de limpieza (unificación del
+header en el parser, excisión de las rutas v2 muertas, eliminación total de
+v1/v2), de modo que el refactor está demostrado neutro, no supuesto.
+
+Método que la consiguió: diff exhaustivo de cada archivo portado contra el
+fuente de campaña con los renombres aplicados. Tres defectos encontrados:
+
+1. `.gitignore` excluía todo `*.txt`, es decir **todos los `CMakeLists.txt`**:
+   el módulo publicado no tenía sistema de compilación (`Skipping
+   contrib/dv-cl` al configurar). Corregido y versionado.
+2. Faltaba el fallback de carga desconocida de la métrica (derivar de
+   `batteryMv`). Port fiel restaurado; no se ejercita en estos escenarios
+   porque las baterías están al ~99.9%.
+3. **La causa de la divergencia**: el guardia del sondeo de beacon en
+   recepción. Ver sección siguiente.
+
+## 2026-07-20 — Guardia de sondeo de beacon: defecto y medición de impacto
+
+La campaña guarda el sondeo que recupera el origen lógico de un beacon con
+**7 B**, el tamaño del header experimental v2 retirado, aunque parsea el de
+**6 B**. Un beacon que no anuncia rutas mide exactamente 6 B, así que la
+campaña nunca recupera su origen ni aprende de él el mapeo nodeId↔MAC. Eso le
+cuesta rutas, y con ellas relays.
+
+Corregido en el módulo (guardia = `DvClBeaconHeader::kSerializedSize`), en
+commit aparte para que la equivalencia quede firmada sobre el código fiel.
+
+**Impacto medido** (barrido pareado por semilla, mismas semillas en ambas
+variantes, 8 semillas por topología, grilla 500 m, 1200 s):
+
+| nEd | PDR campaña (7 B) | PDR corregido (6 B) | delta | t pareado | corridas idénticas |
+|-----|-------------------|---------------------|-------|-----------|--------------------|
+| 9   | 0.6883            | 0.6914              | +0.0031 | —       | 5/8                |
+| 25  | 0.3214            | 0.3181              | −0.0033 | −1.21   | 6/8                |
+| 49  | 0.1730            | 0.1790              | +0.0060 | +0.89   | 5/8                |
+
+**Conclusión: el efecto no es significativo ni crece con la escala.** Ambos
+|t| < 2 (7 gl); el signo incluso se invierte entre 25 y 49 nodos. De 16 pares
+25n/49n solo 5 difieren (2 a favor del corregido, 3 a favor de la campaña), y
+la magnitud típica del delta cuando difiere (0.0231) es **menor que la
+desviación entre semillas** (0.0281 a 49 nodos). La fracción de corridas
+idénticas se mantiene ~5-6/8 en las tres topologías.
+
+Consecuencia para el paper: el defecto es real y está corregido, pero **no
+compromete ningún número publicado** en ninguno de los tres tamaños de red.
+
+Reservas: una sola familia de topología (grilla), tráfico bajo all-to-all y
+ventana de 1200 s. No se midió con movilidad ni con cargas de saturación.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
