@@ -613,6 +613,55 @@ dos perfiles con duty al 1% quedan en 0.034-0.041 pagando el régimen.
 cinco sin él, y la brecha de ~4-5x entre ambos grupos es regulatoria, no de
 encaminamiento (confirmado en la entrada anterior).
 
+## 2026-07-20 — Campaña completa post-endurecimiento (360 corridas)
+
+Primera campaña sobre el simulador endurecido: 8 perfiles, {9,25,49} nodos, 10
+semillas, 7200 s de horizonte (dos ventanas de duty), datos desde 600 s, PDR
+medido en los últimos 1800 s, métricas completas. **360/360 corridas sin fallo**,
+15 GB. Índice en `tools/validation/campaign_20260720_index.csv`.
+
+**PDR medio ± desv (10 semillas), perfiles sin duty:**
+
+| perfil | n=9 | n=25 | n=49 |
+|---|---|---|---|
+| `pueyo2024_paper_like_csmacad` | 0.1706±0.021 | 0.0778±0.003 | 0.0392±0.002 |
+| `pueyo2024_paper_like` | 0.1688±0.021 | 0.0771±0.004 | 0.0385±0.002 |
+| `proposal_pueyo_like_csmacad` | 0.1679±0.020 | 0.0771±0.003 | 0.0381±0.002 |
+| `csmacad_free_backoff` | 0.1674±0.020 | 0.0768±0.002 | 0.0386±0.002 |
+| `proposal_pueyo_like_aloha` | 0.1657±0.021 | 0.0767±0.004 | 0.0376±0.002 |
+| `pueyo2024` | 0.0733±0.031 | 0.0114±0.002 | 0.0043±0.001 |
+
+**Hallazgo 1 — los cinco perfiles superiores son indistinguibles entre sí.** El
+rango completo (0.1657-0.1706 en n=9) cabe holgadamente dentro de una
+desviación (±0.020). Solo `pueyo2024` —el baseline débil por construcción— se
+separa. Con esta configuración **la propuesta no se distingue de los baselines
+en PDR**; si la tesis afirma superioridad, no es en este eje ni en este régimen,
+y habrá que buscarla en energía, vida útil o latencia, o en un régimen donde el
+duty muerda.
+
+**Hallazgo 2 — la disciplina de duty conformante rinde MEJOR:**
+
+| perfil | disciplina | n=9 | n=25 | n=49 |
+|---|---|---|---|---|
+| `proposal_pueyo_like` | time_off_air | **0.0304** | **0.0118** | **0.0041** |
+| | sliding_window | 0.0191 | 0.0054 | 0.0023 |
+| | fixed_window | 0.0194 | 0.0066 | 0.0032 |
+| `proposal_pueyo_like_observed` | time_off_air | **0.0374** | **0.0194** | **0.0089** |
+| | sliding_window | 0.0182 | 0.0060 | 0.0026 |
+| | fixed_window | 0.0163 | 0.0054 | 0.0024 |
+
+Con **el mismo presupuesto de aire**, `time_off_air` entrega 1.6x-2.3x más que
+las otras dos lecturas de la norma, consistente en ambos perfiles y las tres
+escalas. La explicación mecánica: espacia las transmisiones de forma continua en
+vez de permitir ráfagas seguidas de bloqueos largos, y las ráfagas colisionan
+consigo mismas. `sliding_window` y `fixed_window` quedan parejas entre sí, ambas
+propensas a ráfaga.
+
+Resultado aprovechable para el paper: **interpretar el duty cycle como
+espaciado continuo (lo que hacen los dispositivos reales) no es solo lo
+correcto normativamente, también es lo que mejor rinde** — la conformidad no
+cuesta rendimiento, lo gana.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
