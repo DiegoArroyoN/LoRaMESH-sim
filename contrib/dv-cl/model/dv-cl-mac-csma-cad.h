@@ -51,6 +51,7 @@ class DvClCsmaCadMac : public Object
     {
         TIME_OFF_AIR,   //!< ETSI EN 300 220 / LoRaWAN: silence proportional to airtime
         SLIDING_WINDOW, //!< legacy: sum over the trailing window (reproduces old runs)
+        FIXED_WINDOW,   //!< clock-aligned allowance that refills when the window rolls over
     };
 
     /// Transmissions that consumed air without a same-instant gate grant.
@@ -73,6 +74,12 @@ class DvClCsmaCadMac : public Object
      * the EU868 behaviour it has always had.
      */
     void SetRegionalProfile(Ptr<DvClRegionalProfile> region);
+
+  private:
+    /// Refill the fixed-window allowance if the clock has entered a new window.
+    void RollFixedWindow();
+
+  public:
     Ptr<DvClRegionalProfile> GetRegionalProfile() const { return m_region; }
 
     void SetDutyEnforcement(const std::string& mode);
@@ -167,6 +174,10 @@ class DvClCsmaCadMac : public Object
     //! Instant at which the gate last authorised a transmission, and the airtime
     //! it authorised. Air consumed without a grant standing at the same instant
     //! is air the gate never priced.
+    //! Fixed-window discipline: index of the window the allowance belongs to,
+    //! and the airtime already spent inside it.
+    int64_t m_fixedWindowIndex{-1};
+    double m_fixedWindowSpent{0.0};
     Time m_lastGrantAt{Seconds(-1)};
     double m_lastGrantToa{0.0};
     uint64_t m_ungatedTx{0};

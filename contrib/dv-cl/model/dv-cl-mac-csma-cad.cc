@@ -102,7 +102,10 @@ DvClCsmaCadMac::GetTypeId()
                 "and LoRaWAN (after transmitting T the radio stays silent until T/limit "
                 "has elapsed, which bounds the ratio over every window); 'sliding_window' "
                 "keeps the legacy trailing-sum gate, which is only checked at transmission "
-                "instants and lets the true rolling peak exceed the limit.",
+                "instants and lets the true rolling peak exceed the limit; 'fixed_window' "
+                "grants a clock-aligned allowance that refills when the window rolls over, "
+                "which reads the hour as a calendar hour and therefore permits twice the "
+                "allowance across a boundary.",
                 StringValue("time_off_air"),
                 MakeStringAccessor(&DvClCsmaCadMac::SetDutyEnforcement,
                                    &DvClCsmaCadMac::GetDutyEnforcement),
@@ -210,6 +213,24 @@ DvClCsmaCadMac::CanTransmitNow(double toaSeconds)
         return false;
     }
 
+    if (m_dutyEnforcement == DutyEnforcement::FIXED_WINDOW)
+    {
+        RollFixedWindow();
+        const double budget = m_dutyCycleLimit * m_dutyCycleWindow.GetSeconds();
+        const bool fits = (m_fixedWindowSpent + toaSeconds) <= budget;
+        if (fits)
+        {
+            m_lastGrantAt = Simulator::Now();
+            m_lastGrantToa = toaSeconds;
+        }
+        else
+        {
+            NS_LOG_WARN("DvClCsmaCadMac: fixed-window allowance spent ("
+                        << m_fixedWindowSpent << "/" << budget << "s)");
+        }
+        return fits;
+    }
+
     if (m_dutyEnforcement == DutyEnforcement::TIME_OFF_AIR)
     {
         const bool ready = Simulator::Now() >= m_nextTxAllowed;
@@ -250,6 +271,22 @@ DvClCsmaCadMac::CanTransmitNow(double toaSeconds)
 }
 
 void
+DvClCsmaCadMac::RollFixedWindow()
+{
+    if (m_dutyCycleWindow.IsZero())
+    {
+        return;
+    }
+    const int64_t idx =
+        static_cast<int64_t>(Simulator::Now().GetSeconds() / m_dutyCycleWindow.GetSeconds());
+    if (idx != m_fixedWindowIndex)
+    {
+        m_fixedWindowIndex = idx;
+        m_fixedWindowSpent = 0.0; // the allowance refills wholesale on rollover
+    }
+}
+
+void
 DvClCsmaCadMac::SetRegionalProfile(Ptr<DvClRegionalProfile> region)
 {
     m_region = region;
@@ -262,15 +299,32 @@ DvClCsmaCadMac::SetRegionalProfile(Ptr<DvClRegionalProfile> region)
 void
 DvClCsmaCadMac::SetDutyEnforcement(const std::string& mode)
 {
-    m_dutyEnforcement = (mode == "sliding_window") ? DutyEnforcement::SLIDING_WINDOW
-                                                   : DutyEnforcement::TIME_OFF_AIR;
+    if (mode == "sliding_window")
+    {
+        m_dutyEnforcement = DutyEnforcement::SLIDING_WINDOW;
+    }
+    else if (mode == "fixed_window")
+    {
+        m_dutyEnforcement = DutyEnforcement::FIXED_WINDOW;
+    }
+    else
+    {
+        m_dutyEnforcement = DutyEnforcement::TIME_OFF_AIR;
+    }
 }
 
 std::string
 DvClCsmaCadMac::GetDutyEnforcement() const
 {
-    return (m_dutyEnforcement == DutyEnforcement::SLIDING_WINDOW) ? "sliding_window"
-                                                                  : "time_off_air";
+    switch (m_dutyEnforcement)
+    {
+    case DutyEnforcement::SLIDING_WINDOW:
+        return "sliding_window";
+    case DutyEnforcement::FIXED_WINDOW:
+        return "fixed_window";
+    default:
+        return "time_off_air";
+    }
 }
 
 void
@@ -281,6 +335,11 @@ DvClCsmaCadMac::NotifyTxStart(double toaSeconds)
     const Time duration = Seconds(toaSeconds);
     // ETSI EN 300 220: pay for the air just used before taking any more. Mirrors
     // ns-3's own lorawan module (LogicalLoraChannelHelper::AddEvent).
+    if (m_dutyEnforcement == DutyEnforcement::FIXED_WINDOW)
+    {
+        RollFixedWindow();
+        m_fixedWindowSpent += toaSeconds;
+    }
     if (m_dutyCycleEnabled && m_lastGrantAt != now)
     {
         ++m_ungatedTx;

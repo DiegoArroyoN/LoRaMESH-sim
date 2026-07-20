@@ -194,6 +194,67 @@ class DvClMacTimeOffAirTestCase : public TestCase
     }
 };
 
+/**
+ * \ingroup dv-cl
+ * rief The fixed-window allowance refills on the clock, boundary and all.
+ *
+ * Reads the hour as a calendar hour: 36 s of air per 1% window, spendable
+ * whenever, and replenished in full the moment the window rolls over. The
+ * test pins the consequence that distinguishes it from the other two
+ * disciplines — air spent just before a boundary does not restrain air
+ * spent just after, so a window straddling the boundary sees twice the
+ * allowance. That is legal under a calendar reading of the limit and a
+ * violation under a sliding one, which is exactly why the campaign
+ * measures both instead of assuming.
+ */
+class DvClMacFixedWindowTestCase : public TestCase
+{
+  public:
+    DvClMacFixedWindowTestCase()
+        : TestCase("dv-cl mac duty: fixed-window allowance refills on rollover")
+    {
+    }
+
+  private:
+    Ptr<DvClCsmaCadMac> m_mac;
+
+    /// Just before the boundary only the unspent remainder is available.
+    void BeforeBoundary()
+    {
+        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(30.0),
+                              false,
+                              "only the 6 s remainder is left at 3599 s");
+        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(5.0), true, "the remainder itself still fits");
+    }
+
+    /// Just after it, a full allowance is available again.
+    void AfterBoundary()
+    {
+        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(30.0), true, "refilled at 3601 s");
+    }
+
+    void DoRun() override
+    {
+        m_mac = CreateObject<DvClCsmaCadMac>();
+        m_mac->SetAttribute("DutyEnforcement", StringValue("fixed_window"));
+        m_mac->SetAttribute("DutyCycleLimit", DoubleValue(0.01));
+        m_mac->SetDutyCycleWindow(Hours(1)); // 36 s of air per window
+
+        NS_TEST_ASSERT_MSG_EQ(m_mac->GetDutyEnforcement(), "fixed_window", "mode selected");
+        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(30.0), true, "30 s fits in 36 s");
+        m_mac->NotifyTxStart(30.0);
+        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(10.0), false, "only 6 s left");
+        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(5.0), true, "5 s still fits");
+
+        Simulator::Schedule(Seconds(3599), &DvClMacFixedWindowTestCase::BeforeBoundary, this);
+        Simulator::Schedule(Seconds(3601), &DvClMacFixedWindowTestCase::AfterBoundary, this);
+        Simulator::Stop(Seconds(3700));
+        Simulator::Run();
+        Simulator::Destroy();
+        m_mac = nullptr;
+    }
+};
+
 class DvClMacTestSuite : public TestSuite
 {
   public:
@@ -201,6 +262,7 @@ class DvClMacTestSuite : public TestSuite
         : TestSuite("dv-cl-mac", Type::UNIT)
     {
         AddTestCase(new DvClMacTimeOffAirTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new DvClMacFixedWindowTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClMacDutyRollingTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClMacDutyDisabledTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClMacBackoffBoundsTestCase, TestCase::Duration::QUICK);
