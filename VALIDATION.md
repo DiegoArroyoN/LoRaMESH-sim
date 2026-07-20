@@ -587,6 +587,32 @@ Descartado que la disciplina de duty lo explique: `proposal_pueyo_like` entrega
 **más** con `time_off_air` (50) que con `sliding_window` (42), y los perfiles sin
 duty dan resultado idéntico bajo ambas.
 
+## 2026-07-20 — Perfiles corregidos: 8/8 convergen, resultados interpretables
+
+Aplicado `pueyoFloraLikeRx=true` a `pueyo2024` y `proposal_pueyo_like_observed`
+(decisión de Diego), más la validación `NS_ABORT_MSG_IF(!pueyoFloraLikeRx, ...)`
+que los otros seis perfiles ya tenían, para que no se vuelva a perder.
+
+| perfil | beacon_rx_ok | rutas | entregados | PDR | régimen |
+|---|---|---|---|---|---|
+| `pueyo2024` | 228 (era 13) | 140 (era 7) | 56 (era 0) | 0.0379 | ALOHA puro, ToA-only, SF 7-12 |
+| `proposal_pueyo_like_observed` | 199 (era 18) | 134 (era 7) | 60 (era 0) | 0.0407 | **duty 1%** |
+| `proposal_pueyo_like` | 402 | 143 | 50 | 0.0339 | **duty 1%** |
+| `proposal_pueyo_like_aloha` | 198 | 141 | 262 | 0.1775 | sin duty |
+| `proposal_pueyo_like_csmacad` | 211 | 134 | 257 | 0.1741 | sin duty |
+| `pueyo2024_paper_like` | 176 | 142 | 244 | 0.1653 | sin duty |
+| `pueyo2024_paper_like_csmacad` | 182 | 141 | 238 | 0.1612 | sin duty |
+| `csmacad_free_backoff` | 165 | 142 | 261 | 0.1768 | sin duty |
+
+Los ocho convergen y ninguno de los seis previos se alteró. Los números pasan a
+ser interpretables: `pueyo2024` queda bajo (0.038) **por ser el baseline débil
+por diseño** —ALOHA, métrica solo-ToA, rango de SF completo— y no por avería; los
+dos perfiles con duty al 1% quedan en 0.034-0.041 pagando el régimen.
+
+**Al tabular resultados, separar por régimen**: tres perfiles operan con duty y
+cinco sin él, y la brecha de ~4-5x entre ambos grupos es regulatoria, no de
+encaminamiento (confirmado en la entrada anterior).
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
