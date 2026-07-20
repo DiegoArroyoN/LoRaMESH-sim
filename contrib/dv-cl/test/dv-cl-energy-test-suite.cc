@@ -44,11 +44,12 @@ class DvClEnergyLedgerTestCase : public TestCase
         const double sIdle = m_model->GetTimeInState(DvClRadioState::IDLE).GetSeconds();
         NS_TEST_ASSERT_MSG_EQ_TOL(sTx, 2.0, 1e-9, "TX time committed at transition");
         NS_TEST_ASSERT_MSG_EQ_TOL(sSleep, 3.0, 1e-9, "SLEEP time committed at transition");
-        NS_TEST_ASSERT_MSG_EQ_TOL(sIdle, 0.0, 1e-12,
-                                  "IDLE accrues only at the next commit");
+        NS_TEST_ASSERT_MSG_EQ_TOL(sIdle, 0.0, 1e-12, "IDLE accrues only at the next commit");
         // E = V * (I_tx*2 + I_sleep*3) with datasheet defaults and V=3.0.
         const double expected = 3.0 * (0.120 * 2.0 + 0.0000002 * 3.0);
-        NS_TEST_ASSERT_MSG_EQ_TOL(m_model->GetTotalEnergyConsumption(), expected, 1e-6,
+        NS_TEST_ASSERT_MSG_EQ_TOL(m_model->GetTotalEnergyConsumption(),
+                                  expected,
+                                  1e-6,
                                   "energy closure E = sum(I_s*V*t_s)");
     }
 
@@ -88,7 +89,8 @@ class DvClEnergyTraceSourceTestCase : public TestCase
     {
         TypeId tid = DvClLoraEnergyModel::GetTypeId();
         auto accessor = tid.LookupTraceSourceByName("EnergyDepleted");
-        NS_TEST_ASSERT_MSG_EQ((accessor != nullptr), true,
+        NS_TEST_ASSERT_MSG_EQ((accessor != nullptr),
+                              true,
                               "EnergyDepleted trace source registered");
     }
 };

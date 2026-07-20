@@ -6,7 +6,6 @@
 
 #include "dv-cl-lora-energy-model.h"
 
-
 #include "ns3/double.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
@@ -30,18 +29,20 @@ DvClLoraEnergyModel::GetTypeId()
             .SetParent<energy::DeviceEnergyModel>()
             .SetGroupName("DvCl")
             .AddConstructor<DvClLoraEnergyModel>()
-            .AddAttribute("TxCurrentA",
-                          "TX current [A]. SX1276/77/78/79 DS: 120 mA at +20 dBm PA_BOOST.",
-                          DoubleValue(0.120), // 120 mA @ +20 dBm PA_BOOST [SX1276/77/78/79 DS, IDD_TXLORA]
-                          MakeDoubleAccessor(&DvClLoraEnergyModel::SetTxCurrentA,
-                                             &DvClLoraEnergyModel::GetTxCurrentA),
-                          MakeDoubleChecker<double>())
-            .AddAttribute("AutoTxCurrentFromPower",
-                          "If true, TX current is auto-adjusted from txPowerDbm using anchor values.",
-                          BooleanValue(false), // 20 dBm only; no interpolation needed
-                          MakeBooleanAccessor(&DvClLoraEnergyModel::SetAutoTxCurrentFromPower,
-                                              &DvClLoraEnergyModel::GetAutoTxCurrentFromPower),
-                          MakeBooleanChecker())
+            .AddAttribute(
+                "TxCurrentA",
+                "TX current [A]. SX1276/77/78/79 DS: 120 mA at +20 dBm PA_BOOST.",
+                DoubleValue(0.120), // 120 mA @ +20 dBm PA_BOOST [SX1276/77/78/79 DS, IDD_TXLORA]
+                MakeDoubleAccessor(&DvClLoraEnergyModel::SetTxCurrentA,
+                                   &DvClLoraEnergyModel::GetTxCurrentA),
+                MakeDoubleChecker<double>())
+            .AddAttribute(
+                "AutoTxCurrentFromPower",
+                "If true, TX current is auto-adjusted from txPowerDbm using anchor values.",
+                BooleanValue(false), // 20 dBm only; no interpolation needed
+                MakeBooleanAccessor(&DvClLoraEnergyModel::SetAutoTxCurrentFromPower,
+                                    &DvClLoraEnergyModel::GetAutoTxCurrentFromPower),
+                MakeBooleanChecker())
             .AddAttribute("TxCurrentAt14dBmA",
                           "Anchor TX current [A] at 14 dBm (unused: sim operates at 20 dBm only).",
                           DoubleValue(0.120), // set equal to 20 dBm anchor; unused in practice
@@ -54,12 +55,13 @@ DvClLoraEnergyModel::GetTypeId()
                           MakeDoubleAccessor(&DvClLoraEnergyModel::SetTxCurrentAt20dBmA,
                                              &DvClLoraEnergyModel::GetTxCurrentAt20dBmA),
                           MakeDoubleChecker<double>(0.0))
-            .AddAttribute("RxCurrentA",
-                          "The current draw in Amperes during RX mode",
-                          DoubleValue(0.0103), // 10.3 mA, LoRa BW=125 kHz [SX1276/77/78/79 DS, IDD_RXLORA]
-                          MakeDoubleAccessor(&DvClLoraEnergyModel::SetRxCurrentA,
-                                             &DvClLoraEnergyModel::GetRxCurrentA),
-                          MakeDoubleChecker<double>())
+            .AddAttribute(
+                "RxCurrentA",
+                "The current draw in Amperes during RX mode",
+                DoubleValue(0.0103), // 10.3 mA, LoRa BW=125 kHz [SX1276/77/78/79 DS, IDD_RXLORA]
+                MakeDoubleAccessor(&DvClLoraEnergyModel::SetRxCurrentA,
+                                   &DvClLoraEnergyModel::GetRxCurrentA),
+                MakeDoubleChecker<double>())
             .AddAttribute("CadCurrentA",
                           "The current draw in Amperes during CAD mode",
                           DoubleValue(0.0103), // 10.3 mA, same RX circuitry [SX1276/77/78/79 DS]
@@ -83,7 +85,7 @@ DvClLoraEnergyModel::GetTypeId()
                 "Total energy consumption in Joules",
                 MakeTraceSourceAccessor(&DvClLoraEnergyModel::m_totalEnergyConsumptionTrace),
                 "ns3::TracedValueCallback::Double");
-        ;
+    ;
     static bool traceRegistered =
         (tid.AddTraceSource("EnergyDepleted",
                             "Node ran out of energy: (nodeId, remaining fraction).",
@@ -97,14 +99,14 @@ DvClLoraEnergyModel::GetTypeId()
 DvClLoraEnergyModel::DvClLoraEnergyModel()
     : m_source(nullptr),
       m_node(nullptr),
-      m_txCurrentA(0.120),         // 120 mA @ +20 dBm PA_BOOST [SX1276/77/78/79 DS]
-      m_rxCurrentA(0.0103),        //  10.3 mA LoRa BW=125 kHz   [SX1276/77/78/79 DS]
-      m_cadCurrentA(0.0103),       //  10.3 mA (same RX circuits) [SX1276/77/78/79 DS]
-      m_idleCurrentA(0.0016),      //   1.6 mA standby            [SX1276/77/78/79 DS]
-      m_sleepCurrentA(0.0000002),  //   0.2 uA sleep              [SX1276/77/78/79 DS]
+      m_txCurrentA(0.120),             // 120 mA @ +20 dBm PA_BOOST [SX1276/77/78/79 DS]
+      m_rxCurrentA(0.0103),            //  10.3 mA LoRa BW=125 kHz   [SX1276/77/78/79 DS]
+      m_cadCurrentA(0.0103),           //  10.3 mA (same RX circuits) [SX1276/77/78/79 DS]
+      m_idleCurrentA(0.0016),          //   1.6 mA standby            [SX1276/77/78/79 DS]
+      m_sleepCurrentA(0.0000002),      //   0.2 uA sleep              [SX1276/77/78/79 DS]
       m_autoTxCurrentFromPower(false), // 20 dBm only, no interpolation
-      m_txCurrentAt14dBmA(0.120),  // unused (sim uses 20 dBm only)
-      m_txCurrentAt20dBmA(0.120),  // 120 mA @ +20 dBm PA_BOOST [SX1276/77/78/79 DS]
+      m_txCurrentAt14dBmA(0.120),      // unused (sim uses 20 dBm only)
+      m_txCurrentAt20dBmA(0.120),      // 120 mA @ +20 dBm PA_BOOST [SX1276/77/78/79 DS]
       m_lastTxPowerDbm(14.0),
       m_currentState(DvClRadioState::IDLE),
       m_lastUpdateTime(Seconds(0)),
@@ -152,8 +154,7 @@ void
 DvClLoraEnergyModel::HandleEnergyDepletion()
 {
     NS_LOG_FUNCTION(this);
-    NS_LOG_WARN("DvClLoraEnergyModel: Energy depleted on node "
-                << (m_node ? m_node->GetId() : 0));
+    NS_LOG_WARN("DvClLoraEnergyModel: Energy depleted on node " << (m_node ? m_node->GetId() : 0));
 
     // Module-clean: report through a TraceSource instead of a global collector.
     if (m_node && m_source)
@@ -170,8 +171,7 @@ void
 DvClLoraEnergyModel::HandleEnergyRecharged()
 {
     NS_LOG_FUNCTION(this);
-    NS_LOG_INFO("DvClLoraEnergyModel: Energy recharged on node "
-                << (m_node ? m_node->GetId() : 0));
+    NS_LOG_INFO("DvClLoraEnergyModel: Energy recharged on node " << (m_node ? m_node->GetId() : 0));
 }
 
 void
@@ -285,7 +285,8 @@ DvClLoraEnergyModel::SetAutoTxCurrentFromPower(bool enable)
     m_autoTxCurrentFromPower = enable;
     if (m_autoTxCurrentFromPower)
     {
-        m_txCurrentA = EstimateTxCurrentA(m_lastTxPowerDbm, m_txCurrentAt14dBmA, m_txCurrentAt20dBmA);
+        m_txCurrentA =
+            EstimateTxCurrentA(m_lastTxPowerDbm, m_txCurrentAt14dBmA, m_txCurrentAt20dBmA);
     }
 }
 
@@ -301,7 +302,8 @@ DvClLoraEnergyModel::SetTxCurrentAt14dBmA(double currentA)
     m_txCurrentAt14dBmA = currentA;
     if (m_autoTxCurrentFromPower)
     {
-        m_txCurrentA = EstimateTxCurrentA(m_lastTxPowerDbm, m_txCurrentAt14dBmA, m_txCurrentAt20dBmA);
+        m_txCurrentA =
+            EstimateTxCurrentA(m_lastTxPowerDbm, m_txCurrentAt14dBmA, m_txCurrentAt20dBmA);
     }
 }
 
@@ -317,7 +319,8 @@ DvClLoraEnergyModel::SetTxCurrentAt20dBmA(double currentA)
     m_txCurrentAt20dBmA = currentA;
     if (m_autoTxCurrentFromPower)
     {
-        m_txCurrentA = EstimateTxCurrentA(m_lastTxPowerDbm, m_txCurrentAt14dBmA, m_txCurrentAt20dBmA);
+        m_txCurrentA =
+            EstimateTxCurrentA(m_lastTxPowerDbm, m_txCurrentAt14dBmA, m_txCurrentAt20dBmA);
     }
 }
 
@@ -345,8 +348,8 @@ DvClLoraEnergyModel::GetLastTxPowerDbm() const
 
 double
 DvClLoraEnergyModel::EstimateTxCurrentA(double txPowerDbm,
-                                          double txCurrentAt14dBmA,
-                                          double txCurrentAt20dBmA)
+                                        double txCurrentAt14dBmA,
+                                        double txCurrentAt20dBmA)
 {
     // Piecewise-linear estimate anchored at SX1276 typical values:
     // 14 dBm -> txCurrentAt14dBmA, 20 dBm -> txCurrentAt20dBmA.

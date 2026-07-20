@@ -2,10 +2,10 @@
 
 #include "dv-cl-helper.h"
 
-#include "ns3/lora-channel.h"
-#include "ns3/mac48-address.h"
 #include "ns3/dv-cl-app.h"
 #include "ns3/dv-cl-lora-net-device.h"
+#include "ns3/lora-channel.h"
+#include "ns3/mac48-address.h"
 #include "ns3/mobility-helper.h"
 #include "ns3/pcap-file-wrapper.h"
 #include "ns3/pointer.h"
@@ -33,9 +33,8 @@ NS_OBJECT_ENSURE_REGISTERED(DvClHelper);
 TypeId
 DvClHelper::GetTypeId()
 {
-    static TypeId tid = TypeId("ns3::dvcl::DvClHelper")
-                            .SetParent<Object>()
-                            .AddConstructor<DvClHelper>();
+    static TypeId tid =
+        TypeId("ns3::dvcl::DvClHelper").SetParent<Object>().AddConstructor<DvClHelper>();
     return tid;
 }
 
@@ -136,7 +135,8 @@ DvClHelper::ConfigureMobility(NodeContainer& nodes)
         const double spacingY = (m_cfg.gridSpacingY > 0.0) ? m_cfg.gridSpacingY : m_cfg.spacing;
         if (side == 0 || side * side != totalNodes)
         {
-            NS_LOG_WARN("Invalid pueyo_* config (nEd is not a perfect square). Falling back to line placement");
+            NS_LOG_WARN("Invalid pueyo_* config (nEd is not a perfect square). Falling back to "
+                        "line placement");
         }
         else if (placementMode == "pueyo_grid")
         {
@@ -220,11 +220,11 @@ DvClHelper::InstallDevices(NodeContainer& nodes)
     Ptr<lorawan::LoraChannel> channel = CreateObject<lorawan::LoraChannel>(loss, delay);
 
     NS_LOG_INFO("✓ Canal LoRa creado con LogDistancePropagationLossModel (ref="
-                  << m_cfg.referenceLossDb << "dB@" << m_cfg.referenceDistance
-                  << "m, exp=" << m_cfg.pathLossExponent << ")"
-                  << (m_cfg.shadowingSigmaDb > 0.0
-                          ? (" + Shadowing σ=" + std::to_string(m_cfg.shadowingSigmaDb) + "dB")
-                          : " + No shadowing"));
+                << m_cfg.referenceLossDb << "dB@" << m_cfg.referenceDistance
+                << "m, exp=" << m_cfg.pathLossExponent << ")"
+                << (m_cfg.shadowingSigmaDb > 0.0
+                        ? (" + Shadowing σ=" + std::to_string(m_cfg.shadowingSigmaDb) + "dB")
+                        : " + No shadowing"));
 
     // ========================================================================
     // Initialize global unified PCAP file for all nodes
@@ -283,8 +283,8 @@ DvClHelper::InstallApplications(NodeContainer& nodes)
         app->SetStartTime(Seconds(1.0 + i * 0.5));
         app->SetStopTime(Seconds(stopTime));
 
-        NS_LOG_INFO(">>> DvClApp installed on node "
-                    << i << " (collectorNodeId=" << collectorNodeId << ")");
+        NS_LOG_INFO(">>> DvClApp installed on node " << i << " (collectorNodeId=" << collectorNodeId
+                                                     << ")");
     }
 
     NS_LOG_INFO("DvClApp configured on ALL " << nodes.GetN() << " nodes");
@@ -309,7 +309,8 @@ DvClHelper::ForceStandbyMode(NodeContainer& nodes)
 
             if (phy)
             {
-                // SimpleGatewayLoraPhy remains in RX when not transmitting; no standby switch needed.
+                // SimpleGatewayLoraPhy remains in RX when not transmitting; no standby switch
+                // needed.
                 NS_LOG_INFO("✓ Node " << i << " PHY (single-demod) ready for RX");
             }
         }

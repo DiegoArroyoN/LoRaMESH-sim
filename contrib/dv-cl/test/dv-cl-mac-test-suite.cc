@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#include "ns3/double.h"
-#include "ns3/string.h"
 #include "ns3/boolean.h"
+#include "ns3/double.h"
 #include "ns3/dv-cl-mac-csma-cad.h"
 #include "ns3/random-variable-stream.h"
 #include "ns3/simulator.h"
+#include "ns3/string.h"
 #include "ns3/test.h"
 
 namespace ns3
@@ -37,9 +37,11 @@ class DvClMacDutyRollingTestCase : public TestCase
     {
         // tx [0, 3.6] fully elapsed: used = 3.6/3600 = 0.001.
         NS_TEST_ASSERT_MSG_EQ_TOL(m_mac->GetDutyCycleUsed(), 0.001, 1e-9, "used at t=10");
-        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(32.4), true,
+        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(32.4),
+                              true,
                               "projected exactly at the limit is allowed");
-        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(32.5), false,
+        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(32.5),
+                              false,
                               "projected above the limit is blocked");
         m_mac->NotifyTxStart(32.4);
     }
@@ -54,8 +56,7 @@ class DvClMacDutyRollingTestCase : public TestCase
     void AtT3610()
     {
         // record [0,3.6] aged out; [10,42.4] fully inside: used = 32.4/3600.
-        NS_TEST_ASSERT_MSG_EQ_TOL(m_mac->GetDutyCycleUsed(), 0.009, 1e-9,
-                                  "first record aged out");
+        NS_TEST_ASSERT_MSG_EQ_TOL(m_mac->GetDutyCycleUsed(), 0.009, 1e-9, "first record aged out");
         NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(3.6), true, "recovered headroom");
         NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(3.7), false, "still bounded");
     }
@@ -63,9 +64,12 @@ class DvClMacDutyRollingTestCase : public TestCase
     void AtT3630()
     {
         // window start = 30: overlap of [10,42.4] is [30,42.4] = 12.4 s.
-        NS_TEST_ASSERT_MSG_EQ_TOL(m_mac->GetDutyCycleUsed(), 12.4 / 3600.0, 1e-9,
+        NS_TEST_ASSERT_MSG_EQ_TOL(m_mac->GetDutyCycleUsed(),
+                                  12.4 / 3600.0,
+                                  1e-9,
                                   "partial overlap of the sliding window");
-        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(20.0), true,
+        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(20.0),
+                              true,
                               "recovery grows as the window slides");
     }
 

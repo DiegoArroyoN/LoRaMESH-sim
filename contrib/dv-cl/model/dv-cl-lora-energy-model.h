@@ -111,11 +111,11 @@ class DvClLoraEnergyModel : public energy::DeviceEnergyModel
     Ptr<Node> m_node;
 
     // Current draw in Amperes for each state (from SX1276 datasheet)
-    double m_txCurrentA;    ///< TX current (default: 0.120 A = 120 mA @ 20dBm)
-    double m_rxCurrentA;    ///< RX current (default: 0.011 A = 11 mA)
-    double m_cadCurrentA;   ///< CAD current (default: 0.011 A = 11 mA)
-    double m_idleCurrentA;  ///< Idle current (default: 0.001 A = 1 mA)
-    double m_sleepCurrentA; ///< Sleep current (default: 0.0000002 A = 0.2 µA)
+    double m_txCurrentA;           ///< TX current (default: 0.120 A = 120 mA @ 20dBm)
+    double m_rxCurrentA;           ///< RX current (default: 0.011 A = 11 mA)
+    double m_cadCurrentA;          ///< CAD current (default: 0.011 A = 11 mA)
+    double m_idleCurrentA;         ///< Idle current (default: 0.001 A = 1 mA)
+    double m_sleepCurrentA;        ///< Sleep current (default: 0.0000002 A = 0.2 µA)
     bool m_autoTxCurrentFromPower; ///< Auto-adjust TX current from txPowerDbm.
     double m_txCurrentAt14dBmA;    ///< Anchor current at 14 dBm.
     double m_txCurrentAt20dBmA;    ///< Anchor current at 20 dBm.

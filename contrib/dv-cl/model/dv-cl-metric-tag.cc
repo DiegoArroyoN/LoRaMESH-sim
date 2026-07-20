@@ -34,7 +34,7 @@ DvClMetricTag::GetInstanceTypeId() const
 uint32_t
 DvClMetricTag::GetSerializedSize() const
 {
-    return 24;  // era 23; +1 byte §DC-wire (m_dcRemaining)
+    return 24; // era 23; +1 byte §DC-wire (m_dcRemaining)
 }
 
 void
@@ -51,7 +51,7 @@ DvClMetricTag::Serialize(TagBuffer i) const
     i.WriteU16(m_scoreX100);
     i.WriteU16(m_prevHop);
     i.WriteU16(m_expectedNextHop);
-    i.WriteU8(m_dcRemaining);  // §DC-wire
+    i.WriteU8(m_dcRemaining); // §DC-wire
 }
 
 void
@@ -68,17 +68,16 @@ DvClMetricTag::Deserialize(TagBuffer i)
     m_scoreX100 = i.ReadU16();
     m_prevHop = i.ReadU16();
     m_expectedNextHop = i.ReadU16();
-    m_dcRemaining = i.ReadU8();  // §DC-wire
+    m_dcRemaining = i.ReadU8(); // §DC-wire
 }
 
 void
 DvClMetricTag::Print(std::ostream& os) const
 {
     os << "src=" << m_src << " dst=" << m_dst << " seq=" << m_seq << " ttl=" << unsigned(m_ttl)
-       << " hops=" << unsigned(m_hops) << " sf=" << unsigned(m_sf)
-       << " toaUs=" << m_toaUs << " batt=" << m_batt_mV << " score=" << m_scoreX100
-       << " prevHop=" << m_prevHop << " expNextHop=" << m_expectedNextHop
-       << " dcRem=" << unsigned(m_dcRemaining);
+       << " hops=" << unsigned(m_hops) << " sf=" << unsigned(m_sf) << " toaUs=" << m_toaUs
+       << " batt=" << m_batt_mV << " score=" << m_scoreX100 << " prevHop=" << m_prevHop
+       << " expNextHop=" << m_expectedNextHop << " dcRem=" << unsigned(m_dcRemaining);
 }
 
 void
@@ -139,8 +138,8 @@ DvClMetricTag::DeserializeRoutePayload(const uint8_t* in,
     {
         const size_t offset = i * kRoutePayloadSize;
         RoutePayloadEntry e;
-        e.dst = static_cast<uint16_t>(in[offset + 0]) |
-                (static_cast<uint16_t>(in[offset + 1]) << 8);
+        e.dst =
+            static_cast<uint16_t>(in[offset + 0]) | (static_cast<uint16_t>(in[offset + 1]) << 8);
         e.hops = in[offset + 2];
         e.sf = in[offset + 3];
         e.score = in[offset + 4];

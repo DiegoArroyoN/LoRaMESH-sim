@@ -1,17 +1,17 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 #pragma once
-#include "dv-cl-wire.h"
+#include "dv-cl-energy-registry.h"
+#include "dv-cl-mac-csma-cad.h"
 #include "dv-cl-metric-tag.h"
+#include "dv-cl-routing.h"
 #include "dv-cl-stats-sink.h"
+#include "dv-cl-wire.h"
 
 #include "ns3/address.h"
 #include "ns3/application.h"
 #include "ns3/event-id.h"
 #include "ns3/log.h"
-#include "dv-cl-energy-registry.h"
-#include "dv-cl-mac-csma-cad.h"
-#include "dv-cl-routing.h"
 #include "ns3/mac48-address.h"
 #include "ns3/net-device.h"
 #include "ns3/nstime.h"
@@ -19,9 +19,9 @@
 #include "ns3/random-variable-stream.h"
 #include "ns3/simulator.h"
 
+#include <array>
 #include <cstdint>
 #include <deque>
-#include <array>
 #include <map>
 #include <set>
 #include <string>
@@ -65,9 +65,9 @@ struct TxQueueEntry
 struct RouteStatus
 {
     const RouteEntry* route{nullptr}; // Puntero a la ruta (o nullptr)
-    bool exists{false};                         // HasAnyRoute() retornó true
-    bool expired{false};                        // IsRouteExpired() retornó true
-    bool valid{false};                          // exists && !expired && route != nullptr
+    bool exists{false};               // HasAnyRoute() retornó true
+    bool expired{false};              // IsRouteExpired() retornó true
+    bool valid{false};                // exists && !expired && route != nullptr
 
     // Helper: true si la ruta es usable para forwarding
     explicit operator bool() const
@@ -113,7 +113,6 @@ class DvClApp : public Application
         m_collectorNodeId = collectorNodeId;
     }
 
-
     void StartApplication() override;
     void StopApplication() override;
     void ForceFinalFlush(); // §LossFine: flush final stats on early (death-hook) stop
@@ -146,7 +145,10 @@ class DvClApp : public Application
     void BuildAndSendDvPueyo(uint8_t sf);
     void ForwardWithTtl(Ptr<const Packet> pIn, const DvClMetricTag& inTag);
     bool L2Receive(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, const Address& from);
-    bool L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, const Address& from);
+    bool L2ReceiveWire(Ptr<NetDevice> dev,
+                       Ptr<const Packet> p,
+                       uint16_t proto,
+                       const Address& from);
     void ForwardWithTtlV2(Ptr<const Packet> pIn,
                           uint16_t src,
                           uint16_t dst,
@@ -168,7 +170,9 @@ class DvClApp : public Application
     void OnPacketTransmitted(uint32_t toaUs);
     Address ResolveNextHopAddress(uint32_t nextHopId) const;
     bool IsLinkAddrFresh(uint32_t nextHopId) const;
-    bool ResolveUnicastNextHopLinkAddr(uint32_t nextHopId, Mac48Address* outMac, bool* outStale) const;
+    bool ResolveUnicastNextHopLinkAddr(uint32_t nextHopId,
+                                       Mac48Address* outMac,
+                                       bool* outStale) const;
     bool TryGetBestRecentSf(const AppNeighborLink& link, Time now, uint8_t* outSf) const;
     uint8_t SelectRandomSfProbabilistic() const;   // B3: Selección probabilística de SF según paper
     RouteStatus ValidateRoute(uint32_t dst) const; // REFACTORING: Helper para validación de rutas
@@ -256,16 +260,16 @@ class DvClApp : public Application
                           const Mac48Address& fromMac,
                           uint32_t toaUsNeighbor);
     NeighborLinkInfo BuildNeighborLinkInfo(const DvClMetricTag& tag,
-                                                     uint32_t toaUs,
-                                                     Mac48Address fromMac,
-                                                     uint8_t linkSf) const;
+                                           uint32_t toaUs,
+                                           Mac48Address fromMac,
+                                           uint8_t linkSf) const;
     std::vector<DvEntry> DecodeDvEntries(Ptr<const Packet> p,
-                                                   const DvClMetricTag& tag,
-                                                   uint32_t toaUsNeighbor) const;
+                                         const DvClMetricTag& tag,
+                                         uint32_t toaUsNeighbor) const;
     std::vector<DvEntry> DecodeDvEntriesPueyo(Ptr<const Packet> p,
-                                                        uint32_t payloadOffset,
-                                                        uint32_t toaUsNeighbor,
-                                                        uint8_t rxSf) const;
+                                              uint32_t payloadOffset,
+                                              uint32_t toaUsNeighbor,
+                                              uint8_t rxSf) const;
     bool ParseDataWirePacketPueyo7b(Ptr<const Packet> p,
                                     DvClDataHeader* outHdr,
                                     Ptr<Packet>* outPayload) const;
@@ -306,6 +310,7 @@ class DvClApp : public Application
     double m_initialDvDelayBase{1.0};
     double m_initialDvJitterMax{8.0};
     double m_initialDvNodeSpacing{0.5};
+
     /**
      * rief Charge of \p nodeId for the metric, mirroring the campaign metric:
      * an unknown fraction (<0) is resolved from the energy registry before the
@@ -343,9 +348,11 @@ class DvClApp : public Application
     Ptr<UniformRandomVariable> m_rng;
 
     // Tabla de direcciones de enlace aprendidas por RX.
-    // Nota: Mac48Address se usa solo como wrapper interno de ns-3; on-air viajan src/dst/via de 2 bytes.
+    // Nota: Mac48Address se usa solo como wrapper interno de ns-3; on-air viajan src/dst/via de 2
+    // bytes.
     std::map<uint32_t, Mac48Address> m_linkAddrTable; // id lógico -> link-layer address conocida
-    std::map<uint32_t, Time> m_linkAddrLastSeen;      // id lógico -> última observación de link-layer address
+    std::map<uint32_t, Time>
+        m_linkAddrLastSeen; // id lógico -> última observación de link-layer address
     Time m_linkAddrCacheWindow{Seconds(300)};
     Time m_routeTimeout{Seconds(300)};
     Ptr<NetDevice> m_meshDevice;
@@ -369,15 +376,17 @@ class DvClApp : public Application
     // SF empírico basado en historial de beacons exitosos (según paper)
     struct AppNeighborLink
     {
-        std::array<Time, 6> lastSeenBySf{};           // Último beacon recibido por SF (SF7..SF12)
-        std::array<std::deque<Time>, 6> rxTimesBySf;  // Historial corto de Rx por SF
-        Time lastUpdate{Seconds(0)};                  // Última actualización general del vecino
-        uint8_t lastRxSf{12};                         // Último SF observado (solo debug)
+        std::array<Time, 6> lastSeenBySf{};          // Último beacon recibido por SF (SF7..SF12)
+        std::array<std::deque<Time>, 6> rxTimesBySf; // Historial corto de Rx por SF
+        Time lastUpdate{Seconds(0)};                 // Última actualización general del vecino
+        uint8_t lastRxSf{12};                        // Último SF observado (solo debug)
     };
 
     std::map<uint32_t, AppNeighborLink> m_neighborLinks;
-    Time m_neighborLinkTimeout{Seconds(60)}; // Ventana efectiva de vigencia por SF para selección empírica
-    Time m_neighborLinkTimeoutConfigured{Seconds(60)}; // Valor manual (si auto-timeout está deshabilitado)
+    Time m_neighborLinkTimeout{
+        Seconds(60)}; // Ventana efectiva de vigencia por SF para selección empírica
+    Time m_neighborLinkTimeoutConfigured{
+        Seconds(60)};                    // Valor manual (si auto-timeout está deshabilitado)
     bool m_autoTimeoutsFromBeacon{true}; // Auto-escalado de route/link timeout según beacon activo
     double m_neighborLinkTimeoutFactor{1.0}; // linkFreshness = factor * beaconInterval
     void UpdateNeighborLinkSf(uint32_t neighborId, uint8_t rxSf);
@@ -406,18 +415,18 @@ class DvClApp : public Application
     double m_dataPeriodJitterMax{0.5};        // Jitter en segundos
     bool m_dataPeriodJitterSymmetric{false};  // Jitter de media cero en periodos sucesivos
     double m_dataStartPhaseMaxSec{0.0};       // Fase inicial aleatoria [0,max]
-    bool m_enableDataSlots{false};                   // Habilita micro-slots locales
-    double m_dataSlotPeriodSec{0.0};                 // Periodo de slots para datos [s]
-    double m_dataSlotJitterSec{0.0};                 // Jitter +/- dentro del slot [s]
-    double m_dataSlotOffsetSec{0.0};                 // Offset fijo por nodo [s]
-    bool m_dataStartPhaseOnly{false};                // Usa slots solo para el primer envio
-    bool m_dataFixedPhaseCadence{false};             // Mantiene la fase fija en cada periodo
-    double m_nextDataNominalTimeSec{-1.0};           // Proximo tiempo nominal de generacion
-    uint32_t m_dataPayloadSize{20};                  // 20 bytes por paquete
-    uint32_t m_dataSeqPerNode{0};                    // Secuencia de datos por nodo
-    uint32_t m_dataPacketsGenerated{0};              // Contador de datos generados
-    uint32_t m_dataPacketsDelivered{0};              // Contador de datos entregados
-    uint32_t m_dataNoRoute{0};                       // Contador de datos descartados por no ruta
+    bool m_enableDataSlots{false};            // Habilita micro-slots locales
+    double m_dataSlotPeriodSec{0.0};          // Periodo de slots para datos [s]
+    double m_dataSlotJitterSec{0.0};          // Jitter +/- dentro del slot [s]
+    double m_dataSlotOffsetSec{0.0};          // Offset fijo por nodo [s]
+    bool m_dataStartPhaseOnly{false};         // Usa slots solo para el primer envio
+    bool m_dataFixedPhaseCadence{false};      // Mantiene la fase fija en cada periodo
+    double m_nextDataNominalTimeSec{-1.0};    // Proximo tiempo nominal de generacion
+    uint32_t m_dataPayloadSize{20};           // 20 bytes por paquete
+    uint32_t m_dataSeqPerNode{0};             // Secuencia de datos por nodo
+    uint32_t m_dataPacketsGenerated{0};       // Contador de datos generados
+    uint32_t m_dataPacketsDelivered{0};       // Contador de datos entregados
+    uint32_t m_dataNoRoute{0};                // Contador de datos descartados por no ruta
     uint64_t m_cadBusyEvents{0};
     uint64_t m_dutyBlockedEvents{0};
     uint64_t m_controlDutyBlocked{0};
@@ -465,12 +474,12 @@ class DvClApp : public Application
     double m_beaconDelaySumSec{0.0};
     std::vector<double> m_beaconDelaySamplesSec;
     std::unordered_map<uint32_t, Time> m_beaconScheduledAtBySeq;
-    uint32_t m_collectorNodeId{3};                   // Data collection node (designated sink)
-    double m_batteryFullCapacityJ{38880.0};          // Capacidad nominal total para SOC [J]
+    uint32_t m_collectorNodeId{3};          // Data collection node (designated sink)
+    double m_batteryFullCapacityJ{38880.0}; // Capacidad nominal total para SOC [J]
     bool m_advertiseAllRoutes{true};
-    double m_dataStartTimeSec{90.0};                 // Inicio de datos tras convergencia DV
-    double m_dataStopTimeSec{-1.0};                  // Fin de generación de datos (-1 = deshabilitado)
-    bool m_dataStopLogged{false};                    // Evita logs repetidos al alcanzar dataStop
+    double m_dataStartTimeSec{90.0}; // Inicio de datos tras convergencia DV
+    double m_dataStopTimeSec{-1.0};  // Fin de generación de datos (-1 = deshabilitado)
+    bool m_dataStopLogged{false};    // Evita logs repetidos al alcanzar dataStop
     bool m_enableDataRandomDest{false};
     int32_t m_onlyGenerateFromNodeId{-1};
     int32_t m_forcedDataDestinationId{-1};
@@ -505,8 +514,9 @@ class DvClApp : public Application
         m_seenData;                       // {src,dst,seq} -> info
     Time m_seenDataWindow{Seconds(60)};   // 60 segundos
     Time m_seenPacketWindow{Minutes(10)}; // Ventana para deduplicación (solo sink)
-    Time m_dedupWindow{Seconds(86400)};   // [B2] 24h default: evita purgas en runs paper_like; CLI puede bajar
-    double m_routeTimeoutFactor{6.0};     // Default ajustado para escenarios con duty cycle activo
+    Time m_dedupWindow{
+        Seconds(86400)}; // [B2] 24h default: evita purgas en runs paper_like; CLI puede bajar
+    double m_routeTimeoutFactor{6.0}; // Default ajustado para escenarios con duty cycle activo
     double m_sfMarginDb{2.0};
     std::map<std::tuple<uint32_t, uint32_t, uint32_t>, Time> m_deliveredSet; // solo sink (con TTL)
     std::map<std::tuple<uint32_t, uint32_t, uint32_t>, Time>
@@ -565,8 +575,10 @@ class DvClApp : public Application
     EventId m_gapAuditEvt;
     // Beacon v2 on-air counter state (flags_ttl lower 6 bits).
     uint8_t m_beaconRpCounterTx{0}; // modulo-64 counter for locally transmitted beacons
-    std::unordered_map<uint32_t, uint8_t> m_lastBeaconRpCounterRx; // last raw 6-bit counter seen per origin
-    std::unordered_map<uint32_t, uint32_t> m_beaconRpExtendedSeqRx; // locally extended monotonic sequence per origin
+    std::unordered_map<uint32_t, uint8_t>
+        m_lastBeaconRpCounterRx; // last raw 6-bit counter seen per origin
+    std::unordered_map<uint32_t, uint32_t>
+        m_beaconRpExtendedSeqRx; // locally extended monotonic sequence per origin
 };
 
 } // namespace dvcl

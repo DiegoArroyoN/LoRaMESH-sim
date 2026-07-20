@@ -56,14 +56,45 @@ class DvClMetricTag : public Tag
     }
 
     // --- Campos de métricas (serializados OTA para trazabilidad end-to-end) ---
-    void SetToaUs(uint32_t v)       { m_toaUs = v; }
-    void SetBatt_mV(uint16_t v)     { m_batt_mV = v; }
-    void SetScoreX100(uint16_t v)   { m_scoreX100 = v; }
-    void SetDcRemaining(uint8_t v)  { m_dcRemaining = v; }   // §DC-wire
-    uint32_t GetToaUs() const       { return m_toaUs; }
-    uint16_t GetBatt_mV() const     { return m_batt_mV; }
-    uint16_t GetScoreX100() const   { return m_scoreX100; }
-    uint8_t  GetDcRemaining() const { return m_dcRemaining; } // §DC-wire
+    void SetToaUs(uint32_t v)
+    {
+        m_toaUs = v;
+    }
+
+    void SetBatt_mV(uint16_t v)
+    {
+        m_batt_mV = v;
+    }
+
+    void SetScoreX100(uint16_t v)
+    {
+        m_scoreX100 = v;
+    }
+
+    void SetDcRemaining(uint8_t v)
+    {
+        m_dcRemaining = v;
+    } // §DC-wire
+
+    uint32_t GetToaUs() const
+    {
+        return m_toaUs;
+    }
+
+    uint16_t GetBatt_mV() const
+    {
+        return m_batt_mV;
+    }
+
+    uint16_t GetScoreX100() const
+    {
+        return m_scoreX100;
+    }
+
+    uint8_t GetDcRemaining() const
+    {
+        return m_dcRemaining;
+    } // §DC-wire
 
     void SetPrevHop(uint16_t v)
     {
@@ -168,7 +199,7 @@ class DvClMetricTag : public Tag
     uint16_t m_scoreX100 = 100;
     uint16_t m_prevHop = 0xFFFF;
     uint16_t m_expectedNextHop = 0;
-    uint8_t m_dcRemaining = 0xFF;  // §DC-wire: DC restante del emisor 0-100; 0xFF = N/A
+    uint8_t m_dcRemaining = 0xFF; // §DC-wire: DC restante del emisor 0-100; 0xFF = N/A
 };
 
 } // namespace dvcl

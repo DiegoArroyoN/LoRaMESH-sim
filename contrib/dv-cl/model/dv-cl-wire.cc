@@ -61,8 +61,8 @@ DvClBeaconHeader::Deserialize(Buffer::Iterator start)
 void
 DvClBeaconHeader::Print(std::ostream& os) const
 {
-    os << "src=" << m_src << " dst=" << m_dst << " type="
-       << (UnpackType(m_flagsTtl) == DvClPacketType::BEACON ? "BEACON" : "DATA")
+    os << "src=" << m_src << " dst=" << m_dst
+       << " type=" << (UnpackType(m_flagsTtl) == DvClPacketType::BEACON ? "BEACON" : "DATA")
        << " ttl=" << unsigned(UnpackTtl(m_flagsTtl)) << " soc=" << unsigned(m_soc);
 }
 
@@ -155,8 +155,7 @@ DeserializeDvEntries(const uint8_t* in, uint32_t len, std::vector<DvClDvEntry>& 
     {
         const uint32_t o = i * DvClDvEntry::kEntrySize;
         DvClDvEntry e;
-        e.destination =
-            static_cast<uint16_t>(in[o + 0]) | (static_cast<uint16_t>(in[o + 1]) << 8);
+        e.destination = static_cast<uint16_t>(in[o + 0]) | (static_cast<uint16_t>(in[o + 1]) << 8);
         e.score = in[o + 2];
         out.push_back(e);
     }

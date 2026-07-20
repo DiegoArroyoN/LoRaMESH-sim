@@ -79,15 +79,45 @@ class DvClBeaconHeader : public Header
     static TypeId GetTypeId();
     TypeId GetInstanceTypeId() const override;
 
-    void SetSrc(uint16_t src) { m_src = src; }
-    void SetDst(uint16_t dst) { m_dst = dst; }
-    void SetFlagsTtl(uint8_t flagsTtl) { m_flagsTtl = flagsTtl; }
-    void SetSoc(uint8_t soc) { m_soc = soc; }
+    void SetSrc(uint16_t src)
+    {
+        m_src = src;
+    }
 
-    uint16_t GetSrc() const { return m_src; }
-    uint16_t GetDst() const { return m_dst; }
-    uint8_t GetFlagsTtl() const { return m_flagsTtl; }
-    uint8_t GetSoc() const { return m_soc; }
+    void SetDst(uint16_t dst)
+    {
+        m_dst = dst;
+    }
+
+    void SetFlagsTtl(uint8_t flagsTtl)
+    {
+        m_flagsTtl = flagsTtl;
+    }
+
+    void SetSoc(uint8_t soc)
+    {
+        m_soc = soc;
+    }
+
+    uint16_t GetSrc() const
+    {
+        return m_src;
+    }
+
+    uint16_t GetDst() const
+    {
+        return m_dst;
+    }
+
+    uint8_t GetFlagsTtl() const
+    {
+        return m_flagsTtl;
+    }
+
+    uint8_t GetSoc() const
+    {
+        return m_soc;
+    }
 
     uint32_t GetSerializedSize() const override;
     void Serialize(Buffer::Iterator start) const override;
@@ -116,16 +146,50 @@ class DvClDataHeader : public Header
     static TypeId GetTypeId();
     TypeId GetInstanceTypeId() const override;
 
-    void SetSrc(uint16_t src) { m_src = src; }
-    void SetDst(uint16_t dst) { m_dst = dst; }
-    void SetVia(uint16_t via) { m_via = via; }
-    void SetFlagsTtl(uint8_t flagsTtl) { m_flagsTtl = flagsTtl; }
+    void SetSrc(uint16_t src)
+    {
+        m_src = src;
+    }
 
-    uint16_t GetSrc() const { return m_src; }
-    uint16_t GetDst() const { return m_dst; }
-    uint16_t GetVia() const { return m_via; }
-    uint8_t GetFlagsTtl() const { return m_flagsTtl; }
-    uint8_t GetTtl() const { return UnpackTtl(m_flagsTtl); }
+    void SetDst(uint16_t dst)
+    {
+        m_dst = dst;
+    }
+
+    void SetVia(uint16_t via)
+    {
+        m_via = via;
+    }
+
+    void SetFlagsTtl(uint8_t flagsTtl)
+    {
+        m_flagsTtl = flagsTtl;
+    }
+
+    uint16_t GetSrc() const
+    {
+        return m_src;
+    }
+
+    uint16_t GetDst() const
+    {
+        return m_dst;
+    }
+
+    uint16_t GetVia() const
+    {
+        return m_via;
+    }
+
+    uint8_t GetFlagsTtl() const
+    {
+        return m_flagsTtl;
+    }
+
+    uint8_t GetTtl() const
+    {
+        return UnpackTtl(m_flagsTtl);
+    }
 
     uint32_t GetSerializedSize() const override;
     void Serialize(Buffer::Iterator start) const override;
@@ -158,16 +222,12 @@ struct DvClDvEntry
  * \brief Pack DV entries into a byte buffer (truncates at maxLen).
  * \return bytes written (multiple of DvClDvEntry::kEntrySize)
  */
-uint32_t SerializeDvEntries(const std::vector<DvClDvEntry>& entries,
-                            uint8_t* out,
-                            uint32_t maxLen);
+uint32_t SerializeDvEntries(const std::vector<DvClDvEntry>& entries, uint8_t* out, uint32_t maxLen);
 
 /**
  * \brief Unpack DV entries from a byte buffer (floor(len/3) entries).
  */
-void DeserializeDvEntries(const uint8_t* in,
-                          uint32_t len,
-                          std::vector<DvClDvEntry>& out);
+void DeserializeDvEntries(const uint8_t* in, uint32_t len, std::vector<DvClDvEntry>& out);
 
 } // namespace dvcl
 } // namespace ns3

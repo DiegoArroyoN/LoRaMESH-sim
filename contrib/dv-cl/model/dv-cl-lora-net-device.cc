@@ -2,10 +2,10 @@
 
 #include "dv-cl-lora-net-device.h"
 
-#include "dv-cl-wire.h"
 #include "dv-cl-lora-energy-model.h"
 #include "dv-cl-mac-header.h"
 #include "dv-cl-metric-tag.h"
+#include "dv-cl-wire.h"
 
 #include "ns3/double.h"
 #include "ns3/end-device-lora-phy.h"
@@ -63,20 +63,21 @@ NS_OBJECT_ENSURE_REGISTERED(DvClLoraNetDevice);
 TypeId
 DvClLoraNetDevice::GetTypeId()
 {
-    static TypeId tid = TypeId("ns3::dvcl::DvClLoraNetDevice")
-                            .SetParent<NetDevice>()
-                            .SetGroupName("DvCl")
-                            .AddConstructor<DvClLoraNetDevice>()
-                            .AddAttribute("TxPowerDbm",
-                                          "Unified TX power in dBm for data and control (DV).",
-                                          DoubleValue(14.0),
-                                          MakeDoubleAccessor(&DvClLoraNetDevice::m_txPowerDbm),
-                                          MakeDoubleChecker<double>())
-                            .AddAttribute("PreambleSymbols",
-                                          "LoRa preamble symbols used to build PHY TX parameters.",
-                                          UintegerValue(8),
-                                          MakeUintegerAccessor(&DvClLoraNetDevice::m_preambleSymbols),
-                                          MakeUintegerChecker<uint8_t>(6, 64));
+    static TypeId tid =
+        TypeId("ns3::dvcl::DvClLoraNetDevice")
+            .SetParent<NetDevice>()
+            .SetGroupName("DvCl")
+            .AddConstructor<DvClLoraNetDevice>()
+            .AddAttribute("TxPowerDbm",
+                          "Unified TX power in dBm for data and control (DV).",
+                          DoubleValue(14.0),
+                          MakeDoubleAccessor(&DvClLoraNetDevice::m_txPowerDbm),
+                          MakeDoubleChecker<double>())
+            .AddAttribute("PreambleSymbols",
+                          "LoRa preamble symbols used to build PHY TX parameters.",
+                          UintegerValue(8),
+                          MakeUintegerAccessor(&DvClLoraNetDevice::m_preambleSymbols),
+                          MakeUintegerChecker<uint8_t>(6, 64));
     return tid;
 }
 
@@ -226,8 +227,6 @@ DvClLoraNetDevice::~DvClLoraNetDevice()
 {
 }
 
-
-
 void
 DvClLoraNetDevice::SetPhy(Ptr<LoraPhy> phy)
 {
@@ -297,7 +296,6 @@ DvClLoraNetDevice::Send(Ptr<Packet> packet, const Address& dest, uint16_t protoc
 
     Ptr<Packet> txPacket = packet;
 
-
     // Volcado pcap de TX
     if (m_pcapTx)
     {
@@ -311,8 +309,8 @@ DvClLoraNetDevice::Send(Ptr<Packet> packet, const Address& dest, uint16_t protoc
     txParams = BuildTxParams(10);
 
     NS_LOG_INFO("DvClLoraNetDevice::Send params sf="
-                  << unsigned(txParams.sf) << " bw=" << txParams.bandwidthHz
-                  << " cr=" << unsigned(txParams.codingRate) << " pktSize=" << packet->GetSize());
+                << unsigned(txParams.sf) << " bw=" << txParams.bandwidthHz
+                << " cr=" << unsigned(txParams.codingRate) << " pktSize=" << packet->GetSize());
 
     DvClMetricTag meshTag;
     // TX unificado para datos y beacons para alinear DV con el comportamiento real de datos.
@@ -347,7 +345,7 @@ DvClLoraNetDevice::Send(Ptr<Packet> packet, const Address& dest, uint16_t protoc
     // Enviar paquete por PHY (EU868 = 868 MHz)
     m_phy->Send(txPacket, txParams, 868000000, txPowerDbm);
     NS_LOG_INFO("DvClLoraNetDevice::Send EJECUTADO en node " << GetNode()->GetId()
-                                                               << " size=" << txPacket->GetSize());
+                                                             << " size=" << txPacket->GetSize());
 
     // ========================================================================
     // Calcular duración TX usando LoraPhy::GetOnAirTime (static, works with any PHY)
@@ -367,8 +365,8 @@ DvClLoraNetDevice::Send(Ptr<Packet> packet, const Address& dest, uint16_t protoc
         m_energyModel->UpdateEnergy(m_node->GetId(), txCurrentMa, txDuration.GetSeconds());
     }
     NS_LOG_INFO("Node " << GetNode()->GetId() << " duración TX: " << txDuration.GetMilliSeconds()
-                          << "ms"
-                          << " (" << txDuration.GetSeconds() << "s)");
+                        << "ms"
+                        << " (" << txDuration.GetSeconds() << "s)");
 
     // SimpleGatewayLoraPhy (used for multi-SF RX, NOT as LoRaWAN gateway)
     // handles TX→RX transition internally via TxFinished callback.
@@ -394,7 +392,7 @@ DvClLoraNetDevice::Receive(Ptr<const Packet> packet)
     NotifyRadioStateChange(1); // 1 = RX
 
     NS_LOG_INFO(">>>>>>> DvClLoraNetDevice::Receive LLAMADO en node "
-                  << (m_node ? m_node->GetId() : -1) << " size=" << packet->GetSize());
+                << (m_node ? m_node->GetId() : -1) << " size=" << packet->GetSize());
 
     NS_LOG_FUNCTION(this << packet << packet->GetSize());
 
@@ -455,22 +453,21 @@ DvClLoraNetDevice::Receive(Ptr<const Packet> packet)
     if (pktCopy->PeekPacketTag(rxTag))
     {
         // DEBUG: Log para TODOS los paquetes (beacons y datos)
-        NS_LOG_INFO("NETDEV_RX_TAG node=" << (m_node ? m_node->GetId() : -1) << " src="
-                                            << rxTag.GetSrc() << " dst=" << rxTag.GetDst()
-                                            << " seq=" << rxTag.GetSeq()
-                                            << " size=" << pktCopy->GetSize() << " hasTag=true");
+        NS_LOG_INFO("NETDEV_RX_TAG node=" << (m_node ? m_node->GetId() : -1)
+                                          << " src=" << rxTag.GetSrc() << " dst=" << rxTag.GetDst()
+                                          << " seq=" << rxTag.GetSeq()
+                                          << " size=" << pktCopy->GetSize() << " hasTag=true");
         if (rxTag.GetDst() == 0xFFFF)
         {
             NS_LOG_INFO("DVTRACE_RX_PHY time=" << Simulator::Now().GetSeconds()
-                                                 << " node=" << (m_node ? m_node->GetId() : -1)
-                                                 << " src=" << rxTag.GetSrc() << " seq="
-                                                 << rxTag.GetSeq() << " rssi=" << m_lastRxRssi
-                                                 << " size=" << pktCopy->GetSize());
+                                               << " node=" << (m_node ? m_node->GetId() : -1)
+                                               << " src=" << rxTag.GetSrc() << " seq="
+                                               << rxTag.GetSeq() << " rssi=" << m_lastRxRssi
+                                               << " size=" << pktCopy->GetSize());
         }
         else
         {
             // v1: filtro por expectedNextHop desde DvClMetricTag.
-
         }
         // Compute RX duration: use ToA from tag if available, else compute from packet
         double duration = rxTag.GetToaUs() / 1e6;

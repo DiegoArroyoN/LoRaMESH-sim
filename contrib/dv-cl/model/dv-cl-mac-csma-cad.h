@@ -52,9 +52,16 @@ class DvClCsmaCadMac : public Object
     };
 
     /// Transmissions that consumed air without a same-instant gate grant.
-    uint64_t GetUngatedTxCount() const { return m_ungatedTx; }
+    uint64_t GetUngatedTxCount() const
+    {
+        return m_ungatedTx;
+    }
+
     /// Transmissions that were authorised at the instant they went on air.
-    uint64_t GetGatedTxCount() const { return m_gatedTx; }
+    uint64_t GetGatedTxCount() const
+    {
+        return m_gatedTx;
+    }
 
     void SetDutyEnforcement(const std::string& mode);
     std::string GetDutyEnforcement() const;

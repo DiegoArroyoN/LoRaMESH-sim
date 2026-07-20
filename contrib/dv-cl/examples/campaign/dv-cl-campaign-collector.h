@@ -2,15 +2,15 @@
 
 #pragma once
 
-#include "ns3/dv-cl-stats-sink.h"
 #include "ns3/core-module.h"
+#include "ns3/dv-cl-stats-sink.h"
 
+#include <cstdint>
 #include <fstream>
 #include <map>
 #include <set>
 #include <tuple>
 #include <vector>
-#include <cstdint>
 
 namespace ns3
 {
@@ -323,6 +323,7 @@ class MetricsCollector : public DvClStatsSink
 
     // Exportar a JSON (structured logging)
     void ExportToJson(std::string prefix = "mesh_dv");
+
     void SetEssentialMetricsOnly(bool value)
     {
         m_essentialMetricsOnly = value;

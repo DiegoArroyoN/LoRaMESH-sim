@@ -5,14 +5,14 @@
 #include "ns3/boolean.h"
 #include "ns3/double.h"
 #include "ns3/log.h"
-#include "ns3/string.h"
 #include "ns3/simulator.h"
+#include "ns3/string.h"
 #include "ns3/uinteger.h"
 
 #include <algorithm>
 #include <cctype>
-#include <cstddef>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 
@@ -51,63 +51,64 @@ DvClRouting::GetTypeId()
                           BooleanValue(false),
                           MakeBooleanAccessor(&DvClRouting::m_advertiseAllRoutes),
                           MakeBooleanChecker())
+            .AddAttribute("AdvertRoutePolicy",
+                          "Route selection policy for beacon payload truncation: top_score | "
+                          "uniform | cost_weighted.",
+                          StringValue("top_score"),
+                          MakeStringAccessor(&DvClRouting::SetAdvertRoutePolicy,
+                                             &DvClRouting::GetAdvertRoutePolicy),
+                          MakeStringChecker())
             .AddAttribute(
-                "AdvertRoutePolicy",
-                "Route selection policy for beacon payload truncation: top_score | uniform | cost_weighted.",
-                StringValue("top_score"),
-                MakeStringAccessor(&DvClRouting::SetAdvertRoutePolicy, &DvClRouting::GetAdvertRoutePolicy),
+                "MetricMode",
+                "Route metric mode: composite_score | toa_only.",
+                StringValue("composite_score"),
+                MakeStringAccessor(&DvClRouting::SetMetricMode, &DvClRouting::GetMetricMode),
                 MakeStringChecker())
-            .AddAttribute("MetricMode",
-                          "Route metric mode: composite_score | toa_only.",
-                          StringValue("composite_score"),
-                          MakeStringAccessor(&DvClRouting::SetMetricMode, &DvClRouting::GetMetricMode),
-                          MakeStringChecker())
-            .AddAttribute("CostEncoding",
-                          "On-air byte encoding for announced metric: score100 | cost255 | score255.",
-                          StringValue("cost255"),
-                          MakeStringAccessor(&DvClRouting::SetCostEncoding, &DvClRouting::GetCostEncoding),
-                          MakeStringChecker())
+            .AddAttribute(
+                "CostEncoding",
+                "On-air byte encoding for announced metric: score100 | cost255 | score255.",
+                StringValue("cost255"),
+                MakeStringAccessor(&DvClRouting::SetCostEncoding, &DvClRouting::GetCostEncoding),
+                MakeStringChecker())
             .AddAttribute("CompositeWToa",
                           "Weight alpha applied to normalised T_hat in composite_score mode.",
                           DoubleValue(0.60),
-                          MakeDoubleAccessor(&DvClRouting::SetAttrWToa,
-                                             &DvClRouting::GetAttrWToa),
+                          MakeDoubleAccessor(&DvClRouting::SetAttrWToa, &DvClRouting::GetAttrWToa),
                           MakeDoubleChecker<double>(0.0))
             .AddAttribute("CompositeWHop",
                           "Fixed per-hop cost beta added once per link in composite_score mode.",
                           DoubleValue(0.15),
-                          MakeDoubleAccessor(&DvClRouting::SetAttrWHop,
-                                             &DvClRouting::GetAttrWHop),
+                          MakeDoubleAccessor(&DvClRouting::SetAttrWHop, &DvClRouting::GetAttrWHop),
                           MakeDoubleChecker<double>(0.0))
-            .AddAttribute("CompositeWEnergy",
-                          "Energy penalty weight delta in composite_score mode (thesis 4.2).",
-                          DoubleValue(0.25),
-                          MakeDoubleAccessor(&DvClRouting::SetAttrWEnergy,
-                                             &DvClRouting::GetAttrWEnergy),
-                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute(
+                "CompositeWEnergy",
+                "Energy penalty weight delta in composite_score mode (thesis 4.2).",
+                DoubleValue(0.25),
+                MakeDoubleAccessor(&DvClRouting::SetAttrWEnergy, &DvClRouting::GetAttrWEnergy),
+                MakeDoubleChecker<double>(0.0))
             .AddAttribute("CompositeCostStep",
                           "Scalar step to quantize composite raw cost into a COST255 byte.",
                           DoubleValue(0.025),
                           MakeDoubleAccessor(&DvClRouting::m_compositeCostStep),
                           MakeDoubleChecker<double>(1e-9))
-            .AddAttribute("EnergyLo",
-                          "Lower energy threshold for composite energy penalty.",
-                          DoubleValue(0.20),
-                          MakeDoubleAccessor(&DvClRouting::SetAttrEnergyLo,
-                                             &DvClRouting::GetAttrEnergyLo),
-                          MakeDoubleChecker<double>(0.0, 1.0))
-            .AddAttribute("EnergyHi",
-                          "Upper energy threshold for composite energy penalty.",
-                          DoubleValue(0.50),
-                          MakeDoubleAccessor(&DvClRouting::SetAttrEnergyHi,
-                                             &DvClRouting::GetAttrEnergyHi),
-                          MakeDoubleChecker<double>(0.0, 1.0))
-            .AddAttribute("EnergyPow",
-                          "Exponent p in piecewise energy penalty Psi (thesis Eq.3).",
-                          DoubleValue(2.0),
-                          MakeDoubleAccessor(&DvClRouting::SetAttrEnergyPow,
-                                             &DvClRouting::GetAttrEnergyPow),
-                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute(
+                "EnergyLo",
+                "Lower energy threshold for composite energy penalty.",
+                DoubleValue(0.20),
+                MakeDoubleAccessor(&DvClRouting::SetAttrEnergyLo, &DvClRouting::GetAttrEnergyLo),
+                MakeDoubleChecker<double>(0.0, 1.0))
+            .AddAttribute(
+                "EnergyHi",
+                "Upper energy threshold for composite energy penalty.",
+                DoubleValue(0.50),
+                MakeDoubleAccessor(&DvClRouting::SetAttrEnergyHi, &DvClRouting::GetAttrEnergyHi),
+                MakeDoubleChecker<double>(0.0, 1.0))
+            .AddAttribute(
+                "EnergyPow",
+                "Exponent p in piecewise energy penalty Psi (thesis Eq.3).",
+                DoubleValue(2.0),
+                MakeDoubleAccessor(&DvClRouting::SetAttrEnergyPow, &DvClRouting::GetAttrEnergyPow),
+                MakeDoubleChecker<double>(0.0))
             .AddAttribute("EnergyMaxPenalty",
                           "Psi_max: maximum piecewise penalty before scaling by CompositeWEnergy.",
                           DoubleValue(1.0),
@@ -141,26 +142,32 @@ DvClRouting::GetTypeId()
                           MakeBooleanChecker())
             // §BatBeacon attributes ───────────────────────────────────────────────────
             .AddAttribute("UseBeaconSoC",
-                          "§BatBeacon: use neighbor SoC from received beacons for Psi(b_j) in composite cost. true=real SoC (default CMP). false=full battery.",
+                          "§BatBeacon: use neighbor SoC from received beacons for Psi(b_j) in "
+                          "composite cost. true=real SoC (default CMP). false=full battery.",
                           BooleanValue(true),
                           MakeBooleanAccessor(&DvClRouting::m_useBeaconSoC),
                           MakeBooleanChecker())
             .AddAttribute("SoCHysteresisPercent",
-                          "§BatBeacon: min SoC change [0-50%] before updating composite link cost. 0=no hysteresis (default). 5=recommended for CMP stability.",
+                          "§BatBeacon: min SoC change [0-50%] before updating composite link cost. "
+                          "0=no hysteresis (default). 5=recommended for CMP stability.",
                           UintegerValue(0),
                           MakeUintegerAccessor(&DvClRouting::m_socHysteresisPercent),
                           MakeUintegerChecker<uint8_t>(0, 50))
             // §DC-aware attributes ────────────────────────────────────────────────────
             .AddAttribute("UseDcAwareRouting",
-                          "§DC-aware: apply duty-cycle feasibility filter in next-hop selection. true=avoid next-hops with DC budget below threshold (DV-CL). false=ignore DC in routing (default).",
+                          "§DC-aware: apply duty-cycle feasibility filter in next-hop selection. "
+                          "true=avoid next-hops with DC budget below threshold (DV-CL). "
+                          "false=ignore DC in routing (default).",
                           BooleanValue(false),
                           MakeBooleanAccessor(&DvClRouting::m_useDcAwareRouting),
                           MakeBooleanChecker())
-            .AddAttribute("DcFeasibilityThreshold",
-                          "§DC-aware: DC-remaining threshold [0-100%]. Next-hops below this are deemed infeasible and avoided unless no alternative exists. Default 20%.",
-                          UintegerValue(20),
-                          MakeUintegerAccessor(&DvClRouting::m_dcFeasibilityThreshold),
-                          MakeUintegerChecker<uint8_t>(0, 100));
+            .AddAttribute(
+                "DcFeasibilityThreshold",
+                "§DC-aware: DC-remaining threshold [0-100%]. Next-hops below this are deemed "
+                "infeasible and avoided unless no alternative exists. Default 20%.",
+                UintegerValue(20),
+                MakeUintegerAccessor(&DvClRouting::m_dcFeasibilityThreshold),
+                MakeUintegerChecker<uint8_t>(0, 100));
     return tid;
 }
 
@@ -406,7 +413,8 @@ DvClRouting::IsDestinationActive(NodeId dest) const
 bool
 DvClRouting::HasAnyRoute(NodeId dest) const
 {
-    return (m_routes.find(dest) != m_routes.end()) || (m_backupRoutes.find(dest) != m_backupRoutes.end());
+    return (m_routes.find(dest) != m_routes.end()) ||
+           (m_backupRoutes.find(dest) != m_backupRoutes.end());
 }
 
 bool
@@ -799,9 +807,11 @@ DvClRouting::ScoreToToaPathUnits(uint16_t scoreX100) const
         return std::numeric_limits<uint16_t>::max();
     }
     const uint32_t maxHopUnits = 1u << 5; // SF7..SF12 -> 2^(12-7)=32
-    const uint32_t maxPathUnits = std::max<uint32_t>(1u, static_cast<uint32_t>(m_initTtl) * maxHopUnits);
+    const uint32_t maxPathUnits =
+        std::max<uint32_t>(1u, static_cast<uint32_t>(m_initTtl) * maxHopUnits);
     const double normCost = std::clamp(1.0 - (static_cast<double>(scoreX100) / 100.0), 0.0, 1.0);
-    const uint32_t units = static_cast<uint32_t>(std::round(normCost * static_cast<double>(maxPathUnits)));
+    const uint32_t units =
+        static_cast<uint32_t>(std::round(normCost * static_cast<double>(maxPathUnits)));
     return static_cast<uint16_t>(std::max<uint32_t>(1u, std::min<uint32_t>(units, 0xFFFFu)));
 }
 
@@ -809,7 +819,8 @@ uint16_t
 DvClRouting::ToaUnitsToScoreX100(uint32_t units) const
 {
     const uint32_t maxHopUnits = 1u << 5;
-    const uint32_t maxPathUnits = std::max<uint32_t>(1u, static_cast<uint32_t>(m_initTtl) * maxHopUnits);
+    const uint32_t maxPathUnits =
+        std::max<uint32_t>(1u, static_cast<uint32_t>(m_initTtl) * maxHopUnits);
     const double normCost =
         std::clamp(static_cast<double>(units) / static_cast<double>(maxPathUnits), 0.0, 1.0);
     const uint16_t score = static_cast<uint16_t>(std::round((1.0 - normCost) * 100.0));
@@ -820,7 +831,8 @@ uint16_t
 DvClRouting::ToaUnitsToCostX1000(uint32_t units) const
 {
     const uint32_t maxHopUnits = 1u << 5;
-    const uint32_t maxPathUnits = std::max<uint32_t>(1u, static_cast<uint32_t>(m_initTtl) * maxHopUnits);
+    const uint32_t maxPathUnits =
+        std::max<uint32_t>(1u, static_cast<uint32_t>(m_initTtl) * maxHopUnits);
     const double normCost =
         std::clamp(static_cast<double>(units) / static_cast<double>(maxPathUnits), 0.0, 1.0);
     return static_cast<uint16_t>(std::round(normCost * 1000.0));
@@ -868,13 +880,16 @@ DvClRouting::AdvertMetricToToaPathUnits(uint16_t metric) const
     }
     if (m_costEncoding == CostEncoding::SCORE255)
     {
-        return static_cast<uint16_t>(std::clamp<int32_t>(256 - static_cast<int32_t>(metric), 1, 255));
+        return static_cast<uint16_t>(
+            std::clamp<int32_t>(256 - static_cast<int32_t>(metric), 1, 255));
     }
     return ScoreToToaPathUnits(metric);
 }
 
 bool
-DvClRouting::IsCandidateBetter(const RouteEntry& candidate, const RouteEntry& current, bool* tie) const
+DvClRouting::IsCandidateBetter(const RouteEntry& candidate,
+                               const RouteEntry& current,
+                               bool* tie) const
 {
     if (tie)
     {
@@ -1050,8 +1065,8 @@ DvClRouting::UpdateFromDvMsg(const DvMessage& msg, const NeighborLinkInfo& link)
     if (itSeq != m_lastSeq.end() && msg.sequence <= itSeq->second)
     {
         NS_LOG_INFO("DVTRACE_RX_DROP reason=old_seq node=" << m_nodeId << " origin=" << msg.origin
-                                                             << " seq=" << msg.sequence
-                                                             << " last=" << itSeq->second);
+                                                           << " seq=" << msg.sequence
+                                                           << " last=" << itSeq->second);
         NS_LOG_DEBUG("Ignore old seq=" << msg.sequence << " <= last=" << itSeq->second
                                        << " from src=" << msg.origin);
         return;
@@ -1083,7 +1098,7 @@ DvClRouting::UpdateFromDvMsg(const DvMessage& msg, const NeighborLinkInfo& link)
     direct.toaUs = link.toaUs;
     // REMOVED: direct.rssiDbm - eliminado de struct
     direct.batt_mV = link.batt_mV;
-    direct.nextHopDcRemaining = link.dc_remaining;  // §DC-aware
+    direct.nextHopDcRemaining = link.dc_remaining; // §DC-aware
     if (m_metricMode == MetricMode::TOA_ONLY)
     {
         const uint32_t units = ToaHopCostUnits(linkSf);
@@ -1107,12 +1122,12 @@ DvClRouting::UpdateFromDvMsg(const DvMessage& msg, const NeighborLinkInfo& link)
             }
             else
             {
-                const uint8_t newSoc8 = static_cast<uint8_t>(
-                    std::clamp(std::round(rawFrac * 100.0), 0.0, 100.0));
+                const uint8_t newSoc8 =
+                    static_cast<uint8_t>(std::clamp(std::round(rawFrac * 100.0), 0.0, 100.0));
                 auto& lastSoc = m_lastNeighborSoC[link.neighbor]; // inserts 0 first time
                 const uint8_t delta = (newSoc8 >= lastSoc)
-                                      ? static_cast<uint8_t>(newSoc8 - lastSoc)
-                                      : static_cast<uint8_t>(lastSoc - newSoc8);
+                                          ? static_cast<uint8_t>(newSoc8 - lastSoc)
+                                          : static_cast<uint8_t>(lastSoc - newSoc8);
                 if (delta >= m_socHysteresisPercent)
                 {
                     lastSoc = newSoc8; // significant change: commit new SoC
@@ -1121,10 +1136,9 @@ DvClRouting::UpdateFromDvMsg(const DvMessage& msg, const NeighborLinkInfo& link)
                 neighborEFrac = static_cast<double>(lastSoc) / 100.0;
             }
         }
-        direct.toaCostUnits = 0;  // unused in COMPOSITE_SCORE mode
-        direct.rawMetric = ComputeThesisLinkCost(link.toaUs,
-                                                  static_cast<uint8_t>(linkSf),
-                                                  neighborEFrac);
+        direct.toaCostUnits = 0; // unused in COMPOSITE_SCORE mode
+        direct.rawMetric =
+            ComputeThesisLinkCost(link.toaUs, static_cast<uint8_t>(linkSf), neighborEFrac);
         direct.costX1000 = static_cast<uint16_t>(
             std::clamp<uint32_t>(static_cast<uint32_t>(std::llround(direct.rawMetric * 1000.0)),
                                  0u,
@@ -1137,13 +1151,11 @@ DvClRouting::UpdateFromDvMsg(const DvMessage& msg, const NeighborLinkInfo& link)
     m_inboundRoutes[direct.destination] = direct;
     if (m_pueyoValidationTrace)
     {
-        NS_LOG_INFO("PUEYO_VAL_INBOUND node=" << m_nodeId << " origin=" << msg.origin
-                                                << " dest=" << direct.destination
-                                                << " nextHop=" << direct.nextHop
-                                                << " sf=" << unsigned(direct.sf)
-                                                << " score=" << direct.scoreX100
-                                                << " raw=" << direct.rawMetric
-                                                << " hops=" << unsigned(direct.hops));
+        NS_LOG_INFO("PUEYO_VAL_INBOUND node="
+                    << m_nodeId << " origin=" << msg.origin << " dest=" << direct.destination
+                    << " nextHop=" << direct.nextHop << " sf=" << unsigned(direct.sf)
+                    << " score=" << direct.scoreX100 << " raw=" << direct.rawMetric
+                    << " hops=" << unsigned(direct.hops));
     }
     if (!IsInHoldDown(direct.destination))
     {
@@ -1183,10 +1195,9 @@ DvClRouting::UpdateFromDvMsg(const DvMessage& msg, const NeighborLinkInfo& link)
         uint16_t entryScore = std::min(entry.scoreX100, kMaxAdvertMetric);
         if (m_pueyoValidationTrace)
         {
-            NS_LOG_INFO("PUEYO_VAL_UPDATE_INPUT node=" << m_nodeId << " origin=" << msg.origin
-                                                         << " dest=" << entry.destination
-                                                         << " entryScore=" << entryScore
-                                                         << " linkSf=" << unsigned(linkSf));
+            NS_LOG_INFO("PUEYO_VAL_UPDATE_INPUT node="
+                        << m_nodeId << " origin=" << msg.origin << " dest=" << entry.destination
+                        << " entryScore=" << entryScore << " linkSf=" << unsigned(linkSf));
         }
         const uint16_t candidateHopsRaw = static_cast<uint16_t>(linkHops) + 1;
         if (candidateHopsRaw > hopLimit)
@@ -1251,15 +1262,13 @@ DvClRouting::UpdateFromDvMsg(const DvMessage& msg, const NeighborLinkInfo& link)
                     // SoC-wire fix: b_j = next-hop energy from link.batt_mV (SoC wire byte).
                     const double neighborEFrac = BattMvToEFrac(link.batt_mV);
                     const double rawMetric =
-                        pathRaw + ComputeThesisLinkCost(link.toaUs,
-                                                        linkSf,
-                                                        neighborEFrac);
+                        pathRaw + ComputeThesisLinkCost(link.toaUs, linkSf, neighborEFrac);
                     candidate.toaCostUnits = 0;
                     candidate.rawMetric = rawMetric;
-                    candidate.costX1000 = static_cast<uint16_t>(
-                        std::clamp<uint32_t>(static_cast<uint32_t>(std::llround(rawMetric * 1000.0)),
-                                             0u,
-                                             std::numeric_limits<uint16_t>::max()));
+                    candidate.costX1000 = static_cast<uint16_t>(std::clamp<uint32_t>(
+                        static_cast<uint32_t>(std::llround(rawMetric * 1000.0)),
+                        0u,
+                        std::numeric_limits<uint16_t>::max()));
                     candidate.scoreX100 = EncodeCompositeMetric(rawMetric);
                 }
             }
@@ -1269,18 +1278,16 @@ DvClRouting::UpdateFromDvMsg(const DvMessage& msg, const NeighborLinkInfo& link)
         candidate.nextHopMac = link.mac;
         if (m_pueyoValidationTrace)
         {
-            NS_LOG_INFO("PUEYO_VAL_UPDATE_CAND node=" << m_nodeId << " origin=" << msg.origin
-                                                        << " dest=" << candidate.destination
-                                                        << " nextHop=" << candidate.nextHop
-                                                        << " sf=" << unsigned(candidate.sf)
-                                                        << " score=" << candidate.scoreX100
-                                                        << " raw=" << candidate.rawMetric
-                                                        << " toaUnits=" << candidate.toaCostUnits
-                                                        << " hops=" << unsigned(candidate.hops));
+            NS_LOG_INFO("PUEYO_VAL_UPDATE_CAND node="
+                        << m_nodeId << " origin=" << msg.origin << " dest=" << candidate.destination
+                        << " nextHop=" << candidate.nextHop << " sf=" << unsigned(candidate.sf)
+                        << " score=" << candidate.scoreX100 << " raw=" << candidate.rawMetric
+                        << " toaUnits=" << candidate.toaCostUnits
+                        << " hops=" << unsigned(candidate.hops));
         }
         NS_LOG_INFO("DV_UPDATE node"
-                      << m_nodeId << " from=" << msg.origin << " entry.dst=" << entry.destination
-                      << " hops=" << unsigned(candidate.hops) << " score=" << candidate.scoreX100);
+                    << m_nodeId << " from=" << msg.origin << " entry.dst=" << entry.destination
+                    << " hops=" << unsigned(candidate.hops) << " score=" << candidate.scoreX100);
         UpdateRoute(candidate);
     }
 }
@@ -1317,9 +1324,8 @@ DvClRouting::PrintRoutingTable() const
         const RouteEntry& e = kv.second;
         NS_LOG_INFO("  [backup] dst=" << e.destination << " via=" << e.nextHop
                                       << " hops=" << unsigned(e.hops) << " sf=" << unsigned(e.sf)
-                                      << " score=" << e.scoreX100 << " seq=" << e.seqNum
-                                      << " age=" << (Simulator::Now() - e.lastUpdate).GetSeconds()
-                                      << "s");
+                                      << " score=" << e.scoreX100 << " seq=" << e.seqNum << " age="
+                                      << (Simulator::Now() - e.lastUpdate).GetSeconds() << "s");
     }
 }
 
@@ -1336,18 +1342,17 @@ DvClRouting::DebugDumpRoutingTable() const
     {
         const RouteEntry& e = kv.second;
         NS_LOG_INFO("  dst=" << e.destination << " nextHop=" << e.nextHop
-                               << " hops=" << unsigned(e.hops) << " sf=" << unsigned(e.sf)
-                               << " score=" << e.scoreX100 << " seq=" << e.seqNum
-                               << " age=" << (Simulator::Now() - e.lastUpdate).GetSeconds() << "s");
+                             << " hops=" << unsigned(e.hops) << " sf=" << unsigned(e.sf)
+                             << " score=" << e.scoreX100 << " seq=" << e.seqNum
+                             << " age=" << (Simulator::Now() - e.lastUpdate).GetSeconds() << "s");
     }
     for (const auto& kv : m_backupRoutes)
     {
         const RouteEntry& e = kv.second;
         NS_LOG_INFO("  [backup] dst=" << e.destination << " nextHop=" << e.nextHop
-                                        << " hops=" << unsigned(e.hops) << " sf="
-                                        << unsigned(e.sf) << " score=" << e.scoreX100
-                                        << " seq=" << e.seqNum << " age="
-                                        << (Simulator::Now() - e.lastUpdate).GetSeconds() << "s");
+                                      << " hops=" << unsigned(e.hops) << " sf=" << unsigned(e.sf)
+                                      << " score=" << e.scoreX100 << " seq=" << e.seqNum << " age="
+                                      << (Simulator::Now() - e.lastUpdate).GetSeconds() << "s");
     }
 }
 
@@ -1362,15 +1367,17 @@ DvClRouting::PrintRouteTo(NodeId dest) const
     }
     const RouteEntry& e = it->second;
     NS_LOG_INFO("DvClRouting SNAPSHOT node=" << m_nodeId << " dest=" << dest << " nextHop="
-                                           << e.nextHop << " hops=" << unsigned(e.hops)
-                                           << " sf=" << unsigned(e.sf) << " score=" << e.scoreX100
-                                           << " seq=" << e.seqNum);
+                                             << e.nextHop << " hops=" << unsigned(e.hops)
+                                             << " sf=" << unsigned(e.sf) << " score=" << e.scoreX100
+                                             << " seq=" << e.seqNum);
 }
 
 void
 DvClRouting::PurgeExpiredRoutes()
 {
-    auto purgeMap = [this](std::map<NodeId, RouteEntry>& table, const char* poisonAction, const char* expireAction) {
+    auto purgeMap = [this](std::map<NodeId, RouteEntry>& table,
+                           const char* poisonAction,
+                           const char* expireAction) {
         for (auto it = table.begin(); it != table.end();)
         {
             RouteEntry& entry = it->second;
@@ -1554,9 +1561,10 @@ DvClRouting::GetBestRoutes(uint32_t maxRoutes) const
     }
 
     // Poison announcements keep highest priority to quickly invalidate stale paths.
-    std::sort(poisonRoutes.begin(), poisonRoutes.end(), [](const RouteEntry* a, const RouteEntry* b) {
-        return a->destination < b->destination;
-    });
+    std::sort(
+        poisonRoutes.begin(),
+        poisonRoutes.end(),
+        [](const RouteEntry* a, const RouteEntry* b) { return a->destination < b->destination; });
     for (const RouteEntry* route : poisonRoutes)
     {
         appendEntry(*route);
@@ -1705,11 +1713,10 @@ DvClRouting::GetBestRoutesPueyo(uint32_t maxRoutes) const
         if (m_pueyoValidationTrace)
         {
             const auto& entry = kv.second;
-            NS_LOG_INFO("PUEYO_VAL_ROUTE_POOL node=" << m_nodeId << " source=route"
-                                                       << " dest=" << entry.destination
-                                                       << " score=" << entry.scoreX100
-                                                       << " sf=" << unsigned(entry.sf)
-                                                       << " raw=" << entry.rawMetric);
+            NS_LOG_INFO("PUEYO_VAL_ROUTE_POOL node="
+                        << m_nodeId << " source=route"
+                        << " dest=" << entry.destination << " score=" << entry.scoreX100
+                        << " sf=" << unsigned(entry.sf) << " raw=" << entry.rawMetric);
         }
         maybeInsert(kv.second);
     }
@@ -1718,11 +1725,10 @@ DvClRouting::GetBestRoutesPueyo(uint32_t maxRoutes) const
         if (m_pueyoValidationTrace)
         {
             const auto& entry = kv.second;
-            NS_LOG_INFO("PUEYO_VAL_ROUTE_POOL node=" << m_nodeId << " source=inbound"
-                                                       << " dest=" << entry.destination
-                                                       << " score=" << entry.scoreX100
-                                                       << " sf=" << unsigned(entry.sf)
-                                                       << " raw=" << entry.rawMetric);
+            NS_LOG_INFO("PUEYO_VAL_ROUTE_POOL node="
+                        << m_nodeId << " source=inbound"
+                        << " dest=" << entry.destination << " score=" << entry.scoreX100
+                        << " sf=" << unsigned(entry.sf) << " raw=" << entry.rawMetric);
         }
         maybeInsert(kv.second);
     }
@@ -1774,9 +1780,9 @@ DvClRouting::GetBestRoutesPueyo(uint32_t maxRoutes) const
                                           ? static_cast<double>(MaxAdvertMetricValue())
                                           : GetComparableMetric(entry);
                 NS_LOG_INFO("PUEYO_VAL_ROUTE_CHOSEN node=" << m_nodeId << " mode=all_fit"
-                                                             << " dest=" << entry.destination
-                                                             << " score=" << entry.scoreX100
-                                                             << " metric=" << metric);
+                                                           << " dest=" << entry.destination
+                                                           << " score=" << entry.scoreX100
+                                                           << " metric=" << metric);
             }
             appendEntry(entry);
         }
@@ -1796,10 +1802,9 @@ DvClRouting::GetBestRoutesPueyo(uint32_t maxRoutes) const
             const double w = 1.0 / (0.05 + metric);
             if (m_pueyoValidationTrace)
             {
-                NS_LOG_INFO("PUEYO_VAL_ROUTE_WEIGHT node=" << m_nodeId << " dest="
-                                                             << entry.destination << " score="
-                                                             << entry.scoreX100 << " metric="
-                                                             << metric << " weight=" << w);
+                NS_LOG_INFO("PUEYO_VAL_ROUTE_WEIGHT node="
+                            << m_nodeId << " dest=" << entry.destination << " score="
+                            << entry.scoreX100 << " metric=" << metric << " weight=" << w);
             }
             weights.push_back(w);
             totalWeight += w;
@@ -1826,9 +1831,9 @@ DvClRouting::GetBestRoutesPueyo(uint32_t maxRoutes) const
         {
             const auto& chosenEntry = pool[chosen];
             NS_LOG_INFO("PUEYO_VAL_ROUTE_CHOSEN node=" << m_nodeId << " mode=weighted"
-                                                         << " dest=" << chosenEntry.destination
-                                                         << " score=" << chosenEntry.scoreX100
-                                                         << " index=" << chosen);
+                                                       << " dest=" << chosenEntry.destination
+                                                       << " score=" << chosenEntry.scoreX100
+                                                       << " index=" << chosen);
         }
         appendEntry(pool[chosen]);
         pool.erase(pool.begin() + static_cast<std::ptrdiff_t>(chosen));
@@ -2005,7 +2010,6 @@ DvClRouting::BuildDvMessage() const
     }
     return msg;
 }
-
 
 void
 DvClRouting::SetAttrWToa(double v)

@@ -1,16 +1,16 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#include "ns3/dv-cl-lora-energy-model-helper.h"
-#include "ns3/dv-cl-lora-energy-model.h"
-#include "ns3/dv-cl-app.h"
-#include "ns3/dv-cl-lora-net-device.h"
 #include "dv-cl-campaign-collector.h"
 
 #include "ns3/core-module.h"
-#include "ns3/mobility-model.h"
+#include "ns3/dv-cl-app.h"
+#include "ns3/dv-cl-helper.h"
+#include "ns3/dv-cl-lora-energy-model-helper.h"
+#include "ns3/dv-cl-lora-energy-model.h"
+#include "ns3/dv-cl-lora-net-device.h"
 #include "ns3/energy-module.h"
 #include "ns3/lora-interference-helper.h"
-#include "ns3/dv-cl-helper.h"
+#include "ns3/mobility-model.h"
 #include "ns3/network-module.h"
 #include "ns3/rng-seed-manager.h"
 
@@ -65,26 +65,28 @@ main(int argc, char* argv[])
     bool enableDataRandomDest = true; // Always random destinations in mesh
     int32_t onlyGenerateFromNodeId = -1;
     int32_t forcedDataDestinationId = -1;
-    std::string sinkNodeIdsCsv = ""; // multisink: CSV of sink node IDs (empty = single-sink default)
+    std::string sinkNodeIdsCsv =
+        "";                // multisink: CSV of sink node IDs (empty = single-sink default)
     uint32_t numSinks = 0; // multisink: auto-place K spread sinks if sinkNodeIds empty
     bool verboseLogs = true;
     uint32_t minBackoffSlots = 4;
     uint32_t backoffStep = 2;
     // CSMA/CAD tuning: CAD decision margin over SX1276 sensitivity (dB),
     // max per-packet retries on sustained CAD-busy, TX queue depth cap.
-    double cadSenseMarginDb = 3.0;  // Lowered from 6.0 (validate_margin3 2026-04-24): +37-47% PDR in high-load N=9/25/49, +/-5% in low-load. See FIXES_AND_METHODOLOGY §8.7 item 1.
+    double cadSenseMarginDb =
+        3.0; // Lowered from 6.0 (validate_margin3 2026-04-24): +37-47% PDR in high-load N=9/25/49,
+             // +/-5% in low-load. See FIXES_AND_METHODOLOGY §8.7 item 1.
     uint32_t csmaMaxRetries = 8;
     uint32_t csmaTxQueueMax = 32;
     double beaconIntervalWarmSec = 10.0;
     double beaconIntervalStableSec = 90.0;
-    std::string profile =
-        "pueyo2024_paper_like"; // default operativo; extended queda como legacy
-    std::string wireFormat = "pueyo7b"; // default operativo; v2 queda como legacy
+    std::string profile = "pueyo2024_paper_like"; // default operativo; extended queda como legacy
+    std::string wireFormat = "pueyo7b";           // default operativo; v2 queda como legacy
     std::string trafficMode = "periodic_any_to_any"; // periodic_any_to_any | pueyo_all_to_all
     uint32_t pueyoPacketsPerPair = 100;
     uint32_t dataPayloadSizeBytes = 20;
     uint32_t dvBeaconMaxRoutes = 0;
-    uint32_t dvPayloadMaxBytes = 0; // 0: MTU-derived
+    uint32_t dvPayloadMaxBytes = 0;              // 0: MTU-derived
     std::string routeAdvertPolicy = "top_score"; // top_score | uniform | cost_weighted
     double linkAddrCacheWindowSec = 300.0;
     double neighborLinkTimeoutSec = -1.0; // <=0 => auto (1x beacon interval)
@@ -136,46 +138,49 @@ main(int argc, char* argv[])
     double studySuperframePeriodSec = 1.0;
     double studySuperframeCtrlWindowSec = 0.2;
     bool disableExtraAfterWarmup = true;
-    double batteryFullCapacityJ = 3888.0;  // 1.08 Wh -- 300 mAh @ 3.6V avg (thesis node energy budget)
-    double socInitMin = 0.60; // §SoCInit: min initial SoC fraction (override flag, default reproduces U[60,100])
+    double batteryFullCapacityJ =
+        3888.0; // 1.08 Wh -- 300 mAh @ 3.6V avg (thesis node energy budget)
+    double socInitMin =
+        0.60; // §SoCInit: min initial SoC fraction (override flag, default reproduces U[60,100])
     double socInitMax = 1.00; // §SoCInit: max initial SoC fraction (override flag)
     double routeTimeoutFactor = 6.0;
     double pdrEndWindowSec = 0.0;
-    double dedupWindowSec = 86400.0; // [B2] 24h default; anterior=600 podía causar doble-conteo en saturación
+    double dedupWindowSec =
+        86400.0; // [B2] 24h default; anterior=600 podía causar doble-conteo en saturación
     double dvLinkWeight = 0.70;
     double dvPathWeight = 0.25;
     double dvPathHopWeight = 0.05;
     std::string routeMetricMode = "composite_score"; // composite_score | toa_only
-    std::string costEncoding = "cost255";           // score100 | cost255 | score255
+    std::string costEncoding = "cost255";            // score100 | cost255 | score255
     std::string sfLinkMode = "observed_rxsf";        // observed_rxsf | deterministic_sensitivity
     double sfLinkMarginDb = 0.0;
-    double compositeWToa = 0.60;  // alpha -- thesis 4.2
-    double compositeWHop = 0.15;  // beta -- thesis 4.2
-    double compositeWEnergy = 0.25;  // delta -- thesis 4.2
-    double compositeCostStep = 0.025;  // quantization step
+    double compositeWToa = 0.60;      // alpha -- thesis 4.2
+    double compositeWHop = 0.15;      // beta -- thesis 4.2
+    double compositeWEnergy = 0.25;   // delta -- thesis 4.2
+    double compositeCostStep = 0.025; // quantization step
     double energyLo = 0.20;
     double energyHi = 0.50;
-    double energyPow = 2.0;  // §tesis Ec.3 p=2
-    double energyMaxPenalty = 1.0;  // Psi_max = 1.0 (scaled by delta=0.25)
+    double energyPow = 2.0;        // §tesis Ec.3 p=2
+    double energyMaxPenalty = 1.0; // Psi_max = 1.0 (scaled by delta=0.25)
     // §BatBeacon: toggle + hysteresis (set per-profile below)
-    bool   useBeaconBattery   = true; // CMP default; TOA profiles force false
+    bool useBeaconBattery = true;      // CMP default; TOA profiles force false
     uint32_t socHysteresisPercent = 0; // 0=off; CMP profiles default to 5
     // §DC-aware: filtro de factibilidad por duty cycle (set per-profile below)
-    bool   useDcAwareRouting  = false; // DV-CL lo activa; resto lo deja en false
+    bool useDcAwareRouting = false;       // DV-CL lo activa; resto lo deja en false
     uint32_t dcFeasibilityThreshold = 20; // umbral [0-100%] de DC restante del next-hop
     // §DC-on-override: permite activar DC enforcement (1%) en profiles que normalmente
     // lo tienen off (escenario de evaluación principal de la tesis). Sin este flag,
     // los profiles validan duty disabled (escenario comparativo con Pueyo).
-    bool   allowDutyOverride = false;
+    bool allowDutyOverride = false;
     // §Beacon-override: permite barrer el periodo de beacon fuera de los 60 s que
     // fija el perfil Pueyo (sensibilidad del control plane / operating envelope).
-    bool   allowBeaconOverride = false;
+    bool allowBeaconOverride = false;
     // §Robustness-override (round-6): permiten barrer parametros que el perfil
     // Pueyo fija, para baterias de robustez. Default false => comportamiento
     // IDENTICO al binario congelado (regression-safe).
-    bool   allowShadowOverride = false;
-    bool   allowPayloadOverride = false;
-    bool   allowInterferenceModelOverride = false;
+    bool allowShadowOverride = false;
+    bool allowPayloadOverride = false;
+    bool allowInterferenceModelOverride = false;
     // §DC-sweep: porcentaje de duty cycle aplicado cuando allowDutyOverride=true
     // (default 1%). Permite barrer el DC (ej. 10%) para analisis de sensibilidad.
     double dutyOverridePct = 1.0;
@@ -202,7 +207,7 @@ main(int argc, char* argv[])
     bool enableMetricsPeriodicFlush = false;
     double metricsFlushIntervalSec = 3600.0;
     bool enableMetricsEssentialOnly = false;
-    bool stopOnFullDepletion = true;  // Hook dinámico: parar al agotamiento total
+    bool stopOnFullDepletion = true; // Hook dinámico: parar al agotamiento total
     bool enableGapAuditTrace = false;
     bool pueyoValidationTrace = false;
     int32_t pueyoSyntheticEntriesNodeId = -1;
@@ -230,7 +235,8 @@ main(int argc, char* argv[])
     cmd.AddValue("profile",
                  "Execution profile: pueyo2024_paper_like (default) | pueyo2024 | "
                  "pueyo2024_paper_like_csmacad | csmacad_free_backoff | "
-                 "proposal_pueyo_like | proposal_pueyo_like_aloha | proposal_pueyo_like_csmacad | proposal_pueyo_like_observed | extended (legacy). "
+                 "proposal_pueyo_like | proposal_pueyo_like_aloha | proposal_pueyo_like_csmacad | "
+                 "proposal_pueyo_like_observed | extended (legacy). "
                  "csmacad_free_backoff is identical to pueyo2024_paper_like_csmacad except "
                  "controlBackoffFactor/dataBackoffFactor are CLI-tunable (NOT Pueyo-comparable).",
                  profile);
@@ -245,12 +251,14 @@ main(int argc, char* argv[])
                  forcedDataDestinationId);
     cmd.AddValue("sinkNodeIds",
                  "multisink: comma-separated sink node IDs (e.g. 0,24). Empty=single-sink. "
-                 "Each non-sink node sends to its nearest sink (Euclidean, pueyo_grid); sinks do not generate.",
+                 "Each non-sink node sends to its nearest sink (Euclidean, pueyo_grid); sinks do "
+                 "not generate.",
                  sinkNodeIdsCsv);
-    cmd.AddValue("numSinks",
-                 "multisink: auto-place K spread sinks (over node bounding box) if sinkNodeIds empty. "
-                 "0=disabled. Works for pueyo_grid and random.",
-                 numSinks);
+    cmd.AddValue(
+        "numSinks",
+        "multisink: auto-place K spread sinks (over node bounding box) if sinkNodeIds empty. "
+        "0=disabled. Works for pueyo_grid and random.",
+        numSinks);
     cmd.AddValue("pueyoPacketsPerPair",
                  "Packets generated per source-destination pair in pueyo_all_to_all mode",
                  pueyoPacketsPerPair);
@@ -267,9 +275,13 @@ main(int argc, char* argv[])
                  "Simulation-time interval in seconds for periodic metrics flush",
                  metricsFlushIntervalSec);
     cmd.AddValue("enableMetricsEssentialOnly",
-                 "Keep only essential metrics detail (TX+delay+summary) and skip heavy RX/route/overhead traces",
+                 "Keep only essential metrics detail (TX+delay+summary) and skip heavy "
+                 "RX/route/overhead traces",
                  enableMetricsEssentialOnly);
-cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener simulación cuando 100% de nodos muera (techo stopSec sigue vigente)",                 stopOnFullDepletion);
+    cmd.AddValue("stopOnFullDepletion",
+                 "Hook dinámico: detener simulación cuando 100% de nodos muera (techo stopSec "
+                 "sigue vigente)",
+                 stopOnFullDepletion);
     cmd.AddValue("beaconIntervalWarmSec",
                  "DV beacon interval during warmup [s]",
                  beaconIntervalWarmSec);
@@ -287,7 +299,8 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
                  "Hard cap for DV payload bytes in beacon route entries (0 = MTU-derived)",
                  dvPayloadMaxBytes);
     cmd.AddValue("routeAdvertPolicy",
-                 "Route selection policy when beacon payload truncates entries: top_score | uniform | cost_weighted",
+                 "Route selection policy when beacon payload truncates entries: top_score | "
+                 "uniform | cost_weighted",
                  routeAdvertPolicy);
     cmd.AddValue("macCacheWindowSec",
                  "Legacy alias for linkAddr cache window for nextHop resolution [s]",
@@ -296,11 +309,13 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
                  "Link-layer address cache window for nextHop resolution [s]",
                  linkAddrCacheWindowSec);
     cmd.AddValue("neighborLinkTimeoutSec",
-                 "Empirical per-SF neighbor history validity window [s] (<=0 auto-correlates to beacon interval)",
+                 "Empirical per-SF neighbor history validity window [s] (<=0 auto-correlates to "
+                 "beacon interval)",
                  neighborLinkTimeoutSec);
-    cmd.AddValue("allowStaleMacForUnicastData",
-                 "Legacy alias: allow stale known link-layer address for unicast next-hop resolution",
-                 allowStaleLinkAddrForUnicastData);
+    cmd.AddValue(
+        "allowStaleMacForUnicastData",
+        "Legacy alias: allow stale known link-layer address for unicast next-hop resolution",
+        allowStaleLinkAddrForUnicastData);
     cmd.AddValue("allowStaleLinkAddrForUnicastData",
                  "Allow stale known link-layer address for unicast data next-hop resolution",
                  allowStaleLinkAddrForUnicastData);
@@ -316,12 +331,8 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     cmd.AddValue("sfControl",
                  "Fixed SF for control beacons when probabilistic selection is disabled [7..12]",
                  sfControl);
-    cmd.AddValue("sfMin",
-                 "Minimum SF for probabilistic beacon selection [7..12]",
-                 sfMin);
-    cmd.AddValue("sfMax",
-                 "Maximum SF for probabilistic beacon selection [7..12]",
-                 sfMax);
+    cmd.AddValue("sfMin", "Minimum SF for probabilistic beacon selection [7..12]", sfMin);
+    cmd.AddValue("sfMax", "Maximum SF for probabilistic beacon selection [7..12]", sfMax);
     cmd.AddValue("initTtl",
                  "Initial data TTL (encoded on 6 bits for v2/pueyo7b wire formats)",
                  initTtl);
@@ -351,9 +362,10 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     cmd.AddValue("dataFixedPhaseCadence",
                  "If true, preserve the assigned node phase on every generation period.",
                  dataFixedPhaseCadence);
-    cmd.AddValue("allowTemporalDesyncVariant",
-                 "Allow temporal desync experiments that relax the strict paper-like jitter constraint.",
-                 allowTemporalDesyncVariant);
+    cmd.AddValue(
+        "allowTemporalDesyncVariant",
+        "Allow temporal desync experiments that relax the strict paper-like jitter constraint.",
+        allowTemporalDesyncVariant);
     cmd.AddValue("allowPaperLikeSfRangeVariant",
                  "Allow experimental SF-range overrides on profile=pueyo2024_paper_like.",
                  allowPaperLikeSfRangeVariant);
@@ -378,9 +390,10 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     cmd.AddValue("routeTimeoutFactor",
                  "Route timeout multiplier based on beacon interval",
                  routeTimeoutFactor);
-    cmd.AddValue("pdrEndWindowSec",
-                 "End-window (seconds) excluded from eligible PDR calculation (0=auto from dataStop)",
-                 pdrEndWindowSec);
+    cmd.AddValue(
+        "pdrEndWindowSec",
+        "End-window (seconds) excluded from eligible PDR calculation (0=auto from dataStop)",
+        pdrEndWindowSec);
     cmd.AddValue("dedupWindowSec",
                  "Dedup cache TTL [s] for dataplane keys (src,dst,seq16)",
                  dedupWindowSec);
@@ -421,10 +434,12 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
                  "§DC-aware: DC-remaining threshold [0-100%] below which a next-hop is infeasible.",
                  dcFeasibilityThreshold);
     cmd.AddValue("allowDutyOverride",
-                 "§Eval scenario: allow profiles with duty=off to activate DC enforcement (1%). Tesis principal usa DC on.",
+                 "§Eval scenario: allow profiles with duty=off to activate DC enforcement (1%). "
+                 "Tesis principal usa DC on.",
                  allowDutyOverride);
     cmd.AddValue("allowBeaconOverride",
-                 "§Eval scenario: allow profiles to use the CLI beaconInterval instead of the Pueyo-fixed 60s.",
+                 "§Eval scenario: allow profiles to use the CLI beaconInterval instead of the "
+                 "Pueyo-fixed 60s.",
                  allowBeaconOverride);
     cmd.AddValue("allowShadowOverride",
                  "§Robustness: allow CLI shadowingSigmaDb to override the Pueyo-fixed 3.57 dB.",
@@ -435,11 +450,13 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     cmd.AddValue("allowInterferenceModelOverride",
                  "§Robustness: allow CLI interferenceModel to override the profile default.",
                  allowInterferenceModelOverride);
-    cmd.AddValue("dutyOverridePct",
-                 "§DC-sweep: duty-cycle percent applied when allowDutyOverride=true (default 1.0 = 1%).",
-                 dutyOverridePct);
+    cmd.AddValue(
+        "dutyOverridePct",
+        "§DC-sweep: duty-cycle percent applied when allowDutyOverride=true (default 1.0 = 1%).",
+        dutyOverridePct);
     cmd.AddValue("allowEnergyFwOverride",
-                 "§Replica Pueyo: respect CLI enableNs3EnergyFramework even when profile would force it true.",
+                 "§Replica Pueyo: respect CLI enableNs3EnergyFramework even when profile would "
+                 "force it true.",
                  allowEnergyFwOverride);
     cmd.AddValue("compositeCostStep",
                  "Quantization step for composite raw metric to 1-byte advertised metric",
@@ -459,24 +476,25 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     cmd.AddValue("sfLinkMode",
                  "SF link inference mode: observed_rxsf | deterministic_sensitivity",
                  sfLinkMode);
-    cmd.AddValue("sfLinkMarginDb",
-                 "Margin [dB] added to sensitivity threshold when sfLinkMode=deterministic_sensitivity",
-                 sfLinkMarginDb);
+    cmd.AddValue(
+        "sfLinkMarginDb",
+        "Margin [dB] added to sensitivity threshold when sfLinkMode=deterministic_sensitivity",
+        sfLinkMarginDb);
     cmd.AddValue("maxRoutesPerDestination",
                  "Max route candidates stored per destination in DV table",
                  maxRoutesPerDestination);
     cmd.AddValue("maxTotalRoutes",
                  "Max total route entries in DV table (primary+backup)",
                  maxTotalRoutes);
-    cmd.AddValue("nodePlacementMode", "line | random | pueyo_grid | pueyo_random_equiv", nodePlacementMode);
+    cmd.AddValue("nodePlacementMode",
+                 "line | random | pueyo_grid | pueyo_random_equiv",
+                 nodePlacementMode);
     cmd.AddValue("areaWidth", "Random placement width [m] (mode=random)", areaWidth);
     cmd.AddValue("areaHeight", "Random placement height [m] (mode=random)", areaHeight);
     cmd.AddValue("pueyoGridSpacingM",
                  "Grid spacing [m] for pueyo_grid / pueyo_random_equiv modes",
                  pueyoGridSpacingM);
-    cmd.AddValue("pueyoGridSide",
-                 "Grid side for pueyo modes (0=auto from nEd)",
-                 pueyoGridSide);
+    cmd.AddValue("pueyoGridSide", "Grid side for pueyo modes (0=auto from nEd)", pueyoGridSide);
     cmd.AddValue("rngRun", "RNG run number for reproducible placement", rngRun);
     cmd.AddValue("pathLossExponent", "Log-distance path loss exponent", pathLossExponent);
     cmd.AddValue("referenceDistance", "Path loss reference distance [m]", referenceDistance);
@@ -488,7 +506,8 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
                  "Enable RX scan/lock pending-signal acquisition in SimpleGatewayLoraPhy",
                  enableSfScanRx);
     cmd.AddValue("pueyoFloraLikeRx",
-                 "Minimal FLoRa-like receive-start ablation: disable pending scan/lock while preserving single-channel and single-demod behavior",
+                 "Minimal FLoRa-like receive-start ablation: disable pending scan/lock while "
+                 "preserving single-channel and single-demod behavior",
                  pueyoFloraLikeRx);
     cmd.AddValue("enableGapAuditTrace",
                  "Enable extra control-plane maturity counters for PDR gap audit",
@@ -505,14 +524,16 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     cmd.AddValue("minBackoffSlots", "Minimum backoff window in slots", minBackoffSlots);
     cmd.AddValue("backoffStep", "Backoff step increment per failure", backoffStep);
     cmd.AddValue("cadSenseMarginDb",
-                 "CAD decision margin over SX1276 sensitivity [dB] (default 3.0; lowered from 6.0 in 2026-04-24 — see FIXES_AND_METHODOLOGY.md §8.7).",
+                 "CAD decision margin over SX1276 sensitivity [dB] (default 3.0; lowered from 6.0 "
+                 "in 2026-04-24 — see FIXES_AND_METHODOLOGY.md §8.7).",
                  cadSenseMarginDb);
     cmd.AddValue("csmaMaxRetries",
                  "Max CSMA/CAD retries per TX queue entry before drop (default 8).",
                  csmaMaxRetries);
-    cmd.AddValue("csmaTxQueueMax",
-                 "Max TX queue depth for CSMA/CAD path (default 32, oldest data evicted on overflow).",
-                 csmaTxQueueMax);
+    cmd.AddValue(
+        "csmaTxQueueMax",
+        "Max TX queue depth for CSMA/CAD path (default 32, oldest data evicted on overflow).",
+        csmaTxQueueMax);
     cmd.AddValue("enableProbabilisticCapture",
                  "Enable probabilistic capture for cross-SF collisions",
                  enableProbabilisticCapture);
@@ -546,12 +567,11 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     cmd.AddValue("prioritizeBeacons",
                  "Prioritize DV beacons ahead of data in CSMA queue",
                  prioritizeBeacons);
-    cmd.AddValue("beaconLatestOnly",
-                 "Keep only latest pending beacon in queue",
-                 beaconLatestOnly);
-    cmd.AddValue("pueyoStrictQueueScheduler",
-                 "Enable strict queue scheduler for Pueyo profile (Routing/Data=10:1, Forward/Local=10:1)",
-                 pueyoStrictQueueScheduler);
+    cmd.AddValue("beaconLatestOnly", "Keep only latest pending beacon in queue", beaconLatestOnly);
+    cmd.AddValue(
+        "pueyoStrictQueueScheduler",
+        "Enable strict queue scheduler for Pueyo profile (Routing/Data=10:1, Forward/Local=10:1)",
+        pueyoStrictQueueScheduler);
     cmd.AddValue("controlBackoffFactor",
                  "Backoff multiplier for control (DV) frames",
                  controlBackoffFactor);
@@ -671,7 +691,7 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         sfScanResetOnNewSignal = true;
         shadowingSigmaDb = 3.57;
         dataPayloadSizeBytes = 20;
-        enableNs3EnergyFramework = true;  // active in all profiles [thesis: FND/T50/Psi(bj)]
+        enableNs3EnergyFramework = true; // active in all profiles [thesis: FND/T50/Psi(bj)]
     };
 
     if (profileLower == "pueyo2024")
@@ -685,14 +705,14 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     {
         applyPueyoComparableBase();
         routeMetricMode = "toa_only";
-        useBeaconBattery = false;    // §BatBeacon: TOA ignores SoC
+        useBeaconBattery = false; // §BatBeacon: TOA ignores SoC
         socHysteresisPercent = 0;
         sfLinkMode = "deterministic_sensitivity";
         sfMin = 7;
         sfMax = 8;
         pueyoFloraLikeRx = true;
         enableSfScanRx = false;
-        enableNs3EnergyFramework = true;  // KPIs: FND y T_50 requieren modelo de energia
+        enableNs3EnergyFramework = true; // KPIs: FND y T_50 requieren modelo de energia
         if (allowPaperLikeSfRangeVariant)
         {
             sfMin = cliSfMin;
@@ -709,7 +729,8 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
             cfg.enableDutyCycle = true;
             cfg.dutyLimit = dutyOverridePct / 100.0;
         }
-        NS_LOG_WARN("Aplicando profile=pueyo2024_paper_like: base Pueyo + SF7-8 + FLoRa-like RX + energy framework + duty="
+        NS_LOG_WARN("Aplicando profile=pueyo2024_paper_like: base Pueyo + SF7-8 + FLoRa-like RX + "
+                    "energy framework + duty="
                     << (allowDutyOverride ? "ON(1%)" : "off") << ".");
     }
     else if (profileLower == "pueyo2024_paper_like_csmacad")
@@ -719,7 +740,7 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         applyPueyoComparableBase();
         cfg.enableCsma = true;
         routeMetricMode = "toa_only";
-        useBeaconBattery = false;    // §BatBeacon: TOA ignores SoC
+        useBeaconBattery = false; // §BatBeacon: TOA ignores SoC
         socHysteresisPercent = 0;
         sfLinkMode = "deterministic_sensitivity";
         sfMin = 7;
@@ -742,7 +763,8 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
             cfg.enableDutyCycle = true;
             cfg.dutyLimit = dutyOverridePct / 100.0;
         }
-        NS_LOG_WARN("Aplicando profile=pueyo2024_paper_like_csmacad: base Pueyo + SF7-8 + FLoRa-like RX + CSMA/CAD + duty="
+        NS_LOG_WARN("Aplicando profile=pueyo2024_paper_like_csmacad: base Pueyo + SF7-8 + "
+                    "FLoRa-like RX + CSMA/CAD + duty="
                     << (allowDutyOverride ? "ON(1%)" : "off") << ".");
     }
     else if (profileLower == "csmacad_free_backoff")
@@ -753,13 +775,14 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         // comparable to Pueyo 2024 — different name, different validator, different intent.
         // See FIXES_AND_METHODOLOGY.md §8.7 item 5.
 
-        // Capture CLI-provided cbf/dbf BEFORE applyPueyoComparableBase clobbers them to (1.0, 10.0).
+        // Capture CLI-provided cbf/dbf BEFORE applyPueyoComparableBase clobbers them to
+        // (1.0, 10.0).
         const double cliCbf = controlBackoffFactor;
         const double cliDbf = dataBackoffFactor;
         applyPueyoComparableBase();
         cfg.enableCsma = true;
         routeMetricMode = "toa_only";
-        useBeaconBattery = false;    // §BatBeacon: TOA ignores SoC
+        useBeaconBattery = false; // §BatBeacon: TOA ignores SoC
         socHysteresisPercent = 0;
         sfLinkMode = "deterministic_sensitivity";
         sfMin = 7;
@@ -779,9 +802,10 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         // Restore the CLI cbf/dbf — this is the only divergence from pueyo2024_paper_like_csmacad.
         controlBackoffFactor = cliCbf;
         dataBackoffFactor = cliDbf;
-        NS_LOG_WARN("Aplicando profile=csmacad_free_backoff: idéntico a pueyo2024_paper_like_csmacad "
-                    "pero cbf/dbf libres desde CLI (cbf=" << cliCbf << " dbf=" << cliDbf
-                    << "). NO comparable con Pueyo 2024.");
+        NS_LOG_WARN(
+            "Aplicando profile=csmacad_free_backoff: idéntico a pueyo2024_paper_like_csmacad "
+            "pero cbf/dbf libres desde CLI (cbf="
+            << cliCbf << " dbf=" << cliDbf << "). NO comparable con Pueyo 2024.");
     }
     else if (profileLower == "proposal_pueyo_like")
     {
@@ -793,12 +817,14 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         prioritizeBeacons = false;
         pueyoStrictQueueScheduler = true;
         routeMetricMode = "composite_score";
-        useBeaconBattery = true;     // §BatBeacon: real neighbor SoC for Psi(b_j)
-        socHysteresisPercent = 5;    // 5% threshold reduces routing churn
+        useBeaconBattery = true;  // §BatBeacon: real neighbor SoC for Psi(b_j)
+        socHysteresisPercent = 5; // 5% threshold reduces routing churn
         sfLinkMode = "deterministic_sensitivity";
         pueyoFloraLikeRx = true;
         enableSfScanRx = false;
-        NS_LOG_WARN("Aplicando profile=proposal_pueyo_like: base Pueyo + composite_score + CSMA + duty 1% + strict queue + receive-start FLoRa-like + no beacon prioritization.");
+        NS_LOG_WARN(
+            "Aplicando profile=proposal_pueyo_like: base Pueyo + composite_score + CSMA + duty 1% "
+            "+ strict queue + receive-start FLoRa-like + no beacon prioritization.");
     }
     else if (profileLower == "proposal_pueyo_like_observed")
     {
@@ -810,10 +836,11 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         prioritizeBeacons = true;
         pueyoStrictQueueScheduler = false;
         routeMetricMode = "composite_score";
-        useBeaconBattery = true;     // §BatBeacon
+        useBeaconBattery = true; // §BatBeacon
         socHysteresisPercent = 5;
         sfLinkMode = "observed_rxsf";
-        NS_LOG_WARN("Aplicando profile=proposal_pueyo_like_observed: base Pueyo + composite_score + CSMA + duty 1% + observed_rxsf.");
+        NS_LOG_WARN("Aplicando profile=proposal_pueyo_like_observed: base Pueyo + composite_score "
+                    "+ CSMA + duty 1% + observed_rxsf.");
     }
     else if (profileLower == "proposal_pueyo_like_aloha")
     {
@@ -824,14 +851,14 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         // pueyoFloraLikeRx=true -- identico al baseline ToA para comparacion limpia.
         applyPueyoComparableBase();
         routeMetricMode = "composite_score";
-        useBeaconBattery = true;     // §BatBeacon: real neighbor SoC for Psi(b_j)
-        socHysteresisPercent = 5;    // 5% threshold reduces routing churn
+        useBeaconBattery = true;  // §BatBeacon: real neighbor SoC for Psi(b_j)
+        socHysteresisPercent = 5; // 5% threshold reduces routing churn
         sfLinkMode = "deterministic_sensitivity";
         sfMin = 7;
         sfMax = 8;
         pueyoFloraLikeRx = true;
         enableSfScanRx = false;
-        enableNs3EnergyFramework = true;  // Psi(b_j) en routing + KPIs FND/T_50
+        enableNs3EnergyFramework = true; // Psi(b_j) en routing + KPIs FND/T_50
         if (allowPaperLikeSfRangeVariant)
         {
             sfMin = cliSfMin;
@@ -862,8 +889,8 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         applyPueyoComparableBase();
         cfg.enableCsma = true;
         routeMetricMode = "composite_score";
-        useBeaconBattery = true;     // §BatBeacon: real neighbor SoC for Psi(b_j)
-        socHysteresisPercent = 5;    // 5% threshold reduces routing churn
+        useBeaconBattery = true;  // §BatBeacon: real neighbor SoC for Psi(b_j)
+        socHysteresisPercent = 5; // 5% threshold reduces routing churn
         sfLinkMode = "deterministic_sensitivity";
         sfMin = 7;
         sfMax = 8;
@@ -886,19 +913,18 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
             cfg.enableDutyCycle = true;
             cfg.dutyLimit = dutyOverridePct / 100.0;
         }
-        NS_LOG_WARN("Aplicando profile=proposal_pueyo_like_csmacad: ABLACION CMP-CSMA/CAD -- "
-                    "unico cambio vs pueyo2024_paper_like_csmacad: composite_score + energy framework. "
-                    "MAC=CSMA/CAD, duty="
-                    << (allowDutyOverride ? "ON(1%)" : "off")
-                    << ", SF7-8, deterministic. Comparacion metodologicamente limpia.");
+        NS_LOG_WARN(
+            "Aplicando profile=proposal_pueyo_like_csmacad: ABLACION CMP-CSMA/CAD -- "
+            "unico cambio vs pueyo2024_paper_like_csmacad: composite_score + energy framework. "
+            "MAC=CSMA/CAD, duty="
+            << (allowDutyOverride ? "ON(1%)" : "off")
+            << ", SF7-8, deterministic. Comparacion metodologicamente limpia.");
     }
 
     if (allowTemporalDesyncVariant &&
         (profileLower == "pueyo2024" || profileLower == "pueyo2024_paper_like" ||
-         profileLower == "pueyo2024_paper_like_csmacad" ||
-         profileLower == "csmacad_free_backoff" ||
-         profileLower == "proposal_pueyo_like" ||
-         profileLower == "proposal_pueyo_like_aloha" ||
+         profileLower == "pueyo2024_paper_like_csmacad" || profileLower == "csmacad_free_backoff" ||
+         profileLower == "proposal_pueyo_like" || profileLower == "proposal_pueyo_like_aloha" ||
          profileLower == "proposal_pueyo_like_csmacad" ||
          profileLower == "proposal_pueyo_like_observed"))
     {
@@ -916,9 +942,18 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     // valores) y antes de validar, restaurar el valor CLI cuando el flag esta
     // activo. Los NS_ABORT correspondientes se relajan con el mismo flag.
     // Sin flag (default) no se toca nada => identico al binario congelado.
-    if (allowShadowOverride) { shadowingSigmaDb = cliShadowingSigmaDb; }
-    if (allowPayloadOverride) { dataPayloadSizeBytes = cliDataPayloadSizeBytes; }
-    if (allowInterferenceModelOverride) { interferenceModel = cliInterferenceModel; }
+    if (allowShadowOverride)
+    {
+        shadowingSigmaDb = cliShadowingSigmaDb;
+    }
+    if (allowPayloadOverride)
+    {
+        dataPayloadSizeBytes = cliDataPayloadSizeBytes;
+    }
+    if (allowInterferenceModelOverride)
+    {
+        interferenceModel = cliInterferenceModel;
+    }
 
     auto validatePueyoComparableBase = [&](const std::string& profileName) {
         NS_ABORT_MSG_IF(wireFormat != "pueyo7b",
@@ -928,39 +963,44 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         NS_ABORT_MSG_IF(preambleSymbols != 16,
                         "Error: profile=" << profileName << " requiere preambleSymbols=16");
         NS_ABORT_MSG_IF(trafficMode != "pueyo_all_to_all",
-                        "Error: profile=" << profileName << " requiere trafficMode=pueyo_all_to_all");
+                        "Error: profile=" << profileName
+                                          << " requiere trafficMode=pueyo_all_to_all");
         NS_ABORT_MSG_IF(pueyoPacketsPerPair != 100,
                         "Error: profile=" << profileName << " requiere pueyoPacketsPerPair=100");
         NS_ABORT_MSG_IF(enableDataRandomDest,
                         "Error: profile=" << profileName << " requiere enableDataRandomDest=false");
-        NS_ABORT_MSG_IF((beaconIntervalWarmSec != 60.0 || beaconIntervalStableSec != 60.0) && !allowBeaconOverride,
-                        "Error: profile=" << profileName << " requiere beaconIntervalWarm/Stable=60s (usar allowBeaconOverride para barrer)");
+        NS_ABORT_MSG_IF((beaconIntervalWarmSec != 60.0 || beaconIntervalStableSec != 60.0) &&
+                            !allowBeaconOverride,
+                        "Error: profile=" << profileName
+                                          << " requiere beaconIntervalWarm/Stable=60s (usar "
+                                             "allowBeaconOverride para barrer)");
         NS_ABORT_MSG_IF(routeTimeoutFactor != 5.0,
                         "Error: profile=" << profileName << " requiere routeTimeoutFactor=5");
         NS_ABORT_MSG_IF(routeAdvertPolicy != "cost_weighted",
-                        "Error: profile=" << profileName << " requiere routeAdvertPolicy=cost_weighted");
+                        "Error: profile=" << profileName
+                                          << " requiere routeAdvertPolicy=cost_weighted");
         NS_ABORT_MSG_IF(dvPayloadMaxBytes != 251,
                         "Error: profile=" << profileName << " requiere dvPayloadMaxBytes=251");
         NS_ABORT_MSG_IF(maxRoutesPerDestination != 2 || maxTotalRoutes != 1024,
                         "Error: profile=" << profileName << " requiere tabla DV 2/1024");
         NS_ABORT_MSG_IF(costEncoding != "cost255",
                         "Error: profile=" << profileName << " requiere costEncoding=cost255");
-        NS_ABORT_MSG_IF(interferenceModel != "pueyo_fixed_capture" && interferenceModel != "puello" &&
-                            interferenceModel != "pueyo" && !allowInterferenceModelOverride,
-                        "Error: profile=" << profileName
-                                           << " requiere interferenceModel=pueyo_fixed_capture");
+        NS_ABORT_MSG_IF(
+            interferenceModel != "pueyo_fixed_capture" && interferenceModel != "puello" &&
+                interferenceModel != "pueyo" && !allowInterferenceModelOverride,
+            "Error: profile=" << profileName << " requiere interferenceModel=pueyo_fixed_capture");
         NS_ABORT_MSG_IF(dataPeriodJitterMaxSec != 0.0 && !allowTemporalDesyncVariant,
                         "Error: profile=" << profileName << " requiere dataPeriodJitterMaxSec=0");
         NS_ABORT_MSG_IF(dataStartPhaseMaxSec != kPueyoDefaultDataStartPhaseMaxSec &&
                             !allowTemporalDesyncVariant,
-                        "Error: profile=" << profileName
-                                           << " requiere dataStartPhaseMaxSec="
-                                           << kPueyoDefaultDataStartPhaseMaxSec);
+                        "Error: profile=" << profileName << " requiere dataStartPhaseMaxSec="
+                                          << kPueyoDefaultDataStartPhaseMaxSec);
         NS_ABORT_MSG_IF(dataPayloadSizeBytes != 20 && !allowPayloadOverride,
                         "Error: profile=" << profileName << " requiere dataPayloadSizeBytes=20");
         NS_ABORT_MSG_IF(sfScanEdThresholdDbm != -120.0 || !sfScanResetOnNewSignal,
-                        "Error: profile=" << profileName
-                                           << " requiere sfScanEdThresholdDbm=-120 y SfScanResetOnNewSignal=true");
+                        "Error: profile="
+                            << profileName
+                            << " requiere sfScanEdThresholdDbm=-120 y SfScanResetOnNewSignal=true");
         NS_ABORT_MSG_IF(std::fabs(shadowingSigmaDb - 3.57) > 1e-9 && !allowShadowOverride,
                         "Error: profile=" << profileName << " requiere shadowingSigmaDb=3.57");
     };
@@ -984,17 +1024,20 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         if (!allowDutyOverride)
         {
             NS_ABORT_MSG_IF(cfg.enableDutyCycle || cfg.dutyLimit != 1.0,
-                            "Error: profile=pueyo2024_paper_like requiere duty disabled y dutyLimit=1.0 (sin --allowDutyOverride)");
+                            "Error: profile=pueyo2024_paper_like requiere duty disabled y "
+                            "dutyLimit=1.0 (sin --allowDutyOverride)");
         }
         else
         {
             NS_ABORT_MSG_IF(!cfg.enableDutyCycle,
-                            "Error: profile=pueyo2024_paper_like+allowDutyOverride requiere duty=on y dutyLimit=0.01");
+                            "Error: profile=pueyo2024_paper_like+allowDutyOverride requiere "
+                            "duty=on y dutyLimit=0.01");
         }
         NS_ABORT_MSG_IF(routeMetricMode != "toa_only",
                         "Error: profile=pueyo2024_paper_like requiere routeMetricMode=toa_only");
-        NS_ABORT_MSG_IF(sfLinkMode != "deterministic_sensitivity",
-                        "Error: profile=pueyo2024_paper_like requiere sfLinkMode=deterministic_sensitivity");
+        NS_ABORT_MSG_IF(
+            sfLinkMode != "deterministic_sensitivity",
+            "Error: profile=pueyo2024_paper_like requiere sfLinkMode=deterministic_sensitivity");
         if (!allowPaperLikeSfRangeVariant)
         {
             NS_ABORT_MSG_IF(sfMin != 7 || sfMax != 8,
@@ -1003,7 +1046,8 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         else
         {
             NS_ABORT_MSG_IF(sfMin != 7 || sfMax < 8 || sfMax > 12,
-                            "Error: profile=pueyo2024_paper_like con allowPaperLikeSfRangeVariant=true requiere sfMin=7 y sfMax en [8,12]");
+                            "Error: profile=pueyo2024_paper_like con "
+                            "allowPaperLikeSfRangeVariant=true requiere sfMin=7 y sfMax en [8,12]");
         }
         NS_ABORT_MSG_IF(!pueyoFloraLikeRx,
                         "Error: profile=pueyo2024_paper_like requiere pueyoFloraLikeRx=true");
@@ -1018,31 +1062,39 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         if (!allowDutyOverride)
         {
             NS_ABORT_MSG_IF(cfg.enableDutyCycle || cfg.dutyLimit != 1.0,
-                            "Error: profile=pueyo2024_paper_like_csmacad requiere duty disabled y dutyLimit=1.0 (sin --allowDutyOverride)");
+                            "Error: profile=pueyo2024_paper_like_csmacad requiere duty disabled y "
+                            "dutyLimit=1.0 (sin --allowDutyOverride)");
         }
         else
         {
             NS_ABORT_MSG_IF(!cfg.enableDutyCycle,
-                            "Error: profile=pueyo2024_paper_like_csmacad+allowDutyOverride requiere duty=on y dutyLimit=0.01");
+                            "Error: profile=pueyo2024_paper_like_csmacad+allowDutyOverride "
+                            "requiere duty=on y dutyLimit=0.01");
         }
-        NS_ABORT_MSG_IF(routeMetricMode != "toa_only",
-                        "Error: profile=pueyo2024_paper_like_csmacad requiere routeMetricMode=toa_only");
+        NS_ABORT_MSG_IF(
+            routeMetricMode != "toa_only",
+            "Error: profile=pueyo2024_paper_like_csmacad requiere routeMetricMode=toa_only");
         NS_ABORT_MSG_IF(sfLinkMode != "deterministic_sensitivity",
-                        "Error: profile=pueyo2024_paper_like_csmacad requiere sfLinkMode=deterministic_sensitivity");
+                        "Error: profile=pueyo2024_paper_like_csmacad requiere "
+                        "sfLinkMode=deterministic_sensitivity");
         if (!allowPaperLikeSfRangeVariant)
         {
-            NS_ABORT_MSG_IF(sfMin != 7 || sfMax != 8,
-                            "Error: profile=pueyo2024_paper_like_csmacad requiere sfMin=7 y sfMax=8");
+            NS_ABORT_MSG_IF(
+                sfMin != 7 || sfMax != 8,
+                "Error: profile=pueyo2024_paper_like_csmacad requiere sfMin=7 y sfMax=8");
         }
         else
         {
             NS_ABORT_MSG_IF(sfMin != 7 || sfMax < 8 || sfMax > 12,
-                            "Error: profile=pueyo2024_paper_like_csmacad con allowPaperLikeSfRangeVariant=true requiere sfMin=7 y sfMax en [8,12]");
+                            "Error: profile=pueyo2024_paper_like_csmacad con "
+                            "allowPaperLikeSfRangeVariant=true requiere sfMin=7 y sfMax en [8,12]");
         }
-        NS_ABORT_MSG_IF(!pueyoFloraLikeRx,
-                        "Error: profile=pueyo2024_paper_like_csmacad requiere pueyoFloraLikeRx=true");
-        NS_ABORT_MSG_IF(enableSfScanRx,
-                        "Error: profile=pueyo2024_paper_like_csmacad requiere EnableSfScanRx=false");
+        NS_ABORT_MSG_IF(
+            !pueyoFloraLikeRx,
+            "Error: profile=pueyo2024_paper_like_csmacad requiere pueyoFloraLikeRx=true");
+        NS_ABORT_MSG_IF(
+            enableSfScanRx,
+            "Error: profile=pueyo2024_paper_like_csmacad requiere EnableSfScanRx=false");
     }
     else if (profileLower == "csmacad_free_backoff")
     {
@@ -1051,12 +1103,14 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         validatePueyoComparableBase(profileLower);
         NS_ABORT_MSG_IF(!cfg.enableCsma,
                         "Error: profile=csmacad_free_backoff requiere enableCsma=true");
-        NS_ABORT_MSG_IF(cfg.enableDutyCycle || cfg.dutyLimit != 1.0,
-                        "Error: profile=csmacad_free_backoff requiere duty disabled y dutyLimit=1.0");
+        NS_ABORT_MSG_IF(
+            cfg.enableDutyCycle || cfg.dutyLimit != 1.0,
+            "Error: profile=csmacad_free_backoff requiere duty disabled y dutyLimit=1.0");
         NS_ABORT_MSG_IF(routeMetricMode != "toa_only",
                         "Error: profile=csmacad_free_backoff requiere routeMetricMode=toa_only");
-        NS_ABORT_MSG_IF(sfLinkMode != "deterministic_sensitivity",
-                        "Error: profile=csmacad_free_backoff requiere sfLinkMode=deterministic_sensitivity");
+        NS_ABORT_MSG_IF(
+            sfLinkMode != "deterministic_sensitivity",
+            "Error: profile=csmacad_free_backoff requiere sfLinkMode=deterministic_sensitivity");
         if (!allowPaperLikeSfRangeVariant)
         {
             NS_ABORT_MSG_IF(sfMin != 7 || sfMax != 8,
@@ -1065,7 +1119,8 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         else
         {
             NS_ABORT_MSG_IF(sfMin != 7 || sfMax < 8 || sfMax > 12,
-                            "Error: profile=csmacad_free_backoff con allowPaperLikeSfRangeVariant=true requiere sfMin=7 y sfMax en [8,12]");
+                            "Error: profile=csmacad_free_backoff con "
+                            "allowPaperLikeSfRangeVariant=true requiere sfMin=7 y sfMax en [8,12]");
         }
         NS_ABORT_MSG_IF(!pueyoFloraLikeRx,
                         "Error: profile=csmacad_free_backoff requiere pueyoFloraLikeRx=true");
@@ -1081,24 +1136,25 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         NS_ABORT_MSG_IF(!cfg.enableCsma,
                         "Error: profile=" << profileLower << " requiere enableCsma=true");
         NS_ABORT_MSG_IF(!cfg.enableDutyCycle || cfg.dutyLimit != 0.01 || dutyWindowSec != 3600.0,
-                        "Error: profile=" << profileLower
-                                           << " requiere duty 1% con ventana 3600s");
+                        "Error: profile=" << profileLower << " requiere duty 1% con ventana 3600s");
         NS_ABORT_MSG_IF(routeMetricMode != "composite_score",
                         "Error: profile=" << profileLower
-                                           << " requiere routeMetricMode=composite_score");
+                                          << " requiere routeMetricMode=composite_score");
         NS_ABORT_MSG_IF(beaconLatestOnly,
                         "Error: profile=" << profileLower << " requiere BeaconLatestOnly=false");
         NS_ABORT_MSG_IF(controlBackoffFactor != 1.0 || dataBackoffFactor != 10.0,
                         "Error: profile=" << profileLower
-                                           << " requiere backoff factors control=1.0 data=10.0");
+                                          << " requiere backoff factors control=1.0 data=10.0");
         if (profileLower == "proposal_pueyo_like")
         {
             NS_ABORT_MSG_IF(prioritizeBeacons,
                             "Error: profile=proposal_pueyo_like requiere PrioritizeBeacons=false");
-            NS_ABORT_MSG_IF(!pueyoStrictQueueScheduler,
-                            "Error: profile=proposal_pueyo_like requiere PueyoStrictQueueScheduler=true");
-            NS_ABORT_MSG_IF(sfLinkMode != "deterministic_sensitivity",
-                            "Error: profile=proposal_pueyo_like requiere sfLinkMode=deterministic_sensitivity");
+            NS_ABORT_MSG_IF(
+                !pueyoStrictQueueScheduler,
+                "Error: profile=proposal_pueyo_like requiere PueyoStrictQueueScheduler=true");
+            NS_ABORT_MSG_IF(
+                sfLinkMode != "deterministic_sensitivity",
+                "Error: profile=proposal_pueyo_like requiere sfLinkMode=deterministic_sensitivity");
             NS_ABORT_MSG_IF(!pueyoFloraLikeRx,
                             "Error: profile=proposal_pueyo_like requiere pueyoFloraLikeRx=true");
             NS_ABORT_MSG_IF(enableSfScanRx,
@@ -1106,33 +1162,41 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         }
         else
         {
-            NS_ABORT_MSG_IF(!prioritizeBeacons,
-                            "Error: profile=proposal_pueyo_like_observed requiere PrioritizeBeacons=true");
+            NS_ABORT_MSG_IF(
+                !prioritizeBeacons,
+                "Error: profile=proposal_pueyo_like_observed requiere PrioritizeBeacons=true");
             NS_ABORT_MSG_IF(pueyoStrictQueueScheduler,
-                            "Error: profile=proposal_pueyo_like_observed requiere PueyoStrictQueueScheduler=false");
-            NS_ABORT_MSG_IF(sfLinkMode != "observed_rxsf",
-                            "Error: profile=proposal_pueyo_like_observed requiere sfLinkMode=observed_rxsf");
+                            "Error: profile=proposal_pueyo_like_observed requiere "
+                            "PueyoStrictQueueScheduler=false");
+            NS_ABORT_MSG_IF(
+                sfLinkMode != "observed_rxsf",
+                "Error: profile=proposal_pueyo_like_observed requiere sfLinkMode=observed_rxsf");
         }
     }
     else if (profileLower == "proposal_pueyo_like_aloha")
     {
         validatePueyoComparableBase(profileLower);
-        NS_ABORT_MSG_IF(cfg.enableCsma,
-                        "Error: profile=proposal_pueyo_like_aloha requiere enableCsma=false (MAC ALOHA)");
+        NS_ABORT_MSG_IF(
+            cfg.enableCsma,
+            "Error: profile=proposal_pueyo_like_aloha requiere enableCsma=false (MAC ALOHA)");
         if (!allowDutyOverride)
         {
             NS_ABORT_MSG_IF(cfg.enableDutyCycle || cfg.dutyLimit != 1.0,
-                            "Error: profile=proposal_pueyo_like_aloha requiere duty disabled y dutyLimit=1.0 (sin --allowDutyOverride)");
+                            "Error: profile=proposal_pueyo_like_aloha requiere duty disabled y "
+                            "dutyLimit=1.0 (sin --allowDutyOverride)");
         }
         else
         {
             NS_ABORT_MSG_IF(!cfg.enableDutyCycle,
-                            "Error: profile=proposal_pueyo_like_aloha+allowDutyOverride requiere duty=on y dutyLimit=0.01");
+                            "Error: profile=proposal_pueyo_like_aloha+allowDutyOverride requiere "
+                            "duty=on y dutyLimit=0.01");
         }
-        NS_ABORT_MSG_IF(routeMetricMode != "composite_score",
-                        "Error: profile=proposal_pueyo_like_aloha requiere routeMetricMode=composite_score");
+        NS_ABORT_MSG_IF(
+            routeMetricMode != "composite_score",
+            "Error: profile=proposal_pueyo_like_aloha requiere routeMetricMode=composite_score");
         NS_ABORT_MSG_IF(sfLinkMode != "deterministic_sensitivity",
-                        "Error: profile=proposal_pueyo_like_aloha requiere sfLinkMode=deterministic_sensitivity");
+                        "Error: profile=proposal_pueyo_like_aloha requiere "
+                        "sfLinkMode=deterministic_sensitivity");
         if (!allowPaperLikeSfRangeVariant)
         {
             NS_ABORT_MSG_IF(sfMin != 7 || sfMax != 8,
@@ -1141,14 +1205,17 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         else
         {
             NS_ABORT_MSG_IF(sfMin != 7 || sfMax < 8 || sfMax > 12,
-                            "Error: proposal_pueyo_like_aloha+allowPaperLikeSfRangeVariant requiere sfMin=7 sfMax en [8,12]");
+                            "Error: proposal_pueyo_like_aloha+allowPaperLikeSfRangeVariant "
+                            "requiere sfMin=7 sfMax en [8,12]");
         }
         NS_ABORT_MSG_IF(!pueyoFloraLikeRx,
                         "Error: profile=proposal_pueyo_like_aloha requiere pueyoFloraLikeRx=true");
         NS_ABORT_MSG_IF(enableSfScanRx,
                         "Error: profile=proposal_pueyo_like_aloha requiere enableSfScanRx=false");
-        NS_ABORT_MSG_IF(!enableNs3EnergyFramework && !allowEnergyFwOverride,
-                        "Error: profile=proposal_pueyo_like_aloha requiere enableNs3EnergyFramework=true (usar allowEnergyFwOverride para deshabilitar)");
+        NS_ABORT_MSG_IF(
+            !enableNs3EnergyFramework && !allowEnergyFwOverride,
+            "Error: profile=proposal_pueyo_like_aloha requiere enableNs3EnergyFramework=true (usar "
+            "allowEnergyFwOverride para deshabilitar)");
     }
     else if (profileLower == "proposal_pueyo_like_csmacad")
     {
@@ -1160,39 +1227,50 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         if (!allowDutyOverride)
         {
             NS_ABORT_MSG_IF(cfg.enableDutyCycle || cfg.dutyLimit != 1.0,
-                            "Error: profile=proposal_pueyo_like_csmacad requiere duty disabled y dutyLimit=1.0 (sin --allowDutyOverride)");
+                            "Error: profile=proposal_pueyo_like_csmacad requiere duty disabled y "
+                            "dutyLimit=1.0 (sin --allowDutyOverride)");
         }
         else
         {
             NS_ABORT_MSG_IF(!cfg.enableDutyCycle,
-                            "Error: profile=proposal_pueyo_like_csmacad+allowDutyOverride requiere duty=on y dutyLimit=0.01");
+                            "Error: profile=proposal_pueyo_like_csmacad+allowDutyOverride requiere "
+                            "duty=on y dutyLimit=0.01");
         }
-        NS_ABORT_MSG_IF(routeMetricMode != "composite_score",
-                        "Error: profile=proposal_pueyo_like_csmacad requiere routeMetricMode=composite_score");
+        NS_ABORT_MSG_IF(
+            routeMetricMode != "composite_score",
+            "Error: profile=proposal_pueyo_like_csmacad requiere routeMetricMode=composite_score");
         NS_ABORT_MSG_IF(sfLinkMode != "deterministic_sensitivity",
-                        "Error: profile=proposal_pueyo_like_csmacad requiere sfLinkMode=deterministic_sensitivity");
+                        "Error: profile=proposal_pueyo_like_csmacad requiere "
+                        "sfLinkMode=deterministic_sensitivity");
         if (!allowPaperLikeSfRangeVariant)
         {
-            NS_ABORT_MSG_IF(sfMin != 7 || sfMax != 8,
-                            "Error: profile=proposal_pueyo_like_csmacad requiere sfMin=7 y sfMax=8");
+            NS_ABORT_MSG_IF(
+                sfMin != 7 || sfMax != 8,
+                "Error: profile=proposal_pueyo_like_csmacad requiere sfMin=7 y sfMax=8");
         }
         else
         {
             NS_ABORT_MSG_IF(sfMin != 7 || sfMax < 8 || sfMax > 12,
-                            "Error: proposal_pueyo_like_csmacad+allowPaperLikeSfRangeVariant requiere sfMin=7 sfMax en [8,12]");
+                            "Error: proposal_pueyo_like_csmacad+allowPaperLikeSfRangeVariant "
+                            "requiere sfMin=7 sfMax en [8,12]");
         }
-        NS_ABORT_MSG_IF(!pueyoFloraLikeRx,
-                        "Error: profile=proposal_pueyo_like_csmacad requiere pueyoFloraLikeRx=true");
+        NS_ABORT_MSG_IF(
+            !pueyoFloraLikeRx,
+            "Error: profile=proposal_pueyo_like_csmacad requiere pueyoFloraLikeRx=true");
         NS_ABORT_MSG_IF(enableSfScanRx,
                         "Error: profile=proposal_pueyo_like_csmacad requiere enableSfScanRx=false");
-        NS_ABORT_MSG_IF(!enableNs3EnergyFramework && !allowEnergyFwOverride,
-                        "Error: profile=proposal_pueyo_like_csmacad requiere enableNs3EnergyFramework=true (usar allowEnergyFwOverride para deshabilitar)");
+        NS_ABORT_MSG_IF(
+            !enableNs3EnergyFramework && !allowEnergyFwOverride,
+            "Error: profile=proposal_pueyo_like_csmacad requiere enableNs3EnergyFramework=true "
+            "(usar allowEnergyFwOverride para deshabilitar)");
     }
 
     if (pueyoFloraLikeRx)
     {
         enableSfScanRx = false;
-        NS_LOG_WARN("Aplicando pueyoFloraLikeRx=true: misma semantica single-channel/single-demod y mismo modelo de colision; solo se desactiva pending scan/lock para usar lock inmediato viable.");
+        NS_LOG_WARN("Aplicando pueyoFloraLikeRx=true: misma semantica single-channel/single-demod "
+                    "y mismo modelo de colision; solo se desactiva pending scan/lock para usar "
+                    "lock inmediato viable.");
     }
 
     // FIX C3: Validación de parámetros CLI
@@ -1208,19 +1286,16 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
             const uint32_t sideB =
                 (pueyoGridSide > 0)
                     ? pueyoGridSide
-                    : static_cast<uint32_t>(
-                          std::llround(std::sqrt(static_cast<double>(cfg.nEd))));
+                    : static_cast<uint32_t>(std::llround(std::sqrt(static_cast<double>(cfg.nEd))));
             const uint32_t diameter = (sideB > 1u) ? 2u * (sideB - 1u) : 0u;
-            const double warmupSec      = 60.0; // warmupTime is const Seconds(60)
-            const double warmupHops     = std::floor(warmupSec / beaconIntervalWarmSec);
-            const double remHops        = std::max(0.0,
-                                              static_cast<double>(diameter) - warmupHops);
-            const double convSec        = warmupSec + remHops * beaconIntervalStableSec;
-            const double newDataStart   = std::ceil(convSec * 1.3);
-            NS_LOG_INFO("[C2-autoDataStart] N=" << cfg.nEd
-                        << " side=" << sideB << " diam=" << diameter
-                        << " warmupHops=" << warmupHops << " remHops=" << remHops
-                        << " conv=" << convSec << "s"
+            const double warmupSec = 60.0; // warmupTime is const Seconds(60)
+            const double warmupHops = std::floor(warmupSec / beaconIntervalWarmSec);
+            const double remHops = std::max(0.0, static_cast<double>(diameter) - warmupHops);
+            const double convSec = warmupSec + remHops * beaconIntervalStableSec;
+            const double newDataStart = std::ceil(convSec * 1.3);
+            NS_LOG_INFO("[C2-autoDataStart] N="
+                        << cfg.nEd << " side=" << sideB << " diam=" << diameter << " warmupHops="
+                        << warmupHops << " remHops=" << remHops << " conv=" << convSec << "s"
                         << " => dataStartSec=" << newDataStart << "s"
                         << " (was " << dataStartSec << "s)");
             dataStartSec = newDataStart;
@@ -1230,7 +1305,8 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
             NS_LOG_WARN("[C2-autoDataStart] nodePlacementMode='"
                         << nodePlacementMode
                         << "' is not a grid — autoDataStartSec ignored, "
-                           "keeping dataStartSec=" << dataStartSec << "s");
+                           "keeping dataStartSec="
+                        << dataStartSec << "s");
         }
     }
 
@@ -1242,21 +1318,19 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
                     "Error: dataStartSec (" << dataStartSec << ") debe ser < simTimeSec ("
                                             << cfg.simTimeSec << ")");
     NS_ABORT_MSG_IF(dataStopSec >= 0.0 && dataStopSec <= dataStartSec,
-                    "Error: dataStopSec (" << dataStopSec
-                                            << ") debe ser > dataStartSec (" << dataStartSec
-                                            << ") o -1 para deshabilitar");
+                    "Error: dataStopSec (" << dataStopSec << ") debe ser > dataStartSec ("
+                                           << dataStartSec << ") o -1 para deshabilitar");
     NS_ABORT_MSG_IF(dataStopSec >= cfg.simTimeSec,
                     "Error: dataStopSec (" << dataStopSec << ") debe ser < simTimeSec ("
-                                            << cfg.simTimeSec << ")");
+                                           << cfg.simTimeSec << ")");
     NS_ABORT_MSG_IF(puelloCaptureThresholdDb < 0.0,
                     "Error: puelloCaptureThresholdDb debe ser >= 0");
     NS_ABORT_MSG_IF(puelloAssumedBandwidthHz <= 0.0,
                     "Error: puelloAssumedBandwidthHz debe ser > 0");
-    NS_ABORT_MSG_IF(puelloPreambleSymbols < 0.0,
-                    "Error: puelloPreambleSymbols debe ser >= 0");
-    NS_ABORT_MSG_IF(preambleSymbols < 6 || preambleSymbols > 64,
-                    "Error: preambleSymbols debe estar en [6,64], valor actual: "
-                        << preambleSymbols);
+    NS_ABORT_MSG_IF(puelloPreambleSymbols < 0.0, "Error: puelloPreambleSymbols debe ser >= 0");
+    NS_ABORT_MSG_IF(
+        preambleSymbols < 6 || preambleSymbols > 64,
+        "Error: preambleSymbols debe estar en [6,64], valor actual: " << preambleSymbols);
     NS_ABORT_MSG_IF(wireFormat != "pueyo7b",
                     "Error: el modulo implementa un unico wire (pueyo7b), "
                     "valor actual: "
@@ -1266,18 +1340,20 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     NS_ABORT_MSG_IF(sfMin < 7 || sfMin > 12 || sfMax < 7 || sfMax > 12,
                     "Error: sfMin/sfMax deben estar en [7,12], valores actuales: sfMin="
                         << sfMin << " sfMax=" << sfMax);
-    NS_ABORT_MSG_IF(sfMin > sfMax,
-                    "Error: sfMin debe ser <= sfMax, valores actuales: sfMin=" << sfMin
-                                                                               << " sfMax=" << sfMax);
-    NS_ABORT_MSG_IF(initTtl > 63,
-                    "Error: initTtl debe estar en [0,63] para wire v2/pueyo7b, valor actual: "
-                        << initTtl);
-    NS_ABORT_MSG_IF(sfScanEdThresholdDbm < -160.0 || sfScanEdThresholdDbm > -60.0,
-                    "Error: sfScanEdThresholdDbm fuera de rango razonable [-160,-60], valor actual: "
-                        << sfScanEdThresholdDbm);
-    NS_ABORT_MSG_IF(trafficMode != "periodic_any_to_any" && trafficMode != "pueyo_all_to_all",
-                    "Error: trafficMode debe ser 'periodic_any_to_any' o 'pueyo_all_to_all', valor actual: "
-                        << trafficMode);
+    NS_ABORT_MSG_IF(
+        sfMin > sfMax,
+        "Error: sfMin debe ser <= sfMax, valores actuales: sfMin=" << sfMin << " sfMax=" << sfMax);
+    NS_ABORT_MSG_IF(
+        initTtl > 63,
+        "Error: initTtl debe estar en [0,63] para wire v2/pueyo7b, valor actual: " << initTtl);
+    NS_ABORT_MSG_IF(
+        sfScanEdThresholdDbm < -160.0 || sfScanEdThresholdDbm > -60.0,
+        "Error: sfScanEdThresholdDbm fuera de rango razonable [-160,-60], valor actual: "
+            << sfScanEdThresholdDbm);
+    NS_ABORT_MSG_IF(
+        trafficMode != "periodic_any_to_any" && trafficMode != "pueyo_all_to_all",
+        "Error: trafficMode debe ser 'periodic_any_to_any' o 'pueyo_all_to_all', valor actual: "
+            << trafficMode);
     NS_ABORT_MSG_IF(onlyGenerateFromNodeId < -1 ||
                         onlyGenerateFromNodeId >= static_cast<int32_t>(cfg.nEd),
                     "Error: onlyGenerateFromNodeId debe estar en [-1, nEd-1], valor actual: "
@@ -1286,44 +1362,50 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
                         forcedDataDestinationId >= static_cast<int32_t>(cfg.nEd),
                     "Error: forcedDataDestinationId debe estar en [-1, nEd-1], valor actual: "
                         << forcedDataDestinationId << " nEd=" << cfg.nEd);
-    NS_ABORT_MSG_IF(onlyGenerateFromNodeId >= 0 && forcedDataDestinationId >= 0 &&
-                        onlyGenerateFromNodeId == forcedDataDestinationId,
-                    "Error: onlyGenerateFromNodeId y forcedDataDestinationId no pueden ser iguales");
+    NS_ABORT_MSG_IF(
+        onlyGenerateFromNodeId >= 0 && forcedDataDestinationId >= 0 &&
+            onlyGenerateFromNodeId == forcedDataDestinationId,
+        "Error: onlyGenerateFromNodeId y forcedDataDestinationId no pueden ser iguales");
     NS_ABORT_MSG_IF(dataPayloadSizeBytes < 1 || dataPayloadSizeBytes > 250,
                     "Error: dataPayloadSizeBytes debe estar en [1,250], valor actual: "
                         << dataPayloadSizeBytes);
-    NS_ABORT_MSG_IF(routeAdvertPolicy != "top_score" && routeAdvertPolicy != "uniform" &&
-                        routeAdvertPolicy != "cost_weighted",
-                    "Error: routeAdvertPolicy debe ser top_score|uniform|cost_weighted, valor actual: "
-                        << routeAdvertPolicy);
+    NS_ABORT_MSG_IF(
+        routeAdvertPolicy != "top_score" && routeAdvertPolicy != "uniform" &&
+            routeAdvertPolicy != "cost_weighted",
+        "Error: routeAdvertPolicy debe ser top_score|uniform|cost_weighted, valor actual: "
+            << routeAdvertPolicy);
     NS_ABORT_MSG_IF(routeMetricMode != "composite_score" && routeMetricMode != "toa_only",
                     "Error: routeMetricMode debe ser composite_score|toa_only, valor actual: "
                         << routeMetricMode);
-    NS_ABORT_MSG_IF(costEncoding != "score100" && costEncoding != "cost255" &&
-                        costEncoding != "score255",
-                    "Error: costEncoding debe ser score100|cost255|score255, valor actual: "
-                        << costEncoding);
-    NS_ABORT_MSG_IF(sfLinkMode != "observed_rxsf" && sfLinkMode != "deterministic_sensitivity",
-                    "Error: sfLinkMode debe ser observed_rxsf|deterministic_sensitivity, valor actual: "
-                        << sfLinkMode);
-    NS_ABORT_MSG_IF(sfLinkMarginDb < -10.0 || sfLinkMarginDb > 20.0,
-                    "Error: sfLinkMarginDb fuera de rango [-10,20], valor actual: "
-                        << sfLinkMarginDb);
+    NS_ABORT_MSG_IF(
+        costEncoding != "score100" && costEncoding != "cost255" && costEncoding != "score255",
+        "Error: costEncoding debe ser score100|cost255|score255, valor actual: " << costEncoding);
+    NS_ABORT_MSG_IF(
+        sfLinkMode != "observed_rxsf" && sfLinkMode != "deterministic_sensitivity",
+        "Error: sfLinkMode debe ser observed_rxsf|deterministic_sensitivity, valor actual: "
+            << sfLinkMode);
+    NS_ABORT_MSG_IF(
+        sfLinkMarginDb < -10.0 || sfLinkMarginDb > 20.0,
+        "Error: sfLinkMarginDb fuera de rango [-10,20], valor actual: " << sfLinkMarginDb);
     NS_ABORT_MSG_IF(maxRoutesPerDestination < 1 || maxRoutesPerDestination > 2,
                     "Error: maxRoutesPerDestination debe estar en [1,2], valor actual: "
                         << maxRoutesPerDestination);
     NS_ABORT_MSG_IF(maxTotalRoutes < 1,
                     "Error: maxTotalRoutes debe ser >=1, valor actual: " << maxTotalRoutes);
     NS_ABORT_MSG_IF(nodePlacementMode != "line" && nodePlacementMode != "random" &&
-                        nodePlacementMode != "pueyo_grid" && nodePlacementMode != "pueyo_random_equiv",
-                    "Error: nodePlacementMode debe ser line|random|pueyo_grid|pueyo_random_equiv, valor actual: "
+                        nodePlacementMode != "pueyo_grid" &&
+                        nodePlacementMode != "pueyo_random_equiv",
+                    "Error: nodePlacementMode debe ser line|random|pueyo_grid|pueyo_random_equiv, "
+                    "valor actual: "
                         << nodePlacementMode);
     if (nodePlacementMode == "pueyo_grid" || nodePlacementMode == "pueyo_random_equiv")
     {
-        const uint32_t sideAuto = static_cast<uint32_t>(std::llround(std::sqrt(static_cast<double>(cfg.nEd))));
+        const uint32_t sideAuto =
+            static_cast<uint32_t>(std::llround(std::sqrt(static_cast<double>(cfg.nEd))));
         const uint32_t side = (pueyoGridSide > 0) ? pueyoGridSide : sideAuto;
         NS_ABORT_MSG_IF(side == 0 || side * side != cfg.nEd,
-                        "Error: en modo pueyo_* nEd debe ser cuadrado perfecto (o definir pueyoGridSide válido). nEd="
+                        "Error: en modo pueyo_* nEd debe ser cuadrado perfecto (o definir "
+                        "pueyoGridSide válido). nEd="
                             << cfg.nEd << " side=" << side);
         NS_ABORT_MSG_IF(pueyoGridSpacingM <= 0.0,
                         "Error: pueyoGridSpacingM debe ser >0 en modo pueyo_*");
@@ -1384,8 +1466,10 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     const uint32_t dataHeaderBytes = DvClDataHeader::kSerializedSize;
     const uint32_t beaconHeaderBytes = DvClBeaconHeader::kSerializedSize;
     const uint32_t dvEntryBytes = DvClDvEntry::kEntrySize;
-    g_metricsCollector->SetWireFormatMetadata(
-        wireFormat, dataHeaderBytes, beaconHeaderBytes, dvEntryBytes);
+    g_metricsCollector->SetWireFormatMetadata(wireFormat,
+                                              dataHeaderBytes,
+                                              beaconHeaderBytes,
+                                              dvEntryBytes);
     auto trafficIntervalFromLoad = [&trafficLoad]() {
         std::string load = trafficLoad;
         for (char& ch : load)
@@ -1433,9 +1517,10 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     runMeta.simVersion = "sim_v2.5_" + gitCommitShort + "_" + profileLower + "_" + wireFormat;
     runMeta.nNodes = cfg.nEd;
     runMeta.topology = nodePlacementMode;
-    runMeta.topologyPreset = (nodePlacementMode == "pueyo_grid" || nodePlacementMode == "pueyo_random_equiv")
-                                 ? ("spacing_" + std::to_string(static_cast<int>(pueyoGridSpacingM)) + "m")
-                                 : "";
+    runMeta.topologyPreset =
+        (nodePlacementMode == "pueyo_grid" || nodePlacementMode == "pueyo_random_equiv")
+            ? ("spacing_" + std::to_string(static_cast<int>(pueyoGridSpacingM)) + "m")
+            : "";
     runMeta.gridSide = resolvedGridSide;
     runMeta.gridSpacingXM = pueyoGridSpacingM;
     runMeta.gridSpacingYM = pueyoGridSpacingM;
@@ -1511,8 +1596,9 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     g_metricsCollector->SetRunConfigMetadata(runMeta);
     if (enableMetricsPeriodicFlush)
     {
-        NS_ABORT_MSG_IF(metricsFlushIntervalSec <= 0.0,
-                        "Error: metricsFlushIntervalSec debe ser >0 si enableMetricsPeriodicFlush=true");
+        NS_ABORT_MSG_IF(
+            metricsFlushIntervalSec <= 0.0,
+            "Error: metricsFlushIntervalSec debe ser >0 si enableMetricsPeriodicFlush=true");
         g_metricsCollector->StartPeriodicFlush(Seconds(metricsFlushIntervalSec), "mesh_dv_metrics");
     }
 
@@ -1548,10 +1634,8 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
                                BooleanValue(cfg.enableDutyCycle));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClCsmaCadMac::CadSenseMarginDb",
                                DoubleValue(cadSenseMarginDb));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::CsmaMaxRetries",
-                               UintegerValue(csmaMaxRetries));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::CsmaTxQueueMax",
-                               UintegerValue(csmaTxQueueMax));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::CsmaMaxRetries", UintegerValue(csmaMaxRetries));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::CsmaTxQueueMax", UintegerValue(csmaTxQueueMax));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataStartTimeSec", DoubleValue(dataStartSec));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataStopTimeSec", DoubleValue(dataStopSec));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::TrafficLoad", StringValue(trafficLoad));
@@ -1632,9 +1716,12 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
                                BooleanValue(dataPeriodJitterSymmetric));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataStartPhaseMaxSec",
                                DoubleValue(dataStartPhaseMaxSec));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::EnableDataSlots", BooleanValue(enableDataSlots));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataSlotPeriodSec", DoubleValue(dataSlotPeriodSec));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataSlotJitterSec", DoubleValue(dataSlotJitterSec));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::EnableDataSlots",
+                               BooleanValue(enableDataSlots));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataSlotPeriodSec",
+                               DoubleValue(dataSlotPeriodSec));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataSlotJitterSec",
+                               DoubleValue(dataSlotJitterSec));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataStartPhaseOnly",
                                BooleanValue(dataStartPhaseOnly));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataFixedPhaseCadence",
@@ -1681,7 +1768,8 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
                                BooleanValue(pueyoStrictQueueScheduler));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::ControlBackoffFactor",
                                DoubleValue(controlBackoffFactor));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataBackoffFactor", DoubleValue(dataBackoffFactor));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataBackoffFactor",
+                               DoubleValue(dataBackoffFactor));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::EnableControlGuard",
                                BooleanValue(enableControlGuard));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::ControlGuardSec", DoubleValue(controlGuardSec));
@@ -1701,37 +1789,29 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
                                BooleanValue(disableExtraAfterWarmup));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::BatteryFullCapacityJ",
                                DoubleValue(batteryFullCapacityJ));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::RouteTimeoutFactor", DoubleValue(routeTimeoutFactor));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::RouteTimeoutFactor",
+                               DoubleValue(routeTimeoutFactor));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DedupWindowSec",
                                TimeValue(Seconds(dedupWindowSec)));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::LinkWeight", DoubleValue(dvLinkWeight));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::PathWeight", DoubleValue(dvPathWeight));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::PathHopWeight",
                                DoubleValue(dvPathHopWeight));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::MetricMode",
-                               StringValue(routeMetricMode));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::CostEncoding",
-                               StringValue(costEncoding));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::CompositeWToa",
-                               DoubleValue(compositeWToa));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::CompositeWHop",
-                               DoubleValue(compositeWHop));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::MetricMode", StringValue(routeMetricMode));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::CostEncoding", StringValue(costEncoding));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::CompositeWToa", DoubleValue(compositeWToa));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::CompositeWHop", DoubleValue(compositeWHop));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::CompositeWEnergy",
                                DoubleValue(compositeWEnergy));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::CompositeCostStep",
                                DoubleValue(compositeCostStep));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::EnergyLo",
-                               DoubleValue(energyLo));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::EnergyHi",
-                               DoubleValue(energyHi));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::EnergyPow",
-                               DoubleValue(energyPow));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::EnergyLo", DoubleValue(energyLo));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::EnergyHi", DoubleValue(energyHi));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::EnergyPow", DoubleValue(energyPow));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::EnergyMaxPenalty",
                                DoubleValue(energyMaxPenalty));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::SfLinkMode",
-                               StringValue(sfLinkMode));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::SfLinkMarginDb",
-                               DoubleValue(sfLinkMarginDb));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::SfLinkMode", StringValue(sfLinkMode));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::SfLinkMarginDb", DoubleValue(sfLinkMarginDb));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::MaxRoutesPerDestination",
                                UintegerValue(maxRoutesPerDestination));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::MaxTotalRoutes",
@@ -1754,8 +1834,7 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     bool preambleApplied =
         Config::SetDefaultFailSafe("ns3::dvcl::DvClLoraNetDevice::PreambleSymbols",
                                    UintegerValue(preambleSymbols));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClLoraNetDevice::WireFormat",
-                               StringValue(wireFormat));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClLoraNetDevice::WireFormat", StringValue(wireFormat));
     if (!txPowerApplied)
     {
         NS_LOG_WARN("No se pudo aplicar Config::SetDefault para DvClLoraNetDevice::TxPowerDbm; se "
@@ -1763,56 +1842,49 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     }
     if (!preambleApplied)
     {
-        NS_LOG_WARN("No se pudo aplicar Config::SetDefault para DvClLoraNetDevice::PreambleSymbols");
+        NS_LOG_WARN(
+            "No se pudo aplicar Config::SetDefault para DvClLoraNetDevice::PreambleSymbols");
     }
     NS_LOG_INFO("DataStartTimeSec=" << dataStartSec << "s");
     NS_LOG_INFO("DataStopTimeSec=" << dataStopSec << "s");
-    NS_LOG_INFO("Profile=" << profileLower
-                << " TrafficMode="
-                << trafficMode
-                << " TrafficLoad="
-                << trafficLoad
-                << " EnableDataRandomDest=" << (enableDataRandomDest ? "true" : "false")
-                << " PueyoPacketsPerPair=" << pueyoPacketsPerPair
-                << " DataPayloadBytes=" << dataPayloadSizeBytes
-                << " BeaconWarm=" << beaconIntervalWarmSec << "s"
-                << " BeaconStable=" << beaconIntervalStableSec << "s"
-                << " DvBeaconMaxRoutes=" << dvBeaconMaxRoutes
-                << " DvPayloadMaxBytes=" << dvPayloadMaxBytes
-                << " RouteAdvertPolicy=" << routeAdvertPolicy
-                << " LinkAddrCacheWindow=" << linkAddrCacheWindowSec << "s"
-                << " NeighborLinkTimeoutSec="
-                << ((neighborLinkTimeoutSec > 0.0) ? std::to_string(neighborLinkTimeoutSec) : std::string("auto"))
-                << " NeighborLinkTimeoutFactor=" << neighborLinkTimeoutFactor
-                << " AllowStaleLinkAddr=" << (allowStaleLinkAddrForUnicastData ? "true" : "false")
-                << " EmpiricalSfMode=" << empiricalSfSelectMode
-                << " EmpiricalSfMinSamples=" << empiricalSfMinSamples
-                << " RouteSwitchMinDelta=" << routeSwitchMinDeltaX100
-                << " AvoidBacktrack=" << (avoidImmediateBacktrack ? "true" : "false")
-                << " PdrEndWindow=" << pdrEndWindowSec << "s"
-                << " DedupWindow=" << dedupWindowSec << "s"
-                << " WireFormat=" << wireFormat
-                << " RouteMetricMode=" << routeMetricMode
-                << " CostEncoding=" << costEncoding
-                << " CompositeWToa=" << compositeWToa
-                << " CompositeWHop=" << compositeWHop
-                << " CompositeWEnergy=" << compositeWEnergy
-                << " CompositeCostStep=" << compositeCostStep
-                << " DataJitterMax=" << dataPeriodJitterMaxSec << "s"
-                << " DataJitterSymmetric=" << (dataPeriodJitterSymmetric ? "on" : "off")
-                << " DataStartPhaseMax=" << dataStartPhaseMaxSec << "s"
-                << " DataSlots=" << (enableDataSlots ? "on" : "off")
-                << " SlotPeriod=" << dataSlotPeriodSec << "s"
-                << " SlotJitter=" << dataSlotJitterSec << "s"
-                << " ExtraDvMax=" << extraDvBeaconMaxPerWindow
-                << " ExtraDvMinGap=" << extraDvBeaconMinGapSec << "s"
-                << " DvWeights(legacy/no-op)=" << dvLinkWeight << "," << dvPathWeight << ","
-                << dvPathHopWeight
-                << " InterferenceModel=" << interferenceModel
-                << " Puello(threshold="
-                << puelloCaptureThresholdDb << "dB,bw=" << puelloAssumedBandwidthHz
-                << "Hz,preamble=" << puelloPreambleSymbols << ")"
-                << " BeaconLatestOnly=" << (beaconLatestOnly ? "true" : "false"));
+    NS_LOG_INFO(
+        "Profile=" << profileLower << " TrafficMode=" << trafficMode
+                   << " TrafficLoad=" << trafficLoad
+                   << " EnableDataRandomDest=" << (enableDataRandomDest ? "true" : "false")
+                   << " PueyoPacketsPerPair=" << pueyoPacketsPerPair << " DataPayloadBytes="
+                   << dataPayloadSizeBytes << " BeaconWarm=" << beaconIntervalWarmSec << "s"
+                   << " BeaconStable=" << beaconIntervalStableSec << "s"
+                   << " DvBeaconMaxRoutes=" << dvBeaconMaxRoutes << " DvPayloadMaxBytes="
+                   << dvPayloadMaxBytes << " RouteAdvertPolicy=" << routeAdvertPolicy
+                   << " LinkAddrCacheWindow=" << linkAddrCacheWindowSec << "s"
+                   << " NeighborLinkTimeoutSec="
+                   << ((neighborLinkTimeoutSec > 0.0) ? std::to_string(neighborLinkTimeoutSec)
+                                                      : std::string("auto"))
+                   << " NeighborLinkTimeoutFactor=" << neighborLinkTimeoutFactor
+                   << " AllowStaleLinkAddr="
+                   << (allowStaleLinkAddrForUnicastData ? "true" : "false") << " EmpiricalSfMode="
+                   << empiricalSfSelectMode << " EmpiricalSfMinSamples=" << empiricalSfMinSamples
+                   << " RouteSwitchMinDelta=" << routeSwitchMinDeltaX100
+                   << " AvoidBacktrack=" << (avoidImmediateBacktrack ? "true" : "false")
+                   << " PdrEndWindow=" << pdrEndWindowSec << "s"
+                   << " DedupWindow=" << dedupWindowSec << "s"
+                   << " WireFormat=" << wireFormat << " RouteMetricMode=" << routeMetricMode
+                   << " CostEncoding=" << costEncoding << " CompositeWToa=" << compositeWToa
+                   << " CompositeWHop=" << compositeWHop << " CompositeWEnergy=" << compositeWEnergy
+                   << " CompositeCostStep=" << compositeCostStep
+                   << " DataJitterMax=" << dataPeriodJitterMaxSec << "s"
+                   << " DataJitterSymmetric=" << (dataPeriodJitterSymmetric ? "on" : "off")
+                   << " DataStartPhaseMax=" << dataStartPhaseMaxSec << "s"
+                   << " DataSlots=" << (enableDataSlots ? "on" : "off")
+                   << " SlotPeriod=" << dataSlotPeriodSec << "s"
+                   << " SlotJitter=" << dataSlotJitterSec << "s"
+                   << " ExtraDvMax=" << extraDvBeaconMaxPerWindow
+                   << " ExtraDvMinGap=" << extraDvBeaconMinGapSec << "s"
+                   << " DvWeights(legacy/no-op)=" << dvLinkWeight << "," << dvPathWeight << ","
+                   << dvPathHopWeight << " InterferenceModel=" << interferenceModel
+                   << " Puello(threshold=" << puelloCaptureThresholdDb << "dB,bw="
+                   << puelloAssumedBandwidthHz << "Hz,preamble=" << puelloPreambleSymbols << ")"
+                   << " BeaconLatestOnly=" << (beaconLatestOnly ? "true" : "false"));
     if (enablePcap)
     {
         helper->EnablePcap("mesh_dv_node");
@@ -1889,12 +1961,19 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         //   Sleep               :   0.2 uA  [IDD_SLEEP]
         // Single TX power (20 dBm only) -- AutoTxCurrentFromPower disabled.
         DvClLoraEnergyModelHelper loraEnergyHelper;
-        loraEnergyHelper.Set("AutoTxCurrentFromPower", BooleanValue(false)); // fixed 20 dBm, no interpolation
-        loraEnergyHelper.Set("TxCurrentA",    DoubleValue(0.120));     // 120 mA, +20 dBm PA_BOOST [SX1276/77/78/79 DS]
-        loraEnergyHelper.Set("RxCurrentA",    DoubleValue(0.0103));    //  10.3 mA, LoRa BW=125 kHz [SX1276/77/78/79 DS]
-        loraEnergyHelper.Set("CadCurrentA",   DoubleValue(0.0103));    //  10.3 mA, same RX circuitry [SX1276/77/78/79 DS]
-        loraEnergyHelper.Set("IdleCurrentA",  DoubleValue(0.0016));    //   1.6 mA, standby [SX1276/77/78/79 DS]
-        loraEnergyHelper.Set("SleepCurrentA", DoubleValue(0.0000002)); //   0.2 uA, sleep [SX1276/77/78/79 DS]
+        loraEnergyHelper.Set("AutoTxCurrentFromPower",
+                             BooleanValue(false)); // fixed 20 dBm, no interpolation
+        loraEnergyHelper.Set("TxCurrentA",
+                             DoubleValue(0.120)); // 120 mA, +20 dBm PA_BOOST [SX1276/77/78/79 DS]
+        loraEnergyHelper.Set("RxCurrentA",
+                             DoubleValue(0.0103)); //  10.3 mA, LoRa BW=125 kHz [SX1276/77/78/79 DS]
+        loraEnergyHelper.Set(
+            "CadCurrentA",
+            DoubleValue(0.0103)); //  10.3 mA, same RX circuitry [SX1276/77/78/79 DS]
+        loraEnergyHelper.Set("IdleCurrentA",
+                             DoubleValue(0.0016)); //   1.6 mA, standby [SX1276/77/78/79 DS]
+        loraEnergyHelper.Set("SleepCurrentA",
+                             DoubleValue(0.0000002)); //   0.2 uA, sleep [SX1276/77/78/79 DS]
 
         energy::DeviceEnergyModelContainer deviceEnergyModels =
             loraEnergyHelper.Install(loraDevices, batteries);
@@ -1902,8 +1981,7 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         // 5. Connect DvClLoraEnergyModel to each DvClLoraNetDevice
         for (uint32_t i = 0; i < loraDevices.GetN(); ++i)
         {
-            Ptr<DvClLoraNetDevice> meshDev =
-                DynamicCast<DvClLoraNetDevice>(loraDevices.Get(i));
+            Ptr<DvClLoraNetDevice> meshDev = DynamicCast<DvClLoraNetDevice>(loraDevices.Get(i));
             Ptr<DvClLoraEnergyModel> energyModel =
                 DynamicCast<DvClLoraEnergyModel>(deviceEnergyModels.Get(i));
 
@@ -1955,7 +2033,12 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
         for (uint32_t i = 0; i < M; ++i)
         {
             Ptr<MobilityModel> mm = nodes.Get(i)->GetObject<MobilityModel>();
-            if (mm) { Vector p = mm->GetPosition(); px[i] = p.x; py[i] = p.y; }
+            if (mm)
+            {
+                Vector p = mm->GetPosition();
+                px[i] = p.x;
+                py[i] = p.y;
+            }
         }
         std::vector<uint32_t> sinks;
         if (!sinkNodeIdsCsv.empty())
@@ -1963,48 +2046,102 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
             std::string cur;
             for (char ch : sinkNodeIdsCsv)
             {
-                if (ch == ',') { if (!cur.empty()) { sinks.push_back(static_cast<uint32_t>(std::stoul(cur))); cur.clear(); } }
-                else if (ch != ' ') { cur += ch; }
+                if (ch == ',')
+                {
+                    if (!cur.empty())
+                    {
+                        sinks.push_back(static_cast<uint32_t>(std::stoul(cur)));
+                        cur.clear();
+                    }
+                }
+                else if (ch != ' ')
+                {
+                    cur += ch;
+                }
             }
-            if (!cur.empty()) sinks.push_back(static_cast<uint32_t>(std::stoul(cur)));
+            if (!cur.empty())
+            {
+                sinks.push_back(static_cast<uint32_t>(std::stoul(cur)));
+            }
         }
         else if (numSinks > 0 && M > 0)
         {
             double minx = px[0], maxx = px[0], miny = py[0], maxy = py[0];
             for (uint32_t i = 1; i < M; ++i)
             {
-                if (px[i] < minx) minx = px[i];
-                if (px[i] > maxx) maxx = px[i];
-                if (py[i] < miny) miny = py[i];
-                if (py[i] > maxy) maxy = py[i];
+                if (px[i] < minx)
+                {
+                    minx = px[i];
+                }
+                if (px[i] > maxx)
+                {
+                    maxx = px[i];
+                }
+                if (py[i] < miny)
+                {
+                    miny = py[i];
+                }
+                if (py[i] > maxy)
+                {
+                    maxy = py[i];
+                }
             }
             std::vector<double> tx, ty;
-            if (numSinks == 1) { tx.push_back((minx + maxx) / 2); ty.push_back((miny + maxy) / 2); }
+            if (numSinks == 1)
+            {
+                tx.push_back((minx + maxx) / 2);
+                ty.push_back((miny + maxy) / 2);
+            }
             else if (numSinks == 2)
             {
-                tx.push_back(minx + (maxx - minx) * 0.25); ty.push_back((miny + maxy) / 2);
-                tx.push_back(minx + (maxx - minx) * 0.75); ty.push_back((miny + maxy) / 2);
+                tx.push_back(minx + (maxx - minx) * 0.25);
+                ty.push_back((miny + maxy) / 2);
+                tx.push_back(minx + (maxx - minx) * 0.75);
+                ty.push_back((miny + maxy) / 2);
             }
             else
             {
                 const double fx[2] = {0.25, 0.75};
                 const double fy[2] = {0.25, 0.75};
                 for (int a = 0; a < 2; ++a)
+                {
                     for (int b = 0; b < 2; ++b)
-                    { tx.push_back(minx + (maxx - minx) * fx[a]); ty.push_back(miny + (maxy - miny) * fy[b]); }
+                    {
+                        tx.push_back(minx + (maxx - minx) * fx[a]);
+                        ty.push_back(miny + (maxy - miny) * fy[b]);
+                    }
+                }
             }
             for (std::size_t t = 0; t < tx.size(); ++t)
             {
-                long best = -1; double bestd = 1e36;
+                long best = -1;
+                double bestd = 1e36;
                 for (uint32_t i = 0; i < M; ++i)
                 {
                     bool taken = false;
-                    for (uint32_t s : sinks) { if (s == i) { taken = true; break; } }
-                    if (taken) continue;
+                    for (uint32_t s : sinks)
+                    {
+                        if (s == i)
+                        {
+                            taken = true;
+                            break;
+                        }
+                    }
+                    if (taken)
+                    {
+                        continue;
+                    }
                     const double dx = px[i] - tx[t], dy = py[i] - ty[t], d = dx * dx + dy * dy;
-                    if (d < bestd) { bestd = d; best = static_cast<long>(i); }
+                    if (d < bestd)
+                    {
+                        bestd = d;
+                        best = static_cast<long>(i);
+                    }
                 }
-                if (best >= 0) sinks.push_back(static_cast<uint32_t>(best));
+                if (best >= 0)
+                {
+                    sinks.push_back(static_cast<uint32_t>(best));
+                }
             }
         }
         if (!sinks.empty())
@@ -2013,15 +2150,27 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
             for (uint32_t i = 0; i < M; ++i)
             {
                 bool iIsSink = false;
-                for (uint32_t s : sinks) { if (s == i) { iIsSink = true; break; } }
+                for (uint32_t s : sinks)
+                {
+                    if (s == i)
+                    {
+                        iIsSink = true;
+                        break;
+                    }
+                }
                 uint32_t dst = i; // sink: send to self => no data generation
                 if (!iIsSink)
                 {
-                    double bestd = 1e36; uint32_t best = sinks[0];
+                    double bestd = 1e36;
+                    uint32_t best = sinks[0];
                     for (uint32_t s : sinks)
                     {
                         const double dx = px[i] - px[s], dy = py[i] - py[s], d = dx * dx + dy * dy;
-                        if (d < bestd || (d == bestd && s < best)) { bestd = d; best = s; }
+                        if (d < bestd || (d == bestd && s < best))
+                        {
+                            bestd = d;
+                            best = s;
+                        }
                     }
                     dst = best;
                 }
@@ -2031,14 +2180,20 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
                     Ptr<DvClApp> app = DynamicCast<DvClApp>(n->GetApplication(a));
                     if (app)
                     {
-                        app->SetAttribute("ForcedDataDestinationId", IntegerValue(static_cast<int32_t>(dst)));
+                        app->SetAttribute("ForcedDataDestinationId",
+                                          IntegerValue(static_cast<int32_t>(dst)));
                         app->SetCollectorNodeId(dst);
                     }
                 }
-                NS_LOG_WARN("multisink node=" << i << " -> sink=" << dst << (iIsSink ? " (SINK)" : ""));
+                NS_LOG_WARN("multisink node=" << i << " -> sink=" << dst
+                                              << (iIsSink ? " (SINK)" : ""));
             }
-            for (uint32_t s : sinks) { sl += std::to_string(s) + " "; }
-            NS_LOG_WARN("multisink: " << sinks.size() << " sinks (" << sl << ") placement=" << nodePlacementMode);
+            for (uint32_t s : sinks)
+            {
+                sl += std::to_string(s) + " ";
+            }
+            NS_LOG_WARN("multisink: " << sinks.size() << " sinks (" << sl
+                                      << ") placement=" << nodePlacementMode);
         }
     }
 
@@ -2065,11 +2220,16 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     Simulator::Run();
     NS_LOG_INFO("=== Simulación completada ===");
     // §LossFine: flush final per-app stats even if the sim stopped via the death hook
-    for (uint32_t li = 0; li < nodes.GetN(); ++li) {
+    for (uint32_t li = 0; li < nodes.GetN(); ++li)
+    {
         Ptr<Node> ln = nodes.Get(li);
-        for (uint32_t la = 0; la < ln->GetNApplications(); ++la) {
+        for (uint32_t la = 0; la < ln->GetNApplications(); ++la)
+        {
             Ptr<DvClApp> lapp = DynamicCast<DvClApp>(ln->GetApplication(la));
-            if (lapp) { lapp->ForceFinalFlush(); }
+            if (lapp)
+            {
+                lapp->ForceFinalFlush();
+            }
         }
     }
 

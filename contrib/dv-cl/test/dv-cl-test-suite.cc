@@ -38,6 +38,7 @@ class DvClToaGoldenTestCase : public TestCase
             bool de;
             uint32_t expectedUs;
         };
+
         // From test/reference/toa_golden.csv (explicit header, CRC on).
         const Row rows[] = {
             {7, 125000, 1, 20, false, 56576},
@@ -55,13 +56,12 @@ class DvClToaGoldenTestCase : public TestCase
         };
         for (const auto& r : rows)
         {
-            const uint32_t got =
-                ComputeToaUs(r.sf, r.bw, r.cr, r.pl, false, r.de, true, 8);
+            const uint32_t got = ComputeToaUs(r.sf, r.bw, r.cr, r.pl, false, r.de, true, 8);
             NS_TEST_ASSERT_MSG_EQ(got,
                                   r.expectedUs,
-                                  "ToA mismatch at SF" << unsigned(r.sf) << " BW" << r.bw
-                                                       << " CR" << unsigned(r.cr) << " PL"
-                                                       << r.pl << " DE" << r.de);
+                                  "ToA mismatch at SF" << unsigned(r.sf) << " BW" << r.bw << " CR"
+                                                       << unsigned(r.cr) << " PL" << r.pl << " DE"
+                                                       << r.de);
         }
     }
 };
@@ -98,21 +98,30 @@ class DvClMetricAnalyticTestCase : public TestCase
 
         // Full battery, ToA at the SF7 ceiling: 0.60*1 + 0.15 + 0 = 0.75.
         NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(In(143360.0, 7, 1.0)),
-                                  0.75, tol, "toaNorm=1, no penalty");
+                                  0.75,
+                                  tol,
+                                  "toaNorm=1, no penalty");
 
         // Zero ToA, boundary and interior battery values.
-        NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(In(0.0, 7, 0.50)),
-                                  0.15, tol, "b=bHi: Psi=0");
+        NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(In(0.0, 7, 0.50)), 0.15, tol, "b=bHi: Psi=0");
         // b=0.35: Psi=((0.5-0.35)/0.3)^2=0.25 -> 0.25*0.25=0.0625.
         NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(In(0.0, 7, 0.35)),
-                                  0.2125, tol, "b=0.35 interior ramp");
+                                  0.2125,
+                                  tol,
+                                  "b=0.35 interior ramp");
         NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(In(0.0, 7, 0.20)),
-                                  0.40, tol, "b=bLo: full penalty 0.25");
+                                  0.40,
+                                  tol,
+                                  "b=bLo: full penalty 0.25");
         NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(In(0.0, 7, 0.05)),
-                                  0.40, tol, "b<bLo saturates");
+                                  0.40,
+                                  tol,
+                                  "b<bLo saturates");
         // Unknown charge (<0) prices as full battery.
         NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(In(0.0, 7, -1.0)),
-                                  0.15, tol, "unknown charge: no penalty");
+                                  0.15,
+                                  tol,
+                                  "unknown charge: no penalty");
 
         // Monotonicity in battery (lower b, higher cost).
         const double c45 = m->ComputeLinkCost(In(0.0, 7, 0.45));
@@ -128,12 +137,16 @@ class DvClMetricAnalyticTestCase : public TestCase
 
         // ToA normalization caps at 1 above the ceiling.
         NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(In(10.0 * 143360.0, 7, 1.0)),
-                                  0.75, tol, "toaNorm capped at 1");
+                                  0.75,
+                                  tol,
+                                  "toaNorm capped at 1");
 
         // Attribute plumbing: delta=0 disables the energy term.
         m->SetAttribute("WEnergy", DoubleValue(0.0));
         NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(In(0.0, 7, 0.05)),
-                                  0.15, tol, "WEnergy=0 removes penalty");
+                                  0.15,
+                                  tol,
+                                  "WEnergy=0 removes penalty");
     }
 };
 

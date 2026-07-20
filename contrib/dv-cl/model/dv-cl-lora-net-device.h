@@ -5,9 +5,9 @@
 
 #include "dv-cl-energy-registry.h"
 #include "dv-cl-lora-energy-model.h"
+#include "dv-cl-mac-csma-cad.h"
 
 #include "ns3/lora-phy.h"
-#include "dv-cl-mac-csma-cad.h"
 #include "ns3/mac48-address.h"
 #include "ns3/net-device.h"
 #include "ns3/pcap-file-wrapper.h"
@@ -66,7 +66,6 @@ class DvClLoraNetDevice : public NetDevice
     {
         return m_txPowerDbm;
     }
-
 
     // Habilita volcados pcap (TX/RX) desde Send/Receive.
     void SetPcap(Ptr<PcapFileWrapper> tx, Ptr<PcapFileWrapper> rx)
@@ -156,10 +155,10 @@ class DvClLoraNetDevice : public NetDevice
     lorawan::LoraTxParameters BuildTxParams(uint8_t sf) const;
 
     Ptr<DvClCsmaCadMac> m_mac;
-    Ptr<DvClEnergyRegistry> m_energyModel; //!< campaign energy engine (registry)
+    Ptr<DvClEnergyRegistry> m_energyModel;      //!< campaign energy engine (registry)
     Ptr<DvClLoraEnergyModel> m_loraEnergyModel; ///< ns-3 energy framework model
-    double m_txPowerDbm{14.0};                    // Unified TX power for data/control.
-    uint8_t m_preambleSymbols{8};                 // LoRa preamble symbols used on-air.
+    double m_txPowerDbm{14.0};                  // Unified TX power for data/control.
+    uint8_t m_preambleSymbols{8};               // LoRa preamble symbols used on-air.
     Ptr<PcapFileWrapper> m_pcapTx{nullptr};
     Ptr<PcapFileWrapper> m_pcapRx{nullptr};
     double m_lastRxRssi; ///< Last received RSSI in dBm

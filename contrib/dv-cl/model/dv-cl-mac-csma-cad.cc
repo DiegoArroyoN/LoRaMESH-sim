@@ -4,7 +4,6 @@
 
 #include "ns3/boolean.h"
 #include "ns3/double.h"
-#include "ns3/string.h"
 #include "ns3/enum.h"
 #include "ns3/log.h"
 #include "ns3/lora-channel.h"
@@ -12,6 +11,7 @@
 #include "ns3/net-device.h"
 #include "ns3/node.h"
 #include "ns3/simulator.h"
+#include "ns3/string.h"
 #include "ns3/uinteger.h"
 
 #include <algorithm>
@@ -84,18 +84,18 @@ DvClCsmaCadMac::GetTypeId()
                           DoubleValue(2.0),
                           MakeDoubleAccessor(&DvClCsmaCadMac::m_toaMaxFactor),
                           MakeDoubleChecker<double>(0.0))
-            .AddAttribute(
-                "DutyCycleLimit",
-                "Duty cycle limit as fraction (0.01 = 1%).",
-                DoubleValue(0.01),
-                MakeDoubleAccessor(&DvClCsmaCadMac::SetDutyCycleLimit, &DvClCsmaCadMac::GetDutyCycleLimit),
-                MakeDoubleChecker<double>(0.0, 1.0))
-            .AddAttribute(
-                "DutyCycleWindow",
-                "Window of time for duty cycle enforcement.",
-                TimeValue(Hours(1)),
-                MakeTimeAccessor(&DvClCsmaCadMac::SetDutyCycleWindow, &DvClCsmaCadMac::GetDutyCycleWindow),
-                MakeTimeChecker())
+            .AddAttribute("DutyCycleLimit",
+                          "Duty cycle limit as fraction (0.01 = 1%).",
+                          DoubleValue(0.01),
+                          MakeDoubleAccessor(&DvClCsmaCadMac::SetDutyCycleLimit,
+                                             &DvClCsmaCadMac::GetDutyCycleLimit),
+                          MakeDoubleChecker<double>(0.0, 1.0))
+            .AddAttribute("DutyCycleWindow",
+                          "Window of time for duty cycle enforcement.",
+                          TimeValue(Hours(1)),
+                          MakeTimeAccessor(&DvClCsmaCadMac::SetDutyCycleWindow,
+                                           &DvClCsmaCadMac::GetDutyCycleWindow),
+                          MakeTimeChecker())
             .AddAttribute(
                 "DutyEnforcement",
                 "How the duty cycle is enforced: 'time_off_air' follows ETSI EN 300 220 "
@@ -147,7 +147,8 @@ DvClCsmaCadMac::GetTypeId()
                                           "sf_bw"))
             .AddAttribute("CadSenseMarginDb",
                           "Margin [dB] above sensitivity to declare CAD busy in local_power mode.",
-                          DoubleValue(3.0),  // Lowered from 6.0; see PerformChannelAssessment / FIXES_AND_METHODOLOGY.md §8.7 item 1.
+                          DoubleValue(3.0), // Lowered from 6.0; see PerformChannelAssessment /
+                                            // FIXES_AND_METHODOLOGY.md §8.7 item 1.
                           MakeDoubleAccessor(&DvClCsmaCadMac::m_cadSenseMarginDb),
                           MakeDoubleChecker<double>());
     return tid;
@@ -178,7 +179,7 @@ DvClCsmaCadMac::DvClCsmaCadMac()
       m_cadSymbols(2),
       m_cadSf(9),
       m_cadBandwidthHz(125000),
-      m_cadSenseMarginDb(3.0),  // ctor default mirrors AddAttribute
+      m_cadSenseMarginDb(3.0), // ctor default mirrors AddAttribute
       m_cadBusyEventsLocalPower(0),
       m_cadBusyEventsOracle(0)
 {
@@ -209,8 +210,8 @@ DvClCsmaCadMac::CanTransmitNow(double toaSeconds)
         }
         if (!ready)
         {
-            NS_LOG_WARN("DvClCsmaCadMac: still off air until "
-                        << m_nextTxAllowed.GetSeconds() << "s");
+            NS_LOG_WARN("DvClCsmaCadMac: still off air until " << m_nextTxAllowed.GetSeconds()
+                                                               << "s");
         }
         return ready;
     }
@@ -282,7 +283,7 @@ DvClCsmaCadMac::NotifyTxStart(double toaSeconds)
     }
     m_txHistory.emplace_back(now, duration);
     NS_LOG_DEBUG("DvClCsmaCadMac: TX recorded duration=" << duration.GetSeconds() << "s dc="
-                                                     << GetDutyCycleUsed() * 100.0 << "%");
+                                                         << GetDutyCycleUsed() * 100.0 << "%");
 }
 
 void
@@ -513,10 +514,9 @@ DvClCsmaCadMac::GetDifsCadCount() const
 bool
 DvClCsmaCadMac::PerformChannelAssessment()
 {
-    const uint32_t nodeId =
-        (m_phy && m_phy->GetDevice() && m_phy->GetDevice()->GetNode())
-            ? m_phy->GetDevice()->GetNode()->GetId()
-            : 0xFFFFFFFFu;
+    const uint32_t nodeId = (m_phy && m_phy->GetDevice() && m_phy->GetDevice()->GetNode())
+                                ? m_phy->GetDevice()->GetNode()->GetId()
+                                : 0xFFFFFFFFu;
     bool busy = false;
     const Time cadDuration = GetCadDuration();
     for (uint8_t i = 0; i < m_difsCadCount; ++i)
@@ -524,9 +524,9 @@ DvClCsmaCadMac::PerformChannelAssessment()
         const Time sampleTime = Simulator::Now() + (cadDuration * i);
         if (PerformCadOnce(sampleTime))
         {
-            NS_LOG_INFO("DvClCsmaCadMac: CAD busy node="
-                        << nodeId << " attempt=" << unsigned(i)
-                        << " sampleTime=" << sampleTime.GetSeconds());
+            NS_LOG_INFO("DvClCsmaCadMac: CAD busy node=" << nodeId << " attempt=" << unsigned(i)
+                                                         << " sampleTime="
+                                                         << sampleTime.GetSeconds());
             busy = true;
             break;
         }
@@ -536,9 +536,8 @@ DvClCsmaCadMac::PerformChannelAssessment()
         m_failures++;
         const uint32_t windowSlots = ComputeBackoffWindowSlots();
         NS_LOG_INFO("CAD_RESULT detail: node="
-                    << nodeId << " time=" << Simulator::Now().GetSeconds()
-                    << "s busy=1 failures=" << m_failures << " windowSlots=" << windowSlots
-                    << " load=" << GetCadLoad());
+                    << nodeId << " time=" << Simulator::Now().GetSeconds() << "s busy=1 failures="
+                    << m_failures << " windowSlots=" << windowSlots << " load=" << GetCadLoad());
         return true;
     }
     // Reset m_failures on clean CAD.
@@ -558,10 +557,9 @@ DvClCsmaCadMac::PerformChannelAssessment()
     // was considered.
     m_failures = 0;
     const uint32_t windowSlots = ComputeBackoffWindowSlots();
-    NS_LOG_INFO("CAD_RESULT detail: node="
-                << nodeId << " time=" << Simulator::Now().GetSeconds()
-                << "s busy=0 failures=" << m_failures << " windowSlots=" << windowSlots
-                << " load=" << GetCadLoad());
+    NS_LOG_INFO("CAD_RESULT detail: node=" << nodeId << " time=" << Simulator::Now().GetSeconds()
+                                           << "s busy=0 failures=" << m_failures << " windowSlots="
+                                           << windowSlots << " load=" << GetCadLoad());
     return false;
 }
 
@@ -626,8 +624,8 @@ DvClCsmaCadMac::PerformCadOnce(Time sampleTime)
         if (prxDbm >= thresholdDbm)
         {
             NS_LOG_DEBUG("DvClCsmaCadMac: CAD(local_power) busy freq="
-                         << ev.frequencyHz << " sf=" << unsigned(ev.sf)
-                         << " prx=" << prxDbm << "dBm thr=" << thresholdDbm << "dBm");
+                         << ev.frequencyHz << " sf=" << unsigned(ev.sf) << " prx=" << prxDbm
+                         << "dBm thr=" << thresholdDbm << "dBm");
             m_cadBusyEventsLocalPower++;
             RecordCadResult(true);
             return true;
@@ -647,7 +645,8 @@ DvClCsmaCadMac::CleanOldTxHistory()
     }
 
     const Time threshold = Simulator::Now() - m_dutyCycleWindow;
-    while (!m_txHistory.empty() && (m_txHistory.front().first + m_txHistory.front().second) <= threshold)
+    while (!m_txHistory.empty() &&
+           (m_txHistory.front().first + m_txHistory.front().second) <= threshold)
     {
         m_txHistory.pop_front();
     }

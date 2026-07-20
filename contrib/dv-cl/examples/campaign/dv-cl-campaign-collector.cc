@@ -147,7 +147,10 @@ MetricsCollector::RecordRx(uint32_t nodeId,
 
     // C4-fix (paper throughput): count any-hop successful unicast RX.
     // dst == 0xFFFF are broadcast beacons and are excluded per paper definition.
-    if (dst != 0xFFFF) { m_dataRxAnyHopCount++; }
+    if (dst != 0xFFFF)
+    {
+        m_dataRxAnyHopCount++;
+    }
 
     if (!m_essentialMetricsOnly)
     {
@@ -239,8 +242,7 @@ MetricsCollector::RecordQuantizationSample(uint32_t nodeId,
     sample.nextHop = nextHop;
     sample.isBackup = isBackup;
     sample.rawMetric = rawMetric;
-    sample.rawMetricMilli =
-        static_cast<uint64_t>(std::llround(std::max(0.0, rawMetric) * 1000.0));
+    sample.rawMetricMilli = static_cast<uint64_t>(std::llround(std::max(0.0, rawMetric) * 1000.0));
     sample.scoreQuantized = scoreQuantized;
     if (!m_essentialMetricsOnly)
     {
@@ -262,9 +264,9 @@ MetricsCollector::RecordDataGenerated(uint32_t src, uint32_t dst, uint32_t seq)
 void
 MetricsCollector::RecordDataPacket(uint32_t src, uint32_t seq, uint8_t hops, bool delivered)
 {
-    NS_LOG_DEBUG("RecordDataPacket (deprecated): src="
-                 << src << " seq=" << seq << " hops=" << unsigned(hops)
-                 << " delivered=" << (delivered ? 1 : 0));
+    NS_LOG_DEBUG("RecordDataPacket (deprecated): src=" << src << " seq=" << seq
+                                                       << " hops=" << unsigned(hops)
+                                                       << " delivered=" << (delivered ? 1 : 0));
 }
 
 void
@@ -400,8 +402,9 @@ MetricsCollector::ExportTxCSV(std::string filename)
 
     if (!m_appendMode)
     {
-        std::string header = "timestamp(s),nodeId,src,seq,dst,ttl,hops,rssi(dBm),battery(mV),score,sf,"
-                             "toaUs,energyJ,energyFrac,forwarded,ok\n";
+        std::string header =
+            "timestamp(s),nodeId,src,seq,dst,ttl,hops,rssi(dBm),battery(mV),score,sf,"
+            "toaUs,energyJ,energyFrac,forwarded,ok\n";
         file << header;
     }
     file << std::fixed << std::setprecision(9);
@@ -411,8 +414,9 @@ MetricsCollector::ExportTxCSV(std::string filename)
         file << event.timestamp.GetSeconds() << "," << event.nodeId << "," << event.src << ","
              << event.seq << "," << event.dst << "," << (int)event.ttl << "," << (int)event.hops
              << "," << event.rssi << "," << event.battery << "," << event.score << ","
-             << (int)event.sf << "," << event.toaUs << "," << event.energyJ << "," << event.energyFrac << ","
-             << ((event.nodeId != event.src) ? 1 : 0) << "," << (event.ok ? 1 : 0) << "\n";
+             << (int)event.sf << "," << event.toaUs << "," << event.energyJ << ","
+             << event.energyFrac << "," << ((event.nodeId != event.src) ? 1 : 0) << ","
+             << (event.ok ? 1 : 0) << "\n";
     }
 
     file.close();
@@ -488,7 +492,8 @@ void
 MetricsCollector::ExportDelayCSV(std::string filename)
 {
     std::ofstream file(filename);
-    file << "timestamp(s),src,dst,seq,hops,delay_gen_to_rx(s),delay_first_tx_to_rx(s),bytes,sf,delivered\n";
+    file << "timestamp(s),src,dst,seq,hops,delay_gen_to_rx(s),delay_first_tx_to_rx(s),bytes,sf,"
+            "delivered\n";
     for (const auto& e : m_delayEvents)
     {
         file << std::fixed << std::setprecision(9) << e.timestamp.GetSeconds() << "," << e.src
@@ -674,9 +679,9 @@ MetricsCollector::FlushToDisk()
         for (const auto& e : m_txEvents)
         {
             file << e.timestamp.GetSeconds() << "," << e.nodeId << "," << e.src << "," << e.seq
-                 << "," << e.dst << "," << (int)e.ttl << "," << (int)e.hops << "," << e.rssi
-                 << "," << e.battery << "," << e.score << "," << (int)e.sf << "," << e.toaUs << "," << e.energyJ
-                 << "," << e.energyFrac << "," << (e.ok ? 1 : 0) << "\n";
+                 << "," << e.dst << "," << (int)e.ttl << "," << (int)e.hops << "," << e.rssi << ","
+                 << e.battery << "," << e.score << "," << (int)e.sf << "," << e.toaUs << ","
+                 << e.energyJ << "," << e.energyFrac << "," << (e.ok ? 1 : 0) << "\n";
         }
     }
 
@@ -736,13 +741,14 @@ MetricsCollector::FlushToDisk()
         std::ofstream file(m_csvPrefix + "_delay.csv", openMode);
         if (!m_appendMode)
         {
-            file << "timestamp(s),src,dst,seq,hops,delay_gen_to_rx(s),delay_first_tx_to_rx(s),bytes,sf,delivered\n";
+            file << "timestamp(s),src,dst,seq,hops,delay_gen_to_rx(s),delay_first_tx_to_rx(s),"
+                    "bytes,sf,delivered\n";
         }
         for (const auto& e : m_delayEvents)
         {
             file << std::fixed << std::setprecision(9) << e.timestamp.GetSeconds() << "," << e.src
-                 << "," << e.dst << "," << e.seq << "," << (int)e.hops << "," << e.delayGenSec << ","
-                 << e.delayFirstTxSec << "," << e.bytes << "," << (int)e.sf << ","
+                 << "," << e.dst << "," << e.seq << "," << (int)e.hops << "," << e.delayGenSec
+                 << "," << e.delayFirstTxSec << "," << e.bytes << "," << (int)e.sf << ","
                  << (e.delivered ? 1 : 0) << "\n";
         }
     }
@@ -828,16 +834,14 @@ MetricsCollector::RecordNodeDeath(uint32_t nodeId, double energyFrac, const std:
     // y dejamos que los exportadores escriban los JSON/CSV con el estado final.
     // El techo absoluto (Simulator::Stop al stopSec configurado) sigue vigente
     // si esto nunca se alcanza dentro del horizonte experimental.
-    if (m_stopOnFullDepletion && m_totalNodes > 0 &&
-        m_deadNodes.size() >= m_totalNodes)
+    if (m_stopOnFullDepletion && m_totalNodes > 0 && m_deadNodes.size() >= m_totalNodes)
     {
         if (!m_fullDepletionTriggered)
         {
             m_fullDepletionTriggered = true;
             NS_LOG_INFO("Full network depletion ("
-                        << m_deadNodes.size() << "/" << m_totalNodes
-                        << " nodes dead) at t=" << event.timestamp.GetSeconds()
-                        << "s. Triggering Simulator::Stop().");
+                        << m_deadNodes.size() << "/" << m_totalNodes << " nodes dead) at t="
+                        << event.timestamp.GetSeconds() << "s. Triggering Simulator::Stop().");
             Simulator::Stop();
         }
     }
@@ -1002,11 +1006,12 @@ MetricsCollector::ExportToJson(std::string prefix)
                   static_cast<double>(deliveredDelayFirstTxSamples.size());
     const double p50DelayFirstTx = Percentile50Double(deliveredDelayFirstTxSamples);
     const double p95DelayFirstTx = Percentile95Double(deliveredDelayFirstTxSamples);
-    const double pdr = totalDataGenerated > 0 ? static_cast<double>(deliveredPackets) / totalDataGenerated
-                                              : 0.0;
-    const double pdrEligible = totalDataGeneratedEligible > 0
-                                   ? static_cast<double>(deliveredEligible) / totalDataGeneratedEligible
-                                   : 0.0;
+    const double pdr =
+        totalDataGenerated > 0 ? static_cast<double>(deliveredPackets) / totalDataGenerated : 0.0;
+    const double pdrEligible =
+        totalDataGeneratedEligible > 0
+            ? static_cast<double>(deliveredEligible) / totalDataGeneratedEligible
+            : 0.0;
     const double legacyPdrTxBased =
         totalDataTxLegacy > 0 ? static_cast<double>(deliveredPackets) / totalDataTxLegacy : 0.0;
 
@@ -1196,10 +1201,10 @@ MetricsCollector::ExportToJson(std::string prefix)
         relayPendingEnd += s.relayPendingEnd;         // §LossFine
         queueLensPerNode.push_back(s.txQueueLenEnd);
     }
-    const double txQueueLenEndAvgNode =
-        queueLensPerNode.empty()
-            ? 0.0
-            : static_cast<double>(txQueueLenEndTotal) / static_cast<double>(queueLensPerNode.size());
+    const double txQueueLenEndAvgNode = queueLensPerNode.empty()
+                                            ? 0.0
+                                            : static_cast<double>(txQueueLenEndTotal) /
+                                                  static_cast<double>(queueLensPerNode.size());
     const double txQueueLenEndP95Node = Percentile95(queueLensPerNode);
     uint32_t txQueueLenEndMaxNode = 0;
     for (uint32_t q : queueLensPerNode)
@@ -1237,8 +1242,9 @@ MetricsCollector::ExportToJson(std::string prefix)
     const double sfLinkObservedMismatchRatio =
         sfLinkSamples > 0 ? static_cast<double>(sfLinkObservedMismatch) / sfLinkSamples : 0.0;
     const double dstWithBackupRatio =
-        routesPrimaryTotal > 0 ? static_cast<double>(destinationsWithBackupTotal) / routesPrimaryTotal
-                               : 0.0;
+        routesPrimaryTotal > 0
+            ? static_cast<double>(destinationsWithBackupTotal) / routesPrimaryTotal
+            : 0.0;
     const double controlToDataTxRatio =
         dataTxSent > 0 ? static_cast<double>(beaconTxSent) / dataTxSent : 0.0;
     const double dataStopSec = m_hasRunConfig ? m_runConfig.dataStopSec : -1.0;
@@ -1252,10 +1258,9 @@ MetricsCollector::ExportToJson(std::string prefix)
     uint64_t lateGeneratedNearDataStop = 0;
     std::set<std::tuple<uint32_t, uint32_t, uint32_t>> deliveredNoDrainKeys;
     std::set<std::tuple<uint32_t, uint32_t, uint32_t>> deliveredPostConvergenceKeys;
-    const double lateDataCutoff =
-        (dataStopSec > dataStartSec && m_endWindowSec > 0.0)
-            ? std::max(dataStartSec, dataStopSec - m_endWindowSec)
-            : std::numeric_limits<double>::infinity();
+    const double lateDataCutoff = (dataStopSec > dataStartSec && m_endWindowSec > 0.0)
+                                      ? std::max(dataStartSec, dataStopSec - m_endWindowSec)
+                                      : std::numeric_limits<double>::infinity();
     for (const auto& kv : m_generatedDataTime)
     {
         const auto& key = kv.first;
@@ -1323,10 +1328,12 @@ MetricsCollector::ExportToJson(std::string prefix)
         generatedNoDrainEligible > 0
             ? static_cast<double>(deliveredNoDrainKeys.size()) / generatedNoDrainEligible
             : 0.0;
-    const uint64_t beaconTxDuringDataPhase =
-        (beaconTxAtDataStop >= beaconTxAtDataStart) ? (beaconTxAtDataStop - beaconTxAtDataStart) : 0;
-    const uint64_t beaconRxDuringDataPhase =
-        (beaconRxAtDataStop >= beaconRxAtDataStart) ? (beaconRxAtDataStop - beaconRxAtDataStart) : 0;
+    const uint64_t beaconTxDuringDataPhase = (beaconTxAtDataStop >= beaconTxAtDataStart)
+                                                 ? (beaconTxAtDataStop - beaconTxAtDataStart)
+                                                 : 0;
+    const uint64_t beaconRxDuringDataPhase = (beaconRxAtDataStop >= beaconRxAtDataStart)
+                                                 ? (beaconRxAtDataStop - beaconRxAtDataStart)
+                                                 : 0;
 
     std::vector<double> quantRaw;
     std::vector<double> quantScore;
@@ -1344,13 +1351,14 @@ MetricsCollector::ExportToJson(std::string prefix)
         scoreToRawSet[s.scoreQuantized].insert(s.rawMetricMilli);
     }
     const auto calcMean = [](const std::vector<double>& vals) -> double {
-        return vals.empty()
-                   ? 0.0
-                   : std::accumulate(vals.begin(), vals.end(), 0.0) /
-                         static_cast<double>(vals.size());
+        return vals.empty() ? 0.0
+                            : std::accumulate(vals.begin(), vals.end(), 0.0) /
+                                  static_cast<double>(vals.size());
     };
-    const auto minRaw = quantRaw.empty() ? 0.0 : *std::min_element(quantRaw.begin(), quantRaw.end());
-    const auto maxRaw = quantRaw.empty() ? 0.0 : *std::max_element(quantRaw.begin(), quantRaw.end());
+    const auto minRaw =
+        quantRaw.empty() ? 0.0 : *std::min_element(quantRaw.begin(), quantRaw.end());
+    const auto maxRaw =
+        quantRaw.empty() ? 0.0 : *std::max_element(quantRaw.begin(), quantRaw.end());
     const auto minScore =
         quantScore.empty() ? 0.0 : *std::min_element(quantScore.begin(), quantScore.end());
     const auto maxScore =
@@ -1366,24 +1374,23 @@ MetricsCollector::ExportToJson(std::string prefix)
     }
     for (const auto& s : m_quantizationSamples)
     {
-        const uint32_t maxMetricValue =
-            (m_hasRunConfig &&
-             (m_runConfig.costEncoding == "cost255" || m_runConfig.costEncoding == "score255"))
-                ? 255u
-                : 100u;
-        const double compositeStep =
-            (m_hasRunConfig && m_runConfig.compositeCostStep > 0.0) ? m_runConfig.compositeCostStep
-                                                                    : 1.0;
-        if (s.rawMetric > 0.0 &&
-            std::isfinite(s.rawMetric) &&
+        const uint32_t maxMetricValue = (m_hasRunConfig && (m_runConfig.costEncoding == "cost255" ||
+                                                            m_runConfig.costEncoding == "score255"))
+                                            ? 255u
+                                            : 100u;
+        const double compositeStep = (m_hasRunConfig && m_runConfig.compositeCostStep > 0.0)
+                                         ? m_runConfig.compositeCostStep
+                                         : 1.0;
+        if (s.rawMetric > 0.0 && std::isfinite(s.rawMetric) &&
             (s.rawMetric / compositeStep) >= static_cast<double>(maxMetricValue))
         {
             quantizationSaturationCount++;
         }
     }
     const double quantizationCollisionRatio =
-        quantRaw.empty() ? 0.0
-                         : static_cast<double>(quantizationCollisions) / static_cast<double>(quantRaw.size());
+        quantRaw.empty()
+            ? 0.0
+            : static_cast<double>(quantizationCollisions) / static_cast<double>(quantRaw.size());
     const double quantizationSaturationRatio =
         quantRaw.empty() ? 0.0
                          : static_cast<double>(quantizationSaturationCount) /
@@ -1392,21 +1399,23 @@ MetricsCollector::ExportToJson(std::string prefix)
     const uint64_t totalScores = static_cast<uint64_t>(quantScore.size());
 
     std::vector<QuantizationSample> quantSampleTop = m_quantizationSamples;
-    std::sort(quantSampleTop.begin(), quantSampleTop.end(), [](const QuantizationSample& a, const QuantizationSample& b) {
-        if (a.rawMetric != b.rawMetric)
-        {
-            return a.rawMetric < b.rawMetric;
-        }
-        if (a.scoreQuantized != b.scoreQuantized)
-        {
-            return a.scoreQuantized > b.scoreQuantized;
-        }
-        if (a.nodeId != b.nodeId)
-        {
-            return a.nodeId < b.nodeId;
-        }
-        return a.destination < b.destination;
-    });
+    std::sort(quantSampleTop.begin(),
+              quantSampleTop.end(),
+              [](const QuantizationSample& a, const QuantizationSample& b) {
+                  if (a.rawMetric != b.rawMetric)
+                  {
+                      return a.rawMetric < b.rawMetric;
+                  }
+                  if (a.scoreQuantized != b.scoreQuantized)
+                  {
+                      return a.scoreQuantized > b.scoreQuantized;
+                  }
+                  if (a.nodeId != b.nodeId)
+                  {
+                      return a.nodeId < b.nodeId;
+                  }
+                  return a.destination < b.destination;
+              });
     if (quantSampleTop.size() > 50)
     {
         quantSampleTop.resize(50);
@@ -1428,7 +1437,8 @@ MetricsCollector::ExportToJson(std::string prefix)
         totalDataTxLegacy > 0 ? static_cast<double>(deliveredPackets) / totalDataTxLegacy : 0.0;
     const double deliveryRatio =
         totalDataGenerated > 0 ? static_cast<double>(deliveredPackets) / totalDataGenerated : 0.0;
-    const double payloadBits = static_cast<double>((m_hasRunConfig ? m_runConfig.payloadBytes : 0U) * 8U);
+    const double payloadBits =
+        static_cast<double>((m_hasRunConfig ? m_runConfig.payloadBytes : 0U) * 8U);
     double activeTrafficSec = 0.0;
     if (m_hasRunConfig)
     {
@@ -1442,11 +1452,13 @@ MetricsCollector::ExportToJson(std::string prefix)
         }
     }
     const double throughputBps =
-        activeTrafficSec > 0.0 ? (static_cast<double>(m_dataRxAnyHopCount) * payloadBits) / activeTrafficSec
-                               : 0.0;
+        activeTrafficSec > 0.0
+            ? (static_cast<double>(m_dataRxAnyHopCount) * payloadBits) / activeTrafficSec
+            : 0.0;
     const double goodputBps =
-        activeTrafficSec > 0.0 ? (static_cast<double>(deliveredPackets) * payloadBits) / activeTrafficSec
-                               : 0.0;
+        activeTrafficSec > 0.0
+            ? (static_cast<double>(deliveredPackets) * payloadBits) / activeTrafficSec
+            : 0.0;
 
     // Write JSON
     file << "{\n";
@@ -1514,10 +1526,10 @@ MetricsCollector::ExportToJson(std::string prefix)
              << ",\n";
         file << "    \"max_total_routes\": " << m_runConfig.maxTotalRoutes << ",\n";
         file << "    \"dv_payload_max_bytes\": " << m_runConfig.dvPayloadMaxBytes << ",\n";
-        file << "    \"beacon_latest_only\": "
-             << (m_runConfig.beaconLatestOnly ? "true" : "false") << ",\n";
-        file << "    \"prioritize_beacons\": "
-             << (m_runConfig.prioritizeBeacons ? "true" : "false") << ",\n";
+        file << "    \"beacon_latest_only\": " << (m_runConfig.beaconLatestOnly ? "true" : "false")
+             << ",\n";
+        file << "    \"prioritize_beacons\": " << (m_runConfig.prioritizeBeacons ? "true" : "false")
+             << ",\n";
         file << "    \"pueyo_strict_queue_scheduler\": "
              << (m_runConfig.pueyoStrictQueueScheduler ? "true" : "false") << ",\n";
         file << "    \"control_backoff_factor\": " << m_runConfig.controlBackoffFactor << ",\n";
@@ -1525,10 +1537,10 @@ MetricsCollector::ExportToJson(std::string prefix)
         file << "    \"sf_scan_ed_threshold_dbm\": " << m_runConfig.sfScanEdThresholdDbm << ",\n";
         file << "    \"sf_scan_reset_on_new_signal\": "
              << (m_runConfig.sfScanResetOnNewSignal ? "true" : "false") << ",\n";
-        file << "    \"enable_sf_scan_rx\": "
-             << (m_runConfig.enableSfScanRx ? "true" : "false") << ",\n";
-        file << "    \"pueyo_flora_like_rx\": "
-             << (m_runConfig.pueyoFloraLikeRx ? "true" : "false") << ",\n";
+        file << "    \"enable_sf_scan_rx\": " << (m_runConfig.enableSfScanRx ? "true" : "false")
+             << ",\n";
+        file << "    \"pueyo_flora_like_rx\": " << (m_runConfig.pueyoFloraLikeRx ? "true" : "false")
+             << ",\n";
         file << "    \"enable_ns3_energy_framework\": "
              << (m_runConfig.enableNs3EnergyFramework ? "true" : "false") << ",\n";
         file << "    \"battery_full_capacity_j\": " << m_runConfig.batteryFullCapacityJ << ",\n";
@@ -1551,7 +1563,8 @@ MetricsCollector::ExportToJson(std::string prefix)
     file << "    \"total_data_tx\": " << totalDataGenerated << ",\n";
     file << "    \"delivered\": " << deliveredPackets << ",\n";
     file << "    \"pdr\": " << std::fixed << std::setprecision(4) << pdr << ",\n";
-    file << "    \"delivery_ratio\": " << std::fixed << std::setprecision(4) << deliveryRatio << ",\n";
+    file << "    \"delivery_ratio\": " << std::fixed << std::setprecision(4) << deliveryRatio
+         << ",\n";
     file << "    \"total_data_generated_eligible\": " << totalDataGeneratedEligible << ",\n";
     file << "    \"delivered_eligible\": " << deliveredEligible << ",\n";
     file << "    \"pdr_e2e_generated_eligible\": " << std::fixed << std::setprecision(4)
@@ -1572,8 +1585,7 @@ MetricsCollector::ExportToJson(std::string prefix)
          << deliveredPerTxAttempt << ",\n";
     file << "    \"pdr_post_convergence\": " << std::fixed << std::setprecision(4)
          << pdrPostConvergence << ",\n";
-    file << "    \"pdr_no_drain\": " << std::fixed << std::setprecision(4) << pdrNoDrain
-         << ",\n";
+    file << "    \"pdr_no_drain\": " << std::fixed << std::setprecision(4) << pdrNoDrain << ",\n";
     file << "    \"generated_before_first_route\": " << generatedBeforeFirstRoute << ",\n";
     file << "    \"generated_after_first_route\": " << generatedAfterFirstRoute << ",\n";
     file << "    \"generated_without_route_ever\": " << generatedWithoutRouteEver << ",\n";
@@ -1581,8 +1593,8 @@ MetricsCollector::ExportToJson(std::string prefix)
     file << "    \"late_generated_near_data_stop\": " << lateGeneratedNearDataStop << ",\n";
     file << "    \"generated_no_first_tx_late_window\": " << generatedNoFirstTxLateWindow << ",\n";
     file << "    \"legacy_total_data_tx_attempts\": " << totalDataTxLegacy << ",\n";
-    file << "    \"legacy_pdr_tx_based\": " << std::fixed << std::setprecision(4) << legacyPdrTxBased
-         << "\n";
+    file << "    \"legacy_pdr_tx_based\": " << std::fixed << std::setprecision(4)
+         << legacyPdrTxBased << "\n";
     file << "  },\n";
     file << "  \"pdr_by_source\": [\n";
     bool firstSrc = true;
@@ -1631,10 +1643,10 @@ MetricsCollector::ExportToJson(std::string prefix)
     file << "  \"forwarding\": {\n";
     file << "    \"forward_tx_sent_total\": " << forwardTxSentTotal << ",\n";
     file << "    \"forwarded_unique_count\": " << forwardedUniqueKeys.size() << ",\n";
-    file << "    \"avg_hops_delivered\": " << std::fixed << std::setprecision(6)
-         << avgHopsDelivered << ",\n";
-    file << "    \"p95_hops_delivered\": " << std::fixed << std::setprecision(6)
-         << p95HopsDelivered << "\n";
+    file << "    \"avg_hops_delivered\": " << std::fixed << std::setprecision(6) << avgHopsDelivered
+         << ",\n";
+    file << "    \"p95_hops_delivered\": " << std::fixed << std::setprecision(6) << p95HopsDelivered
+         << "\n";
     file << "  },\n";
     file << "  \"throughput\": {\n";
     file << "    \"active_traffic_sec\": " << std::fixed << std::setprecision(3) << activeTrafficSec
@@ -1673,8 +1685,9 @@ MetricsCollector::ExportToJson(std::string prefix)
     file << "    \"ratio\": " << (dataBytes > 0 ? (double)beaconBytes / dataBytes : 0.0) << "\n";
     file << "  },\n";
     file << "  \"routes\": {\n";
-    file << "    \"total_events\": " << (m_routeNewEvents + m_routeUpdateEvents + m_routePoisonEvents +
-                                         m_routeExpireEvents + m_routePurgeEvents)
+    file << "    \"total_events\": "
+         << (m_routeNewEvents + m_routeUpdateEvents + m_routePoisonEvents + m_routeExpireEvents +
+             m_routePurgeEvents)
          << ",\n";
     file << "    \"new_events\": " << m_routeNewEvents << ",\n";
     file << "    \"update_events\": " << m_routeUpdateEvents << ",\n";
@@ -1717,15 +1730,12 @@ MetricsCollector::ExportToJson(std::string prefix)
     file << "    \"beacon_busy_drops\": " << beaconBusyDrops << ",\n";
     file << "    \"pueyo_same_sf_overlap_events\": " << pueyoSameSfOverlapEvents << ",\n";
     file << "    \"pueyo_destructive_overlap_drops\": " << pueyoDestructiveOverlapDrops << ",\n";
-    file << "    \"pueyo_capture_or_timing_survivals\": " << pueyoCaptureOrTimingSurvivals
-         << ",\n";
-    file << "    \"pueyo_cross_sf_ignored_overlaps\": " << pueyoCrossSfIgnoredOverlaps
-         << ",\n";
+    file << "    \"pueyo_capture_or_timing_survivals\": " << pueyoCaptureOrTimingSurvivals << ",\n";
+    file << "    \"pueyo_cross_sf_ignored_overlaps\": " << pueyoCrossSfIgnoredOverlaps << ",\n";
     file << "    \"goursaud_deterministic_drops\": " << goursaudDeterministicDrops << ",\n";
-    file << "    \"goursaud_cross_sf_capture_successes\": "
-         << goursaudCrossSfCaptureSuccesses << ",\n";
-    file << "    \"goursaud_cross_sf_capture_fails\": " << goursaudCrossSfCaptureFails
+    file << "    \"goursaud_cross_sf_capture_successes\": " << goursaudCrossSfCaptureSuccesses
          << ",\n";
+    file << "    \"goursaud_cross_sf_capture_fails\": " << goursaudCrossSfCaptureFails << ",\n";
     file << "    \"beacon_rx_ok\": " << beaconRxOk << ",\n";
     file << "    \"rx_scan_time_total_s\": " << std::fixed << std::setprecision(6)
          << rxScanTimeTotalS << ",\n";
@@ -1750,8 +1760,8 @@ MetricsCollector::ExportToJson(std::string prefix)
     file << "    \"beacon_rx_before_data_start\": " << beaconRxAtDataStart << ",\n";
     file << "    \"beacon_tx_during_data_phase\": " << beaconTxDuringDataPhase << ",\n";
     file << "    \"beacon_rx_during_data_phase\": " << beaconRxDuringDataPhase << ",\n";
-    file << "    \"beacon_delay_s_mean\": " << std::fixed << std::setprecision(6)
-         << beaconDelayMean << ",\n";
+    file << "    \"beacon_delay_s_mean\": " << std::fixed << std::setprecision(6) << beaconDelayMean
+         << ",\n";
     file << "    \"beacon_delay_s_p95\": " << std::fixed << std::setprecision(6) << beaconDelayP95
          << ",\n";
     file << "    \"beacon_delay_samples\": " << m_beaconDelaySamples.size() << ",\n";
@@ -1771,8 +1781,8 @@ MetricsCollector::ExportToJson(std::string prefix)
          << Percentile95Double(quantRaw) << ",\n";
     file << "    \"metric_raw_max\": " << std::fixed << std::setprecision(6) << maxRaw << ",\n";
     file << "    \"toa_cost_raw_min\": " << std::fixed << std::setprecision(6) << minRaw << ",\n";
-    file << "    \"toa_cost_raw_mean\": " << std::fixed << std::setprecision(6) << calcMean(quantRaw)
-         << ",\n";
+    file << "    \"toa_cost_raw_mean\": " << std::fixed << std::setprecision(6)
+         << calcMean(quantRaw) << ",\n";
     file << "    \"toa_cost_raw_p50\": " << std::fixed << std::setprecision(6)
          << Percentile50Double(quantRaw) << ",\n";
     file << "    \"toa_cost_raw_p95\": " << std::fixed << std::setprecision(6)
@@ -1802,9 +1812,9 @@ MetricsCollector::ExportToJson(std::string prefix)
     {
         const auto& s = quantSampleTop[i];
         file << "      {\"node\": " << s.nodeId << ", \"dst\": " << s.destination
-             << ", \"nextHop\": " << s.nextHop << ", \"is_backup\": "
-             << (s.isBackup ? "true" : "false") << ", \"metric_raw\": " << s.rawMetric
-             << ", \"toa_cost_raw\": " << s.rawMetric
+             << ", \"nextHop\": " << s.nextHop
+             << ", \"is_backup\": " << (s.isBackup ? "true" : "false")
+             << ", \"metric_raw\": " << s.rawMetric << ", \"toa_cost_raw\": " << s.rawMetric
              << ", \"score_quantized\": " << s.scoreQuantized << "}";
         if (i + 1 < quantSampleTop.size())
         {
@@ -1824,9 +1834,9 @@ MetricsCollector::ExportToJson(std::string prefix)
     file << "    \"txQueue_len_end_max_node\": " << txQueueLenEndMaxNode << ",\n";
     file << "    \"queued_packets_at_data_stop\": " << queuedPacketsAtDataStop << ",\n";
     file << "    \"origin_pending_at_stop\": " << originPendingAtStop << ",\n"; // [B1]
-    file << "    \"origin_pending_duty\": " << originPendingDuty << ",\n"; // §LossFine
-    file << "    \"origin_pending_energy\": " << originPendingEnergy << ",\n"; // §LossFine
-    file << "    \"relay_pending_end\": " << relayPendingEnd << ",\n"; // §LossFine
+    file << "    \"origin_pending_duty\": " << originPendingDuty << ",\n";      // §LossFine
+    file << "    \"origin_pending_energy\": " << originPendingEnergy << ",\n";  // §LossFine
+    file << "    \"relay_pending_end\": " << relayPendingEnd << ",\n";          // §LossFine
     file << "    \"cad_busy_events\": " << cadBusyEvents << ",\n";
     file << "    \"cad_busy_events_local_power\": " << cadBusyEventsLocalPower << ",\n";
     file << "    \"cad_busy_events_oracle\": " << cadBusyEventsOracle << ",\n";

@@ -60,11 +60,14 @@ class DvClEnergyRegistry : public Object
 
     // Current values: Semtech SX1276/77/78/79 Datasheet, Table DC Characteristics.
     // Must match lora-device-energy-model.cc for consistent SoC/FND/T50 reporting.
-    static constexpr double kDefaultCapacityMah    =  300.0; // 300 mAh thesis node energy budget
-    static constexpr double kDefaultTxCurrentMa    =  120.0; // 120 mA @ +20 dBm PA_BOOST [SX1276 DS, IDD_TXLORA]
-    static constexpr double kDefaultRxCurrentMa    =   10.3; // 10.3 mA LoRa BW=125 kHz   [SX1276 DS, IDD_RXLORA]
-    static constexpr double kDefaultCadCurrentMa   =   10.3; // 10.3 mA (same RX circuits) [SX1276 DS]
-    static constexpr double kDefaultIdleCurrentMa  =    1.6; //  1.6 mA standby            [SX1276 DS, IDD_STDB]
+    static constexpr double kDefaultCapacityMah = 300.0; // 300 mAh thesis node energy budget
+    static constexpr double kDefaultTxCurrentMa =
+        120.0; // 120 mA @ +20 dBm PA_BOOST [SX1276 DS, IDD_TXLORA]
+    static constexpr double kDefaultRxCurrentMa =
+        10.3; // 10.3 mA LoRa BW=125 kHz   [SX1276 DS, IDD_RXLORA]
+    static constexpr double kDefaultCadCurrentMa = 10.3; // 10.3 mA (same RX circuits) [SX1276 DS]
+    static constexpr double kDefaultIdleCurrentMa =
+        1.6; //  1.6 mA standby            [SX1276 DS, IDD_STDB]
     static constexpr double kDefaultVoltageMinMv = 3000.0;
     static constexpr double kDefaultVoltageMaxMv = 4200.0;
 

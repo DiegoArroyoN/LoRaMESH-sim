@@ -36,9 +36,18 @@ class MiniSink : public DvClStatsSink
     uint64_t delivered{0};
     uint64_t txOk{0};
 
-    void RecordDataGenerated(uint32_t, uint32_t, uint32_t) override { ++generated; }
+    void RecordDataGenerated(uint32_t, uint32_t, uint32_t) override
+    {
+        ++generated;
+    }
 
-    void RecordE2eDelay(uint32_t, uint32_t, uint32_t, uint8_t, double, uint32_t, uint8_t,
+    void RecordE2eDelay(uint32_t,
+                        uint32_t,
+                        uint32_t,
+                        uint8_t,
+                        double,
+                        uint32_t,
+                        uint8_t,
                         bool wasDelivered) override
     {
         if (wasDelivered)
@@ -47,8 +56,20 @@ class MiniSink : public DvClStatsSink
         }
     }
 
-    void RecordTx(uint32_t, uint32_t, uint32_t, uint32_t, uint8_t, uint8_t, int16_t, uint16_t,
-                  uint16_t, uint8_t, uint32_t, double, double, bool ok) override
+    void RecordTx(uint32_t,
+                  uint32_t,
+                  uint32_t,
+                  uint32_t,
+                  uint8_t,
+                  uint8_t,
+                  int16_t,
+                  uint16_t,
+                  uint16_t,
+                  uint8_t,
+                  uint32_t,
+                  double,
+                  double,
+                  bool ok) override
     {
         if (ok)
         {
@@ -57,19 +78,70 @@ class MiniSink : public DvClStatsSink
     }
 
     // The remaining events are ignored by this example.
-    void RecordRx(uint32_t, uint32_t, uint32_t, uint32_t, uint8_t, uint8_t, int16_t, uint16_t,
-                  uint16_t, uint8_t, double, double, bool) override {}
-    void RecordRoute(uint32_t, uint32_t, uint32_t, uint8_t, uint16_t, uint32_t, std::string) override {}
-    void RecordRouteUsed(uint32_t, uint32_t, uint32_t, uint8_t, uint16_t, uint32_t) override {}
-    void RecordEnergySnapshot(uint32_t, double, double) override {}
-    void RecordQuantizationSample(uint32_t, uint32_t, uint32_t, bool, double, uint16_t) override {}
-    void RecordRuntimeNodeStats(const DvClNodeStats&) override {}
-    void RecordOverhead(uint32_t, const std::string&, uint32_t, uint32_t, uint32_t, uint32_t,
-                        uint8_t, uint8_t) override {}
-    void RecordDuty(uint32_t, double, uint32_t, uint32_t) override {}
-    void RecordConnectivity(uint32_t, uint32_t, bool) override {}
-    void RecordBeaconDelay(double) override {}
-    double GetFirstTxTime(uint32_t, uint32_t, uint32_t) const override { return -1.0; }
+    void RecordRx(uint32_t,
+                  uint32_t,
+                  uint32_t,
+                  uint32_t,
+                  uint8_t,
+                  uint8_t,
+                  int16_t,
+                  uint16_t,
+                  uint16_t,
+                  uint8_t,
+                  double,
+                  double,
+                  bool) override
+    {
+    }
+
+    void RecordRoute(uint32_t, uint32_t, uint32_t, uint8_t, uint16_t, uint32_t, std::string)
+        override
+    {
+    }
+
+    void RecordRouteUsed(uint32_t, uint32_t, uint32_t, uint8_t, uint16_t, uint32_t) override
+    {
+    }
+
+    void RecordEnergySnapshot(uint32_t, double, double) override
+    {
+    }
+
+    void RecordQuantizationSample(uint32_t, uint32_t, uint32_t, bool, double, uint16_t) override
+    {
+    }
+
+    void RecordRuntimeNodeStats(const DvClNodeStats&) override
+    {
+    }
+
+    void RecordOverhead(uint32_t,
+                        const std::string&,
+                        uint32_t,
+                        uint32_t,
+                        uint32_t,
+                        uint32_t,
+                        uint8_t,
+                        uint8_t) override
+    {
+    }
+
+    void RecordDuty(uint32_t, double, uint32_t, uint32_t) override
+    {
+    }
+
+    void RecordConnectivity(uint32_t, uint32_t, bool) override
+    {
+    }
+
+    void RecordBeaconDelay(double) override
+    {
+    }
+
+    double GetFirstTxTime(uint32_t, uint32_t, uint32_t) const override
+    {
+        return -1.0;
+    }
 };
 
 int
@@ -125,7 +197,9 @@ main(int argc, char* argv[])
 
     std::printf("dv-cl-mesh-example: nodes=%u sim=%.0fs generated=%llu delivered=%llu "
                 "txOk=%llu pdr=%.2f%%\n",
-                nEd, simTime, static_cast<unsigned long long>(sink->generated),
+                nEd,
+                simTime,
+                static_cast<unsigned long long>(sink->generated),
                 static_cast<unsigned long long>(sink->delivered),
                 static_cast<unsigned long long>(sink->txOk),
                 sink->generated ? 100.0 * sink->delivered / sink->generated : 0.0);

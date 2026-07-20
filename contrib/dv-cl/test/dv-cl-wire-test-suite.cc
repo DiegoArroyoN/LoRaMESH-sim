@@ -99,7 +99,8 @@ class DvClWireRoundTripTestCase : public TestCase
             NS_TEST_ASSERT_MSG_EQ(rx.GetDst(), 0xFFFF, "beacon dst");
             NS_TEST_ASSERT_MSG_EQ(unsigned(UnpackTtl(rx.GetFlagsTtl())), 12u, "beacon ttl");
             NS_TEST_ASSERT_MSG_EQ((UnpackType(rx.GetFlagsTtl()) == DvClPacketType::BEACON),
-                                  true, "beacon type");
+                                  true,
+                                  "beacon type");
             NS_TEST_ASSERT_MSG_EQ(unsigned(rx.GetSoc()), 63u, "beacon soc");
         }
         // Data round-trip.
@@ -120,7 +121,8 @@ class DvClWireRoundTripTestCase : public TestCase
         }
         // TTL cap at 63.
         NS_TEST_ASSERT_MSG_EQ(unsigned(UnpackTtl(PackFlagsTtl(DvClPacketType::DATA, 200))),
-                              63u, "ttl capped at 63");
+                              63u,
+                              "ttl capped at 63");
         // DV entries: pack/unpack incl. poison, LE destination.
         {
             std::vector<DvClDvEntry> in = {{0x0102, 90}, {0xBEEF, 0}, {7, 1}};
@@ -135,9 +137,9 @@ class DvClWireRoundTripTestCase : public TestCase
             NS_TEST_ASSERT_MSG_EQ(out.size(), in.size(), "entry count");
             for (size_t i = 0; i < in.size(); ++i)
             {
-                NS_TEST_ASSERT_MSG_EQ(out[i].destination, in[i].destination,
-                                      "entry dest " << i);
-                NS_TEST_ASSERT_MSG_EQ(unsigned(out[i].score), unsigned(in[i].score),
+                NS_TEST_ASSERT_MSG_EQ(out[i].destination, in[i].destination, "entry dest " << i);
+                NS_TEST_ASSERT_MSG_EQ(unsigned(out[i].score),
+                                      unsigned(in[i].score),
                                       "entry score " << i);
             }
         }

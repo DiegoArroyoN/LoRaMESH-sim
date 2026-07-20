@@ -106,7 +106,8 @@ ParseSyntheticDvEntriesPueyo(const std::string& spec, uint32_t maxEntries)
         const std::string scoreStr = token.substr(pos + 1);
         DvEntryWirePueyo entry;
         entry.destination = static_cast<uint16_t>(std::stoul(dstStr));
-        entry.score = static_cast<uint8_t>(std::clamp<unsigned long>(std::stoul(scoreStr), 0ul, 255ul));
+        entry.score =
+            static_cast<uint8_t>(std::clamp<unsigned long>(std::stoul(scoreStr), 0ul, 255ul));
         entries.push_back(entry);
         if (maxEntries > 0 && entries.size() >= maxEntries)
         {
@@ -131,10 +132,9 @@ FormatDecodedEntries(const std::vector<ns3::dvcl::DvEntry>& entries)
     return oss.str();
 }
 
-
 constexpr double kBatteryMvMin = 3000.0;
 constexpr double kBatteryMvMax = 4200.0;
-constexpr uint32_t kPueyoBeaconHeaderBytes = 6;  // 6B: 5 base + 1 SoC (DC dropped)
+constexpr uint32_t kPueyoBeaconHeaderBytes = 6; // 6B: 5 base + 1 SoC (DC dropped)
 constexpr uint32_t kPueyoBeaconEntryBytes = 3;
 
 void
@@ -174,8 +174,8 @@ DeserializeDvEntriesPueyo(const uint8_t* in, size_t len, std::vector<DvEntryWire
     {
         const size_t offset = i * kPueyoBeaconEntryBytes;
         DvEntryWirePueyo e;
-        e.destination = static_cast<uint16_t>(in[offset + 0]) |
-                        (static_cast<uint16_t>(in[offset + 1]) << 8);
+        e.destination =
+            static_cast<uint16_t>(in[offset + 0]) | (static_cast<uint16_t>(in[offset + 1]) << 8);
         e.score = in[offset + 2];
         out.push_back(e);
     }
@@ -217,6 +217,7 @@ SoC8ToFraction(uint8_t soc)
     }
     return std::clamp(static_cast<double>(soc) / 100.0, 0.0, 1.0);
 }
+
 // ────────────────────────────────────────────────────────────────────────────
 
 double
@@ -240,8 +241,6 @@ using namespace ns3::lorawan;
 
 NS_LOG_COMPONENT_DEFINE("DvClApp");
 NS_OBJECT_ENSURE_REGISTERED(DvClApp);
-
-
 
 // Implementación correcta del destructor:
 DvClApp::~DvClApp()
@@ -299,27 +298,28 @@ DvClApp::GetTypeId()
                           DoubleValue(60.0),
                           MakeDoubleAccessor(&DvClApp::m_beaconWarmupSec),
                           MakeDoubleChecker<double>(0.0))
-            .AddAttribute(
-                "TrafficLoad",
-                "Data traffic load: low/medium/high/saturation.",
-                StringValue("medium"),
-                MakeStringAccessor(&DvClApp::SetTrafficLoad, &DvClApp::GetTrafficLoad),
-                MakeStringChecker())
+            .AddAttribute("TrafficLoad",
+                          "Data traffic load: low/medium/high/saturation.",
+                          StringValue("medium"),
+                          MakeStringAccessor(&DvClApp::SetTrafficLoad, &DvClApp::GetTrafficLoad),
+                          MakeStringChecker())
             .AddAttribute("TrafficMode",
                           "Traffic generator mode: periodic_any_to_any | pueyo_all_to_all.",
                           StringValue("periodic_any_to_any"),
                           MakeStringAccessor(&DvClApp::SetTrafficMode, &DvClApp::GetTrafficMode),
                           MakeStringChecker())
             .AddAttribute("SfLinkMode",
-                          "How SF_lm is inferred for routing updates: observed_rxsf | deterministic_sensitivity.",
+                          "How SF_lm is inferred for routing updates: observed_rxsf | "
+                          "deterministic_sensitivity.",
                           StringValue("observed_rxsf"),
                           MakeStringAccessor(&DvClApp::SetSfLinkMode, &DvClApp::GetSfLinkMode),
                           MakeStringChecker())
-            .AddAttribute("SfLinkMarginDb",
-                          "Margin [dB] added over sensitivity when SfLinkMode=deterministic_sensitivity.",
-                          DoubleValue(0.0),
-                          MakeDoubleAccessor(&DvClApp::m_sfLinkMarginDb),
-                          MakeDoubleChecker<double>(-10.0, 20.0))
+            .AddAttribute(
+                "SfLinkMarginDb",
+                "Margin [dB] added over sensitivity when SfLinkMode=deterministic_sensitivity.",
+                DoubleValue(0.0),
+                MakeDoubleAccessor(&DvClApp::m_sfLinkMarginDb),
+                MakeDoubleChecker<double>(-10.0, 20.0))
             .AddAttribute("PueyoPacketsPerPair",
                           "Packets generated per source-destination pair in pueyo_all_to_all mode.",
                           UintegerValue(100),
@@ -350,11 +350,12 @@ DvClApp::GetTypeId()
                           BooleanValue(false),
                           MakeBooleanAccessor(&DvClApp::m_dataPeriodJitterSymmetric),
                           MakeBooleanChecker())
-            .AddAttribute("DataStartPhaseMaxSec",
-                          "Initial per-node random phase offset added before the first data packet.",
-                          DoubleValue(0.0),
-                          MakeDoubleAccessor(&DvClApp::m_dataStartPhaseMaxSec),
-                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute(
+                "DataStartPhaseMaxSec",
+                "Initial per-node random phase offset added before the first data packet.",
+                DoubleValue(0.0),
+                MakeDoubleAccessor(&DvClApp::m_dataStartPhaseMaxSec),
+                MakeDoubleChecker<double>(0.0))
             .AddAttribute("DataPayloadSizeBytes",
                           "Application payload size [bytes] for generated unicast data packets.",
                           UintegerValue(20),
@@ -365,11 +366,12 @@ DvClApp::GetTypeId()
                           UintegerValue(8),
                           MakeUintegerAccessor(&DvClApp::m_preambleSymbols),
                           MakeUintegerChecker<uint32_t>(6, 64))
-            .AddAttribute("BatteryFullCapacityJ",
-                          "Nominal full battery capacity [J] used to compute SoC from remaining energy.",
-                          DoubleValue(38880.0),
-                          MakeDoubleAccessor(&DvClApp::m_batteryFullCapacityJ),
-                          MakeDoubleChecker<double>(1.0))
+            .AddAttribute(
+                "BatteryFullCapacityJ",
+                "Nominal full battery capacity [J] used to compute SoC from remaining energy.",
+                DoubleValue(38880.0),
+                MakeDoubleAccessor(&DvClApp::m_batteryFullCapacityJ),
+                MakeDoubleChecker<double>(1.0))
             .AddAttribute("EnableDataSlots",
                           "Enable local micro-slots for data transmissions.",
                           BooleanValue(false),
@@ -443,36 +445,40 @@ DvClApp::GetTypeId()
                           DoubleValue(0.0),
                           MakeDoubleAccessor(&DvClApp::m_controlGuardSec),
                           MakeDoubleChecker<double>(0.0))
-            .AddAttribute("StudyForwardSpreadEnable",
-                          "Study-only: spread relay forwarding attempts over a deterministic delay window.",
-                          BooleanValue(false),
-                          MakeBooleanAccessor(&DvClApp::m_studyForwardSpreadEnable),
-                          MakeBooleanChecker())
+            .AddAttribute(
+                "StudyForwardSpreadEnable",
+                "Study-only: spread relay forwarding attempts over a deterministic delay window.",
+                BooleanValue(false),
+                MakeBooleanAccessor(&DvClApp::m_studyForwardSpreadEnable),
+                MakeBooleanChecker())
             .AddAttribute("StudyForwardBaseDelayMs",
                           "Study-only: base relay forwarding delay in milliseconds.",
                           DoubleValue(10.0),
                           MakeDoubleAccessor(&DvClApp::m_studyForwardBaseDelayMs),
                           MakeDoubleChecker<double>(0.0))
-            .AddAttribute("StudyForwardSpreadMs",
-                          "Study-only: extra deterministic relay forwarding spread window in milliseconds.",
-                          DoubleValue(240.0),
-                          MakeDoubleAccessor(&DvClApp::m_studyForwardSpreadMs),
-                          MakeDoubleChecker<double>(0.0))
-            .AddAttribute("StudySuperframeEnable",
-                          "Study-only: enforce a lightweight control/data superframe at dequeue time.",
-                          BooleanValue(false),
-                          MakeBooleanAccessor(&DvClApp::m_studySuperframeEnable),
-                          MakeBooleanChecker())
+            .AddAttribute(
+                "StudyForwardSpreadMs",
+                "Study-only: extra deterministic relay forwarding spread window in milliseconds.",
+                DoubleValue(240.0),
+                MakeDoubleAccessor(&DvClApp::m_studyForwardSpreadMs),
+                MakeDoubleChecker<double>(0.0))
+            .AddAttribute(
+                "StudySuperframeEnable",
+                "Study-only: enforce a lightweight control/data superframe at dequeue time.",
+                BooleanValue(false),
+                MakeBooleanAccessor(&DvClApp::m_studySuperframeEnable),
+                MakeBooleanChecker())
             .AddAttribute("StudySuperframePeriodSec",
                           "Study-only: superframe period in seconds.",
                           DoubleValue(1.0),
                           MakeDoubleAccessor(&DvClApp::m_studySuperframePeriodSec),
                           MakeDoubleChecker<double>(0.0))
-            .AddAttribute("StudySuperframeCtrlWindowSec",
-                          "Study-only: control-only window length inside each superframe period (seconds).",
-                          DoubleValue(0.2),
-                          MakeDoubleAccessor(&DvClApp::m_studySuperframeCtrlWindowSec),
-                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute(
+                "StudySuperframeCtrlWindowSec",
+                "Study-only: control-only window length inside each superframe period (seconds).",
+                DoubleValue(0.2),
+                MakeDoubleAccessor(&DvClApp::m_studySuperframeCtrlWindowSec),
+                MakeDoubleChecker<double>(0.0))
             .AddAttribute("EnableDvFlooding",
                           "Enable explicit flooding of received DV beacons.",
                           BooleanValue(false),
@@ -493,11 +499,12 @@ DvClApp::GetTypeId()
                           BooleanValue(true),
                           MakeBooleanAccessor(&DvClApp::m_useProbabilisticSf),
                           MakeBooleanChecker())
-            .AddAttribute("SfControl",
-                          "Fixed SF used for control beacons when probabilistic selection is disabled.",
-                          UintegerValue(12),
-                          MakeUintegerAccessor(&DvClApp::m_sfControl),
-                          MakeUintegerChecker<uint8_t>(7, 12))
+            .AddAttribute(
+                "SfControl",
+                "Fixed SF used for control beacons when probabilistic selection is disabled.",
+                UintegerValue(12),
+                MakeUintegerAccessor(&DvClApp::m_sfControl),
+                MakeUintegerChecker<uint8_t>(7, 12))
             .AddAttribute("SfMin",
                           "Minimum SF used by probabilistic beacon selection.",
                           UintegerValue(7),
@@ -514,15 +521,17 @@ DvClApp::GetTypeId()
                           MakeBooleanAccessor(&DvClApp::m_allowStaleLinkAddrForUnicastData),
                           MakeBooleanChecker())
             .AddAttribute("AllowStaleLinkAddrForUnicastData",
-                          "If true, allow unicast data TX using stale learned link-layer address for nextHop.",
+                          "If true, allow unicast data TX using stale learned link-layer address "
+                          "for nextHop.",
                           BooleanValue(true),
                           MakeBooleanAccessor(&DvClApp::m_allowStaleLinkAddrForUnicastData),
                           MakeBooleanChecker())
-            .AddAttribute("EmpiricalSfMinSamples",
-                          "Minimum recent beacon samples per SF required when using robust_min mode.",
-                          UintegerValue(2),
-                          MakeUintegerAccessor(&DvClApp::m_empiricalSfMinSamples),
-                          MakeUintegerChecker<uint32_t>(1))
+            .AddAttribute(
+                "EmpiricalSfMinSamples",
+                "Minimum recent beacon samples per SF required when using robust_min mode.",
+                UintegerValue(2),
+                MakeUintegerAccessor(&DvClApp::m_empiricalSfMinSamples),
+                MakeUintegerChecker<uint32_t>(1))
             .AddAttribute("EmpiricalSfSelectMode",
                           "Empirical SF selector mode: min | robust_min.",
                           StringValue("robust_min"),
@@ -538,13 +547,15 @@ DvClApp::GetTypeId()
                           UintegerValue(1),
                           MakeUintegerAccessor(&DvClApp::m_dvBeaconOverheadBytes),
                           MakeUintegerChecker<uint32_t>())
-            .AddAttribute("DvPayloadMaxBytes",
-                          "Hard cap for DV payload bytes in beacon route entries (0 = MTU-derived).",
-                          UintegerValue(0),
-                          MakeUintegerAccessor(&DvClApp::m_dvPayloadMaxBytes),
-                          MakeUintegerChecker<uint32_t>())
+            .AddAttribute(
+                "DvPayloadMaxBytes",
+                "Hard cap for DV payload bytes in beacon route entries (0 = MTU-derived).",
+                UintegerValue(0),
+                MakeUintegerAccessor(&DvClApp::m_dvPayloadMaxBytes),
+                MakeUintegerChecker<uint32_t>())
             .AddAttribute("RouteAdvertPolicy",
-                          "Route selection policy for beacon payload truncation: top_score | uniform | cost_weighted.",
+                          "Route selection policy for beacon payload truncation: top_score | "
+                          "uniform | cost_weighted.",
                           StringValue("top_score"),
                           MakeStringAccessor(&DvClApp::m_routeAdvertPolicy),
                           MakeStringChecker())
@@ -593,18 +604,21 @@ DvClApp::GetTypeId()
                           TimeValue(Seconds(600)),
                           MakeTimeAccessor(&DvClApp::m_dedupWindow),
                           MakeTimeChecker())
-            .AddAttribute("AutoTimeoutsFromBeacon",
-                          "Auto-scale route timeout and neighbor link freshness from active beacon interval.",
-                          BooleanValue(true),
-                          MakeBooleanAccessor(&DvClApp::m_autoTimeoutsFromBeacon),
-                          MakeBooleanChecker())
-            .AddAttribute("NeighborLinkTimeoutFactor",
-                          "Neighbor link freshness expressed in beacon intervals (auto-timeout mode).",
-                          DoubleValue(1.0),
-                          MakeDoubleAccessor(&DvClApp::m_neighborLinkTimeoutFactor),
-                          MakeDoubleChecker<double>(0.1))
+            .AddAttribute(
+                "AutoTimeoutsFromBeacon",
+                "Auto-scale route timeout and neighbor link freshness from active beacon interval.",
+                BooleanValue(true),
+                MakeBooleanAccessor(&DvClApp::m_autoTimeoutsFromBeacon),
+                MakeBooleanChecker())
+            .AddAttribute(
+                "NeighborLinkTimeoutFactor",
+                "Neighbor link freshness expressed in beacon intervals (auto-timeout mode).",
+                DoubleValue(1.0),
+                MakeDoubleAccessor(&DvClApp::m_neighborLinkTimeoutFactor),
+                MakeDoubleChecker<double>(0.1))
             .AddAttribute("NeighborLinkTimeout",
-                          "Manual validity window for empirical per-SF neighbor history (used when auto-timeout is disabled).",
+                          "Manual validity window for empirical per-SF neighbor history (used when "
+                          "auto-timeout is disabled).",
                           TimeValue(Seconds(60)),
                           MakeTimeAccessor(&DvClApp::m_neighborLinkTimeoutConfigured),
                           MakeTimeChecker())
@@ -633,31 +647,35 @@ DvClApp::GetTypeId()
                           BooleanValue(true),
                           MakeBooleanAccessor(&DvClApp::m_avoidImmediateBacktrack),
                           MakeBooleanChecker())
-            .AddAttribute("PurePueyoBaselineMode",
-                          "Enable strict Pueyo baseline semantics for beacon selection/advertisement.",
-                          BooleanValue(false),
-                          MakeBooleanAccessor(&DvClApp::m_purePueyoBaselineMode),
-                          MakeBooleanChecker())
+            .AddAttribute(
+                "PurePueyoBaselineMode",
+                "Enable strict Pueyo baseline semantics for beacon selection/advertisement.",
+                BooleanValue(false),
+                MakeBooleanAccessor(&DvClApp::m_purePueyoBaselineMode),
+                MakeBooleanChecker())
             .AddAttribute("PueyoValidationTrace",
                           "Emit detailed validation traces for Pueyo beacon path.",
                           BooleanValue(false),
                           MakeBooleanAccessor(&DvClApp::m_pueyoValidationTrace),
                           MakeBooleanChecker())
-            .AddAttribute("EnableGapAuditTrace",
-                          "Emit and retain extra control-plane maturity counters for PDR gap audit.",
-                          BooleanValue(false),
-                          MakeBooleanAccessor(&DvClApp::m_enableGapAuditTrace),
-                          MakeBooleanChecker())
+            .AddAttribute(
+                "EnableGapAuditTrace",
+                "Emit and retain extra control-plane maturity counters for PDR gap audit.",
+                BooleanValue(false),
+                MakeBooleanAccessor(&DvClApp::m_enableGapAuditTrace),
+                MakeBooleanChecker())
             .AddAttribute("PueyoSyntheticEntriesNodeId",
-                          "If >=0 and validation trace is enabled, this node injects synthetic beacon entries.",
+                          "If >=0 and validation trace is enabled, this node injects synthetic "
+                          "beacon entries.",
                           IntegerValue(-1),
                           MakeIntegerAccessor(&DvClApp::m_pueyoSyntheticEntriesNodeId),
                           MakeIntegerChecker<int32_t>())
-            .AddAttribute("PueyoSyntheticEntries",
-                          "Synthetic Pueyo beacon entries as dst:score,dst:score,... for validation.",
-                          StringValue(""),
-                          MakeStringAccessor(&DvClApp::m_pueyoSyntheticEntries),
-                          MakeStringChecker());
+            .AddAttribute(
+                "PueyoSyntheticEntries",
+                "Synthetic Pueyo beacon entries as dst:score,dst:score,... for validation.",
+                StringValue(""),
+                MakeStringAccessor(&DvClApp::m_pueyoSyntheticEntries),
+                MakeStringChecker());
     return tid;
 }
 
@@ -694,14 +712,14 @@ DvClApp::UpdateRouteTimeout()
     {
         if (GetNode())
         {
-            NS_LOG_INFO("ADAPT_TIMEOUT node" << GetNode()->GetId()
-                                               << " phase=" << GetBeaconPhaseLabel()
-                                               << " beacon=" << baseBeaconSec << "s"
-                                               << " routeTimeout=" << m_routeTimeout.GetSeconds() << "s"
-                                               << " linkFreshness=" << m_neighborLinkTimeout.GetSeconds() << "s"
-                                               << " routeFactor=" << m_routeTimeoutFactor
-                                               << " linkFactor=" << m_neighborLinkTimeoutFactor
-                                               << " auto=" << (m_autoTimeoutsFromBeacon ? "on" : "off"));
+            NS_LOG_INFO("ADAPT_TIMEOUT node"
+                        << GetNode()->GetId() << " phase=" << GetBeaconPhaseLabel()
+                        << " beacon=" << baseBeaconSec << "s"
+                        << " routeTimeout=" << m_routeTimeout.GetSeconds() << "s"
+                        << " linkFreshness=" << m_neighborLinkTimeout.GetSeconds() << "s"
+                        << " routeFactor=" << m_routeTimeoutFactor
+                        << " linkFactor=" << m_neighborLinkTimeoutFactor
+                        << " auto=" << (m_autoTimeoutsFromBeacon ? "on" : "off"));
         }
     }
 }
@@ -759,7 +777,7 @@ std::string
 DvClApp::GetSfLinkMode() const
 {
     return (m_sfLinkMode == SfLinkMode::DETERMINISTIC_SENSITIVITY) ? "deterministic_sensitivity"
-                                                                    : "observed_rxsf";
+                                                                   : "observed_rxsf";
 }
 
 std::string
@@ -783,7 +801,7 @@ std::string
 DvClApp::GetTrafficMode() const
 {
     return (m_trafficMode == TrafficMode::PUEYO_ALL_TO_ALL) ? "pueyo_all_to_all"
-                                                             : "periodic_any_to_any";
+                                                            : "periodic_any_to_any";
 }
 
 void
@@ -869,14 +887,14 @@ DvClApp::InitDataDestinations()
     }
     else
     {
-    for (uint32_t i = 0; i < totalNodes; ++i)
-    {
-        if (i == myId)
+        for (uint32_t i = 0; i < totalNodes; ++i)
         {
-            continue;
+            if (i == myId)
+            {
+                continue;
+            }
+            m_dataDestinations.push_back(i);
         }
-        m_dataDestinations.push_back(i);
-    }
     }
 
     if (m_enableDataRandomDest && m_rng && m_dataDestinations.size() > 1)
@@ -1071,19 +1089,17 @@ DvClApp::SetRouteTimeoutFactor(double factor)
     UpdateRouteTimeout();
 }
 
-
-
 void
 DvClApp::BootstrapLinkAddrTableFromRx()
 {
-    // Link-layer address table is now learned on RX (beacons/data) instead of being preloaded at startup.
-    // Keep this hook for backward compatibility/log traceability.
+    // Link-layer address table is now learned on RX (beacons/data) instead of being preloaded at
+    // startup. Keep this hook for backward compatibility/log traceability.
     m_linkAddrTable.clear();
     m_linkAddrLastSeen.clear();
     if (Ptr<Node> self = GetNode())
     {
         NS_LOG_INFO("LINKADDR_BOOTSTRAP node=" << self->GetId()
-                                            << " entries=0 mode=rx_learning_only");
+                                               << " entries=0 mode=rx_learning_only");
     }
 }
 
@@ -1123,8 +1139,9 @@ DvClApp::BuildAndSendDvPueyo(uint8_t sf)
         }
         else
         {
-            const auto announcements = m_purePueyoBaselineMode ? m_routing->GetBestRoutesPueyo(maxRoutes)
-                                                               : m_routing->GetBestRoutes(maxRoutes);
+            const auto announcements = m_purePueyoBaselineMode
+                                           ? m_routing->GetBestRoutesPueyo(maxRoutes)
+                                           : m_routing->GetBestRoutes(maxRoutes);
             entries.reserve(announcements.size());
             for (const auto& ann : announcements)
             {
@@ -1138,9 +1155,9 @@ DvClApp::BuildAndSendDvPueyo(uint8_t sf)
         if (m_pueyoValidationTrace)
         {
             NS_LOG_INFO("PUEYO_VAL_TX_INTERNAL node=" << GetNode()->GetId()
-                                                        << " synthetic=" << (usedSynthetic ? 1 : 0)
-                                                        << " maxRoutes=" << maxRoutes
-                                                        << " entries=" << FormatDvEntriesPueyo(entries));
+                                                      << " synthetic=" << (usedSynthetic ? 1 : 0)
+                                                      << " maxRoutes=" << maxRoutes << " entries="
+                                                      << FormatDvEntriesPueyo(entries));
         }
     }
 
@@ -1152,9 +1169,8 @@ DvClApp::BuildAndSendDvPueyo(uint8_t sf)
         SerializeDvEntriesPueyo(entries, payload.data(), payload.size());
         if (m_pueyoValidationTrace)
         {
-            NS_LOG_INFO("PUEYO_VAL_TX_PAYLOAD node=" << GetNode()->GetId()
-                                                       << " payload_hex="
-                                                       << BytesToHex(payload.data(), payload.size()));
+            NS_LOG_INFO("PUEYO_VAL_TX_PAYLOAD node=" << GetNode()->GetId() << " payload_hex="
+                                                     << BytesToHex(payload.data(), payload.size()));
         }
     }
 
@@ -1174,8 +1190,8 @@ DvClApp::BuildAndSendDvPueyo(uint8_t sf)
     hdr.SetSrc(myId);
     hdr.SetDst(0xFFFF);
     hdr.SetFlagsTtl(PackFlagsTtl(DvClPacketType::BEACON, 0));
-    hdr.SetSoc(FractionToSoC8(GetEnergyFraction()));  // §SoC-wire
-    (void)dcRem8; // DC byte removed from the 6B wire contract
+    hdr.SetSoc(FractionToSoC8(GetEnergyFraction())); // §SoC-wire
+    (void)dcRem8;                                    // DC byte removed from the 6B wire contract
     p->AddHeader(hdr);
 
     DvClMetricTag traceTag;
@@ -1189,7 +1205,7 @@ DvClApp::BuildAndSendDvPueyo(uint8_t sf)
     traceTag.SetToaUs(ComputeLoRaToAUs(beaconSf, m_bw, m_cr, p->GetSize()));
     traceTag.SetBatt_mV(GetBatteryVoltageMv());
     traceTag.SetScoreX100(0);
-    traceTag.SetDcRemaining(dcRem8);  // §DC-wire
+    traceTag.SetDcRemaining(dcRem8); // §DC-wire
     p->AddPacketTag(traceTag);
 
     if (m_routing)
@@ -1197,18 +1213,15 @@ DvClApp::BuildAndSendDvPueyo(uint8_t sf)
         m_routing->SetSequence(m_seq);
     }
 
-    NS_LOG_INFO("DVTRACE_TX_PUEYO time=" << Simulator::Now().GetSeconds()
-                                           << " node=" << GetNode()->GetId()
-                                           << " seq=" << traceTag.GetSeq() << " entries="
-                                           << entries.size() << " bytes=" << p->GetSize()
-                                           << " maxRoutes=" << maxRoutes
-                                           << " phase=" << GetBeaconPhaseLabel());
+    NS_LOG_INFO("DVTRACE_TX_PUEYO time="
+                << Simulator::Now().GetSeconds() << " node=" << GetNode()->GetId() << " seq="
+                << traceTag.GetSeq() << " entries=" << entries.size() << " bytes=" << p->GetSize()
+                << " maxRoutes=" << maxRoutes << " phase=" << GetBeaconPhaseLabel());
 
     m_lastDvBeaconTime = Simulator::Now();
     RecordBeaconScheduled(traceTag.GetSeq());
     SendWithCSMA(p, traceTag, Address(), true);
 }
-
 
 // Inicializa timers, callbacks y generación de tráfico.
 void
@@ -1263,8 +1276,7 @@ DvClApp::StartApplication()
 
         // Registrar callback en TODOS los dispositivos
         dev->SetReceiveCallback(MakeCallback(&DvClApp::L2Receive, this));
-        Ptr<DvClLoraNetDevice> meshDev =
-            DynamicCast<DvClLoraNetDevice>(dev);
+        Ptr<DvClLoraNetDevice> meshDev = DynamicCast<DvClLoraNetDevice>(dev);
         if (meshDev)
         {
             if (!m_meshDevice)
@@ -1305,7 +1317,7 @@ DvClApp::StartApplication()
     if (!m_mac)
     {
         m_mac = CreateObject<DvClCsmaCadMac>();
-        }
+    }
     m_mac->SetRandomStream(m_rng);
     m_mac->SetDutyCycleWindow(Hours(1));
     m_mac->SetCadDuration(m_cadDuration);
@@ -1319,8 +1331,7 @@ DvClApp::StartApplication()
         for (uint32_t i = 0; i < n->GetNDevices(); ++i)
         {
             Ptr<NetDevice> dev = n->GetDevice(i);
-            Ptr<DvClLoraNetDevice> meshDev =
-                DynamicCast<DvClLoraNetDevice>(dev);
+            Ptr<DvClLoraNetDevice> meshDev = DynamicCast<DvClLoraNetDevice>(dev);
             if (!meshDev)
             {
                 continue;
@@ -1344,9 +1355,8 @@ DvClApp::StartApplication()
                     sgPhy->TraceConnectWithoutContext(
                         "LostPacketBecauseInterference",
                         MakeCallback(&DvClApp::OnPhyCollisionDrop, this));
-                    sgPhy->TraceConnectWithoutContext(
-                        "LostPacketBecauseNoMoreReceivers",
-                        MakeCallback(&DvClApp::OnPhyBusyDrop, this));
+                    sgPhy->TraceConnectWithoutContext("LostPacketBecauseNoMoreReceivers",
+                                                      MakeCallback(&DvClApp::OnPhyBusyDrop, this));
                 }
             }
             phyLinked = true;
@@ -1400,8 +1410,7 @@ DvClApp::StartApplication()
             Ptr<NetDevice> dev = thisNode->GetDevice(i);
             if (dev)
             {
-                Ptr<DvClLoraNetDevice> meshDev =
-                    DynamicCast<DvClLoraNetDevice>(dev);
+                Ptr<DvClLoraNetDevice> meshDev = DynamicCast<DvClLoraNetDevice>(dev);
                 if (meshDev)
                 {
                     // Mapear el LoRa device del nodo actual
@@ -1435,8 +1444,7 @@ DvClApp::StartApplication()
     m_purgeEvt = Simulator::Schedule(Seconds(30), &DvClApp::PurgeExpiredRoutes, this);
     if (nodeId < 3)
     {
-        m_periodicDumpEvt =
-            Simulator::Schedule(Seconds(30), &DvClApp::SchedulePeriodicDump, this);
+        m_periodicDumpEvt = Simulator::Schedule(Seconds(30), &DvClApp::SchedulePeriodicDump, this);
     }
 
     Simulator::Schedule(Seconds(20), &DvClApp::PrintRoutingTable, this);
@@ -1461,18 +1469,17 @@ DvClApp::StartApplication()
         const double firstDataTimeSec = (Simulator::Now() + dataStartDelay).GetSeconds();
         if (m_dataStopTimeSec >= 0.0 && firstDataTimeSec >= m_dataStopTimeSec)
         {
-            NS_LOG_INFO("  >>> Node " << nodeId
-                                      << " - Data generation disabled by DataStopTimeSec="
+            NS_LOG_INFO("  >>> Node " << nodeId << " - Data generation disabled by DataStopTimeSec="
                                       << m_dataStopTimeSec << "s"
                                       << " (firstDataAt=" << firstDataTimeSec << "s)");
         }
         else
         {
-            NS_LOG_INFO("  >>> Node " << nodeId << " - Data generation scheduled at t="
-                                      << firstDataTimeSec << "s (mode=" << GetTrafficMode()
-                                      << " load=" << GetTrafficLoad()
-                                      << " period=" << m_dataGenerationPeriod.GetSeconds() << "s"
-                                      << " stop=" << m_dataStopTimeSec << "s)");
+            NS_LOG_INFO("  >>> Node "
+                        << nodeId << " - Data generation scheduled at t=" << firstDataTimeSec
+                        << "s (mode=" << GetTrafficMode() << " load=" << GetTrafficLoad()
+                        << " period=" << m_dataGenerationPeriod.GetSeconds() << "s"
+                        << " stop=" << m_dataStopTimeSec << "s)");
             m_dataGenerationEvt =
                 Simulator::Schedule(dataStartDelay, &DvClApp::GenerateDataTraffic, this);
         }
@@ -1514,7 +1521,10 @@ void
 DvClApp::StopApplication()
 {
     NS_LOG_INFO("StopApplication(): node=" << GetNode()->GetId());
-    if (m_finalFlushed) { return; } // §LossFine
+    if (m_finalFlushed)
+    {
+        return;
+    } // §LossFine
     m_finalFlushed = true;
 
     if (m_evt.IsPending())
@@ -1568,21 +1578,28 @@ DvClApp::StopApplication()
             // [B1] Paquete de origen mío aún pendiente al corte: se contabiliza
             // para poder calcular PDR efectivo = delivered / (generated - originPending).
             m_originPendingAtStop++;
-            if (nodeDeadAtStop) { m_originPendingEnergy++; } else { m_originPendingDuty++; } // §LossFine
+            if (nodeDeadAtStop)
+            {
+                m_originPendingEnergy++;
+            }
+            else
+            {
+                m_originPendingDuty++;
+            } // §LossFine
 
-            std::string reason = entry.pendingReason.empty() ? "queue_pending_end"
-                                                             : entry.pendingReason;
+            std::string reason =
+                entry.pendingReason.empty() ? "queue_pending_end" : entry.pendingReason;
             if (reason == "tx_attempt_air")
             {
                 reason = "inflight_pending_end";
             }
 
             NS_LOG_INFO("FWDTRACE ORIGIN_PENDING_END time="
-                          << Simulator::Now().GetSeconds() << " node=" << myId
-                          << " src=" << entry.tag.GetSrc() << " dst=" << entry.tag.GetDst()
-                          << " seq=" << entry.tag.GetSeq() << " sf=" << unsigned(entry.tag.GetSf())
-                          << " reason=" << reason << " deferCount=" << entry.deferCount
-                          << " queueSize=" << m_txQueue.size());
+                        << Simulator::Now().GetSeconds() << " node=" << myId
+                        << " src=" << entry.tag.GetSrc() << " dst=" << entry.tag.GetDst()
+                        << " seq=" << entry.tag.GetSeq() << " sf=" << unsigned(entry.tag.GetSf())
+                        << " reason=" << reason << " deferCount=" << entry.deferCount
+                        << " queueSize=" << m_txQueue.size());
         }
     }
 
@@ -1642,8 +1659,7 @@ DvClApp::StopApplication()
         runtimeStats.cadBusyEventsLocalPower = m_mac ? m_mac->GetCadBusyEventsLocalPower() : 0;
         runtimeStats.cadBusyEventsOracle = m_mac ? m_mac->GetCadBusyEventsOracle() : 0;
 
-        Ptr<DvClLoraNetDevice> meshDev =
-            DynamicCast<DvClLoraNetDevice>(m_meshDevice);
+        Ptr<DvClLoraNetDevice> meshDev = DynamicCast<DvClLoraNetDevice>(m_meshDevice);
         Ptr<ns3::lorawan::SimpleGatewayLoraPhy> phy =
             meshDev ? DynamicCast<ns3::lorawan::SimpleGatewayLoraPhy>(meshDev->GetPhy()) : nullptr;
         if (phy)
@@ -1702,21 +1718,21 @@ DvClApp::StopApplication()
             for (const auto& r : primary)
             {
                 m_stats->RecordQuantizationSample(GetNode()->GetId(),
-                                                             r.destination,
-                                                             r.nextHop,
-                                                             false,
-                                                             r.rawMetric,
-                                                             r.scoreX100);
+                                                  r.destination,
+                                                  r.nextHop,
+                                                  false,
+                                                  r.rawMetric,
+                                                  r.scoreX100);
             }
             const auto backup = m_routing->GetBackupRoutesSnapshot();
             for (const auto& r : backup)
             {
                 m_stats->RecordQuantizationSample(GetNode()->GetId(),
-                                                             r.destination,
-                                                             r.nextHop,
-                                                             true,
-                                                             r.rawMetric,
-                                                             r.scoreX100);
+                                                  r.destination,
+                                                  r.nextHop,
+                                                  true,
+                                                  r.rawMetric,
+                                                  r.scoreX100);
             }
         }
         m_stats->RecordRuntimeNodeStats(runtimeStats);
@@ -1747,8 +1763,7 @@ DvClApp::AccountRxScanEnergyDelta()
         return;
     }
 
-    Ptr<DvClLoraNetDevice> meshDev =
-        DynamicCast<DvClLoraNetDevice>(m_meshDevice);
+    Ptr<DvClLoraNetDevice> meshDev = DynamicCast<DvClLoraNetDevice>(m_meshDevice);
     Ptr<ns3::lorawan::SimpleGatewayLoraPhy> phy =
         meshDev ? DynamicCast<ns3::lorawan::SimpleGatewayLoraPhy>(meshDev->GetPhy()) : nullptr;
     if (!phy)
@@ -1774,7 +1789,7 @@ DvClApp::L2Receive(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, cons
     AccountRxScanEnergyDelta();
 
     NS_LOG_INFO("L2Receive ACTIVADA node=" << GetNode()->GetId() << " proto=" << proto
-                                             << " kProtoMesh=" << kProtoMesh);
+                                           << " kProtoMesh=" << kProtoMesh);
     if (proto != kProtoMesh)
     {
         return false;
@@ -1802,10 +1817,9 @@ DvClApp::ForwardWithTtl(Ptr<const Packet> pIn, const DvClMetricTag& inTag)
         // soy destino final, alineado con el path pueyo7b (mesh_dv_app.cc:4660+).
         {
             m_dataPacketsDelivered++;
-            NS_LOG_INFO(">>> DATA DELIVERED: src=" << inTag.GetSrc()
-                                                  << " dst=" << inTag.GetDst()
-                                                  << " seq=" << inTag.GetSeq()
-                                                  << " hops=" << (int)inTag.GetHops());
+            NS_LOG_INFO(">>> DATA DELIVERED: src=" << inTag.GetSrc() << " dst=" << inTag.GetDst()
+                                                   << " seq=" << inTag.GetSeq()
+                                                   << " hops=" << (int)inTag.GetHops());
 
             // Registrar entrega final (no forward).
             LogRxEvent(inTag.GetSrc(),
@@ -1822,25 +1836,23 @@ DvClApp::ForwardWithTtl(Ptr<const Packet> pIn, const DvClMetricTag& inTag)
 
             if (m_stats)
             {
-                double txTime = m_stats->GetFirstTxTime(inTag.GetSrc(),
-                                                                   inTag.GetDst(),
-                                                                   inTag.GetSeq());
+                double txTime =
+                    m_stats->GetFirstTxTime(inTag.GetSrc(), inTag.GetDst(), inTag.GetSeq());
                 double delaySec = (txTime >= 0.0) ? (Simulator::Now().GetSeconds() - txTime) : -1.0;
                 m_stats->RecordE2eDelay(inTag.GetSrc(),
-                                                   inTag.GetDst(),
-                                                   inTag.GetSeq(),
-                                                   inTag.GetHops(),
-                                                   delaySec,
-                                                   pIn->GetSize(),
-                                                   inTag.GetSf(),
-                                                   true);
+                                        inTag.GetDst(),
+                                        inTag.GetSeq(),
+                                        inTag.GetHops(),
+                                        delaySec,
+                                        pIn->GetSize(),
+                                        inTag.GetSf(),
+                                        true);
                 m_stats->RecordEnergySnapshot(myId, energyJ, energyFrac);
             }
             NS_LOG_INFO("FWDTRACE deliver time="
-                          << Simulator::Now().GetSeconds() << " node=" << myId
-                          << " src=" << inTag.GetSrc() << " dst=" << inTag.GetDst()
-                          << " seq=" << inTag.GetSeq() << " hops=" << unsigned(inTag.GetHops())
-                          << " reason=dst_local");
+                        << Simulator::Now().GetSeconds() << " node=" << myId << " src="
+                        << inTag.GetSrc() << " dst=" << inTag.GetDst() << " seq=" << inTag.GetSeq()
+                        << " hops=" << unsigned(inTag.GetHops()) << " reason=dst_local");
         }
         return; // NO forward
     }
@@ -1875,10 +1887,10 @@ DvClApp::ForwardWithTtl(Ptr<const Packet> pIn, const DvClMetricTag& inTag)
     // Flujo esperado: GetRoute() -> usar route->nextHop tal cual (se resuelve a linkAddr abajo)
     // ========================================================================
     const RouteEntry* routePreview = m_routing ? m_routing->GetRoute(dst) : nullptr;
-    NS_LOG_INFO("FWD_CHECK node"
-                  << myId << " dst=" << dst << " route="
-                  << (routePreview ? ("OK nextHop=" + std::to_string(routePreview->nextHop))
-                                   : "NULL"));
+    NS_LOG_INFO("FWD_CHECK node" << myId << " dst=" << dst << " route="
+                                 << (routePreview
+                                         ? ("OK nextHop=" + std::to_string(routePreview->nextHop))
+                                         : "NULL"));
     const RouteEntry* route = m_routing ? m_routing->GetRoute(dst) : nullptr;
     if (!route)
     {
@@ -1893,18 +1905,18 @@ DvClApp::ForwardWithTtl(Ptr<const Packet> pIn, const DvClMetricTag& inTag)
                     << " hasEntry=" << (rs.exists ? 1 : 0) << " expired=" << (rs.expired ? 1 : 0)
                     << " collectorNodeId=" << m_collectorNodeId);
         NS_LOG_INFO("FWDTRACE drop_noroute time=" << Simulator::Now().GetSeconds()
-                                                    << " node=" << myId << " src=" << inTag.GetSrc()
-                                                    << " dst=" << dst << " seq=" << inTag.GetSeq()
-                                                    << " reason=no_route");
+                                                  << " node=" << myId << " src=" << inTag.GetSrc()
+                                                  << " dst=" << dst << " seq=" << inTag.GetSeq()
+                                                  << " reason=no_route");
         DumpFullTable("DATA_NOROUTE_TX");
         return;
     }
     // Log detallado de la ruta usada
     NS_LOG_INFO("FWDTRACE route time="
-                  << Simulator::Now().GetSeconds() << " node=" << myId << " dst=" << dst
-                  << " route_dst=" << route->destination << " nextHop=" << route->nextHop
-                  << " hops=" << unsigned(route->hops) << " score=" << route->scoreX100
-                  << " seqNum=" << route->seqNum << " sf=" << unsigned(route->sf));
+                << Simulator::Now().GetSeconds() << " node=" << myId << " dst=" << dst
+                << " route_dst=" << route->destination << " nextHop=" << route->nextHop
+                << " hops=" << unsigned(route->hops) << " score=" << route->scoreX100
+                << " seqNum=" << route->seqNum << " sf=" << unsigned(route->sf));
 
     // ========================================================================
     // CASO 3: Verificar duty cycle para forward
@@ -1926,11 +1938,10 @@ DvClApp::ForwardWithTtl(Ptr<const Packet> pIn, const DvClMetricTag& inTag)
     if (m_mac && !m_mac->CanTransmitNow(toaUs / 1e6))
     {
         NS_LOG_INFO("FWDTRACE duty_defer time="
-                      << Simulator::Now().GetSeconds() << " node=" << myId
-                      << " src=" << inTag.GetSrc() << " dst=" << dst << " seq=" << inTag.GetSeq()
-                      << " dutyUsed=" << m_mac->GetDutyCycleUsed()
-                      << " dutyLimit=" << m_mac->GetDutyCycleLimit()
-                      << " reason=duty_wait_queue");
+                    << Simulator::Now().GetSeconds() << " node=" << myId
+                    << " src=" << inTag.GetSrc() << " dst=" << dst << " seq=" << inTag.GetSeq()
+                    << " dutyUsed=" << m_mac->GetDutyCycleUsed()
+                    << " dutyLimit=" << m_mac->GetDutyCycleLimit() << " reason=duty_wait_queue");
     }
 
     // ========================================================================
@@ -1943,12 +1954,14 @@ DvClApp::ForwardWithTtl(Ptr<const Packet> pIn, const DvClMetricTag& inTag)
     NS_LOG_INFO(oss.str());
     Mac48Address routeMac;
     bool usingStaleMac = false;
-    const bool hasUsableMac = ResolveUnicastNextHopLinkAddr(route->nextHop, &routeMac, &usingStaleMac);
-    NS_LOG_INFO("LINKADDR_CHECK node" << myId << " nextHop=" << route->nextHop
-                                   << " linkAddrFound=" << (m_linkAddrTable.find(route->nextHop) != m_linkAddrTable.end() ? "YES" : "NO")
-                                   << " linkAddrFresh=" << (IsLinkAddrFresh(route->nextHop) ? "YES" : "NO")
-                                   << " staleAllowed=" << (m_allowStaleLinkAddrForUnicastData ? "YES" : "NO")
-                                   << " usingStale=" << (usingStaleMac ? "YES" : "NO"));
+    const bool hasUsableMac =
+        ResolveUnicastNextHopLinkAddr(route->nextHop, &routeMac, &usingStaleMac);
+    NS_LOG_INFO("LINKADDR_CHECK node"
+                << myId << " nextHop=" << route->nextHop << " linkAddrFound="
+                << (m_linkAddrTable.find(route->nextHop) != m_linkAddrTable.end() ? "YES" : "NO")
+                << " linkAddrFresh=" << (IsLinkAddrFresh(route->nextHop) ? "YES" : "NO")
+                << " staleAllowed=" << (m_allowStaleLinkAddrForUnicastData ? "YES" : "NO")
+                << " usingStale=" << (usingStaleMac ? "YES" : "NO"));
     Address dstAddr = hasUsableMac ? Address(routeMac) : Address();
     if (!hasUsableMac || dstAddr.IsInvalid())
     {
@@ -1960,18 +1973,18 @@ DvClApp::ForwardWithTtl(Ptr<const Packet> pIn, const DvClMetricTag& inTag)
                     << " seq=" << inTag.GetSeq() << " time=" << Simulator::Now().GetSeconds() << "s"
                     << " routesKnown=" << routeCount << " hasGwRoute=" << (hasGwRoute ? 1 : 0)
                     << " hasEntry=" << (rs.exists ? 1 : 0) << " expired=" << (rs.expired ? 1 : 0)
-                    << " collectorNodeId=" << m_collectorNodeId << " reason=no_link_addr_for_unicast");
+                    << " collectorNodeId=" << m_collectorNodeId
+                    << " reason=no_link_addr_for_unicast");
         NS_LOG_INFO("FWDTRACE DATA_NOROUTE time="
-                      << Simulator::Now().GetSeconds() << " node=" << myId
-                      << " src=" << inTag.GetSrc() << " dst=" << dst << " seq=" << inTag.GetSeq()
-                      << " nextHop=" << route->nextHop << " reason=no_link_addr_for_unicast");
+                    << Simulator::Now().GetSeconds() << " node=" << myId
+                    << " src=" << inTag.GetSrc() << " dst=" << dst << " seq=" << inTag.GetSeq()
+                    << " nextHop=" << route->nextHop << " reason=no_link_addr_for_unicast");
         DumpFullTable("DATA_NOROUTE_TX");
         return;
     }
 
     double txPowerDbm = -1.0;
-    Ptr<DvClLoraNetDevice> meshDevTx =
-        DynamicCast<DvClLoraNetDevice>(m_meshDevice);
+    Ptr<DvClLoraNetDevice> meshDevTx = DynamicCast<DvClLoraNetDevice>(m_meshDevice);
     if (meshDevTx)
     {
         txPowerDbm = meshDevTx->GetTxPowerDbm();
@@ -1989,24 +2002,24 @@ DvClApp::ForwardWithTtl(Ptr<const Packet> pIn, const DvClMetricTag& inTag)
                 << " cadLoad=" << cadLoad);
 
     NS_LOG_INFO("FWDTRACE fwd time="
-                  << Simulator::Now().GetSeconds() << " node=" << myId << " src=" << inTag.GetSrc()
-                  << " dst=" << dst << " seq=" << inTag.GetSeq()
-                  << " ttl=" << unsigned(inTag.GetTtl()) << " ttlAfter=" << unsigned(inTag.GetTtl())
-                  << " nextHop=" << route->nextHop << " hopsPlanned=" << unsigned(route->hops)
-                  << " tx_mode=unicast"
-                  << " reason=ok");
+                << Simulator::Now().GetSeconds() << " node=" << myId << " src=" << inTag.GetSrc()
+                << " dst=" << dst << " seq=" << inTag.GetSeq()
+                << " ttl=" << unsigned(inTag.GetTtl()) << " ttlAfter=" << unsigned(inTag.GetTtl())
+                << " nextHop=" << route->nextHop << " hopsPlanned=" << unsigned(route->hops)
+                << " tx_mode=unicast"
+                << " reason=ok");
     NS_LOG_INFO("DATA_TX SF" << unsigned(sfForRoute) << " node=" << myId << " src="
-                               << inTag.GetSrc() << " dst=" << dst << " seq=" << inTag.GetSeq());
+                             << inTag.GetSrc() << " dst=" << dst << " seq=" << inTag.GetSeq());
 
     // Snapshot de ruta usada en el momento del forward
     if (m_stats)
     {
         m_stats->RecordRouteUsed(myId,
-                                            dst,
-                                            route->nextHop,
-                                            route->hops,
-                                            route->scoreX100,
-                                            route->seqNum);
+                                 dst,
+                                 route->nextHop,
+                                 route->hops,
+                                 route->scoreX100,
+                                 route->seqNum);
     }
 
     Ptr<Packet> modifiablePkt = pIn->Copy();
@@ -2140,11 +2153,10 @@ void
 DvClApp::PrintRoutingTable()
 {
     double remainingEnergy = GetRemainingEnergyJ();
-    double voltageAvg = (DvClEnergyRegistry::kDefaultVoltageMaxMv +
-                         DvClEnergyRegistry::kDefaultVoltageMinMv) /
-                        2000.0;
-    double totalEnergy =
-        (DvClEnergyRegistry::kDefaultCapacityMah / 1000.0) * voltageAvg * 3600.0;
+    double voltageAvg =
+        (DvClEnergyRegistry::kDefaultVoltageMaxMv + DvClEnergyRegistry::kDefaultVoltageMinMv) /
+        2000.0;
+    double totalEnergy = (DvClEnergyRegistry::kDefaultCapacityMah / 1000.0) * voltageAvg * 3600.0;
     double energyConsumed = std::max(0.0, totalEnergy - remainingEnergy);
     uint16_t batteryMv = GetBatteryVoltageMv();
     uint32_t entries = m_routing ? static_cast<uint32_t>(m_routing->GetRouteCount()) : 0;
@@ -2209,7 +2221,9 @@ DvClApp::IsLinkAddrFresh(uint32_t nextHopId) const
 }
 
 bool
-DvClApp::ResolveUnicastNextHopLinkAddr(uint32_t nextHopId, Mac48Address* outMac, bool* outStale) const
+DvClApp::ResolveUnicastNextHopLinkAddr(uint32_t nextHopId,
+                                       Mac48Address* outMac,
+                                       bool* outStale) const
 {
     if (outStale)
     {
@@ -2248,8 +2262,10 @@ DvClApp::TryGetBestRecentSf(const AppNeighborLink& link, Time now, uint8_t* outS
         return false;
     }
 
-    const uint8_t minSf = std::clamp<uint8_t>(m_sfMin, static_cast<uint8_t>(7), static_cast<uint8_t>(12));
-    const uint8_t maxSf = std::clamp<uint8_t>(m_sfMax, static_cast<uint8_t>(7), static_cast<uint8_t>(12));
+    const uint8_t minSf =
+        std::clamp<uint8_t>(m_sfMin, static_cast<uint8_t>(7), static_cast<uint8_t>(12));
+    const uint8_t maxSf =
+        std::clamp<uint8_t>(m_sfMax, static_cast<uint8_t>(7), static_cast<uint8_t>(12));
 
     const std::string mode = ToLower(m_empiricalSfSelectMode);
     const bool robustMode = (mode != "min");
@@ -2315,7 +2331,8 @@ DvClApp::ComputeMinSfBySensitivity(double rxPowerDbm) const
 uint8_t
 DvClApp::ResolveSfForLink(uint8_t observedSf, double rxPowerDbm) const
 {
-    const uint8_t obs = std::clamp<uint8_t>(observedSf, static_cast<uint8_t>(7), static_cast<uint8_t>(12));
+    const uint8_t obs =
+        std::clamp<uint8_t>(observedSf, static_cast<uint8_t>(7), static_cast<uint8_t>(12));
     if (m_sfLinkMode != SfLinkMode::DETERMINISTIC_SENSITIVITY)
     {
         return obs;
@@ -2363,9 +2380,9 @@ DvClApp::UpdateNeighborLinkSf(uint32_t neighborId, uint8_t rxSf)
 
     if (!hadPreviousBest && hasNewBest)
     {
-        NS_LOG_DEBUG("Node " << GetNode()->GetId() << " UpdateNeighborLinkSf: neighbor="
-                             << neighborId << " learned initial empirical SF="
-                             << unsigned(newBestSf));
+        NS_LOG_DEBUG("Node " << GetNode()->GetId()
+                             << " UpdateNeighborLinkSf: neighbor=" << neighborId
+                             << " learned initial empirical SF=" << unsigned(newBestSf));
     }
     else if (hadPreviousBest && hasNewBest && newBestSf != previousBestSf)
     {
@@ -2375,8 +2392,8 @@ DvClApp::UpdateNeighborLinkSf(uint32_t neighborId, uint8_t rxSf)
     }
     else if (!hasNewBest)
     {
-        NS_LOG_DEBUG("Node " << GetNode()->GetId() << " UpdateNeighborLinkSf: neighbor=" << neighborId
-                             << " no robust SF yet (mode=" << m_empiricalSfSelectMode
+        NS_LOG_DEBUG("Node " << GetNode()->GetId() << " UpdateNeighborLinkSf: neighbor="
+                             << neighborId << " no robust SF yet (mode=" << m_empiricalSfSelectMode
                              << " minSamples=" << m_empiricalSfMinSamples << ")");
     }
 }
@@ -2395,11 +2412,10 @@ DvClApp::GetDataSfForNeighbor(uint32_t nextHopId) const
         }
 
         // Sin SF vigente en ventana: fallback robusto.
-        NS_LOG_DEBUG("Node " << GetNode()->GetId() << " GetDataSfForNeighbor: neighbor="
-                             << nextHopId << " no recent SF in window="
-                             << m_neighborLinkTimeout.GetSeconds() << "s"
-                             << ", lastRxSf=" << unsigned(it->second.lastRxSf)
-                             << ", using SF12");
+        NS_LOG_DEBUG(
+            "Node " << GetNode()->GetId() << " GetDataSfForNeighbor: neighbor=" << nextHopId
+                    << " no recent SF in window=" << m_neighborLinkTimeout.GetSeconds() << "s"
+                    << ", lastRxSf=" << unsigned(it->second.lastRxSf) << ", using SF12");
         return 12;
     }
 
@@ -2447,8 +2463,8 @@ DvClApp::ScheduleDvCycle(uint8_t sf, EventId* evtSlot)
         UpdateRouteTimeout();
         Time currentInterval = GetBeaconInterval();
         NS_LOG_INFO("BEACON_PHASE node" << GetNode()->GetId() << " sf=" << unsigned(sf)
-                                          << " phase=" << GetBeaconPhaseLabel()
-                                          << " interval=" << currentInterval.GetSeconds() << "s");
+                                        << " phase=" << GetBeaconPhaseLabel()
+                                        << " interval=" << currentInterval.GetSeconds() << "s");
         const bool warmup = Simulator::Now() < m_beaconWarmupEnd;
         const bool routeChanged = m_routeChangePending;
         const bool forcePeriodic = true; // Always periodic for mesh network
@@ -2506,16 +2522,15 @@ DvClApp::DumpRoute(uint32_t dst, const std::string& tag)
     if (r)
     {
         NS_LOG_INFO("DV_SNAPSHOT tag=" << tag << " node" << GetNode()->GetId()
-                                         << " t=" << Simulator::Now().GetSeconds() << " dst=" << dst
-                                         << " nextHop=" << r->nextHop
-                                         << " hops=" << unsigned(r->hops)
-                                         << " score=" << r->scoreX100 << " seq=" << r->seqNum);
+                                       << " t=" << Simulator::Now().GetSeconds() << " dst=" << dst
+                                       << " nextHop=" << r->nextHop << " hops=" << unsigned(r->hops)
+                                       << " score=" << r->scoreX100 << " seq=" << r->seqNum);
     }
     else
     {
         NS_LOG_INFO("DV_SNAPSHOT tag=" << tag << " node" << GetNode()->GetId()
-                                         << " t=" << Simulator::Now().GetSeconds() << " dst=" << dst
-                                         << " route=NULL");
+                                       << " t=" << Simulator::Now().GetSeconds() << " dst=" << dst
+                                       << " route=NULL");
     }
 }
 
@@ -2528,22 +2543,22 @@ DvClApp::DumpFullTable(const std::string& tag) const
     }
     uint32_t nodeId = GetNode() ? GetNode()->GetId() : 0;
     NS_LOG_INFO("DV_TABLE_FULL tag=" << tag << " node" << nodeId
-                                       << " t=" << Simulator::Now().GetSeconds());
+                                     << " t=" << Simulator::Now().GetSeconds());
     m_routing->DebugDumpRoutingTable();
 
     const RouteEntry* gw = m_routing->GetRoute(m_collectorNodeId);
     if (gw)
     {
         NS_LOG_INFO("DV_TABLE_FULL_GW node"
-                      << nodeId << " dst=" << m_collectorNodeId << " nextHop=" << gw->nextHop
-                      << " hops=" << unsigned(gw->hops) << " score=" << gw->scoreX100
-                      << " seq=" << gw->seqNum
-                      << " age=" << (Simulator::Now() - gw->lastUpdate).GetSeconds() << "s");
+                    << nodeId << " dst=" << m_collectorNodeId << " nextHop=" << gw->nextHop
+                    << " hops=" << unsigned(gw->hops) << " score=" << gw->scoreX100
+                    << " seq=" << gw->seqNum
+                    << " age=" << (Simulator::Now() - gw->lastUpdate).GetSeconds() << "s");
     }
     else
     {
         NS_LOG_INFO("DV_TABLE_FULL_GW node" << nodeId << " dst=" << m_collectorNodeId
-                                              << " route=NULL");
+                                            << " route=NULL");
     }
 }
 
@@ -2552,7 +2567,8 @@ DvClApp::GetBeaconPhaseLabel() const
 {
     std::ostringstream oss;
     const bool warm = (Simulator::Now() < m_beaconWarmupEnd);
-    const double intervalSec = warm ? m_beaconIntervalWarm.GetSeconds() : m_beaconIntervalStable.GetSeconds();
+    const double intervalSec =
+        warm ? m_beaconIntervalWarm.GetSeconds() : m_beaconIntervalStable.GetSeconds();
     oss << (warm ? "warmup(" : "stable(") << intervalSec << "s)";
     return oss.str();
 }
@@ -2708,8 +2724,10 @@ DvClApp::SelectStrictQueueHead(std::size_t* outIndex)
         return m_txQueue.size();
     };
 
-    const std::size_t firstControl = findFirst([&](const TxQueueEntry& e) { return IsControlQueueEntry(e); });
-    const std::size_t firstData = findFirst([&](const TxQueueEntry& e) { return !IsControlQueueEntry(e); });
+    const std::size_t firstControl =
+        findFirst([&](const TxQueueEntry& e) { return IsControlQueueEntry(e); });
+    const std::size_t firstData =
+        findFirst([&](const TxQueueEntry& e) { return !IsControlQueueEntry(e); });
     const bool hasControl = (firstControl < m_txQueue.size());
     const bool hasData = (firstData < m_txQueue.size());
 
@@ -2735,9 +2753,10 @@ DvClApp::SelectStrictQueueHead(std::size_t* outIndex)
 
     if (pickControl)
     {
-        m_strictRoutingBudgetRemaining = (m_strictRoutingBudgetRemaining > 0)
-                                             ? static_cast<uint8_t>(m_strictRoutingBudgetRemaining - 1)
-                                             : 0;
+        m_strictRoutingBudgetRemaining =
+            (m_strictRoutingBudgetRemaining > 0)
+                ? static_cast<uint8_t>(m_strictRoutingBudgetRemaining - 1)
+                : 0;
         *outIndex = firstControl;
         return true;
     }
@@ -2763,7 +2782,8 @@ DvClApp::SelectStrictQueueHead(std::size_t* outIndex)
 
         if (hasForward && m_strictForwardBudgetRemaining > 0)
         {
-            m_strictForwardBudgetRemaining = static_cast<uint8_t>(m_strictForwardBudgetRemaining - 1);
+            m_strictForwardBudgetRemaining =
+                static_cast<uint8_t>(m_strictForwardBudgetRemaining - 1);
             *outIndex = firstForward;
             return true;
         }
@@ -2793,9 +2813,9 @@ DvClApp::SelectStrictQueueHead(std::size_t* outIndex)
 // Encola o envía directamente según si CSMA está habilitado.
 void
 DvClApp::SendWithCSMA(Ptr<Packet> packet,
-                        const DvClMetricTag& tag,
-                        Address dstAddr,
-                        bool logTxMetrics)
+                      const DvClMetricTag& tag,
+                      Address dstAddr,
+                      bool logTxMetrics)
 {
     // Incluso con CSMA deshabilitado usamos la misma cola TX para evitar descartar
     // paquetes por duty-cycle. En ese modo, ProcessTxQueue omite CAD/backoff y
@@ -2819,11 +2839,12 @@ DvClApp::SendWithCSMA(Ptr<Packet> packet,
         for (auto it = m_txQueue.begin(); it != m_txQueue.end(); ++it)
         {
             const bool isBeacon = (it->tag.GetDst() == 0xFFFF);
-            const bool isInAirHead = (it == m_txQueue.begin() && m_txBusy &&
-                                      it->pendingReason == "tx_attempt_air");
+            const bool isInAirHead =
+                (it == m_txQueue.begin() && m_txBusy && it->pendingReason == "tx_attempt_air");
             if (!isBeacon && !isInAirHead)
             {
-                NS_LOG_WARN("CSMA: tx queue cap reached (" << m_txQueue.size()
+                NS_LOG_WARN("CSMA: tx queue cap reached ("
+                            << m_txQueue.size()
                             << "), dropping oldest data entry seq=" << it->tag.GetSeq());
                 m_txQueue.erase(it);
                 m_dropQueueOverflow++;
@@ -2834,7 +2855,8 @@ DvClApp::SendWithCSMA(Ptr<Packet> packet,
         if (!evicted)
         {
             // Only beacons or in-air head — drop the incoming packet itself.
-            NS_LOG_WARN("CSMA: tx queue cap reached (" << m_txQueue.size()
+            NS_LOG_WARN("CSMA: tx queue cap reached ("
+                        << m_txQueue.size()
                         << "), no evictable entry; dropping incoming packet seq="
                         << entry.tag.GetSeq());
             m_dropQueueOverflow++;
@@ -2905,10 +2927,10 @@ DvClApp::SendWithCSMA(Ptr<Packet> packet,
     }
     NS_LOG_INFO("CSMA: Paquete en cola (size=" << m_txQueue.size() << ")");
     NS_LOG_INFO("FWDTRACE QUEUE_ENQUEUE time="
-                  << Simulator::Now().GetSeconds() << " node=" << GetNode()->GetId()
-                  << " src=" << entry.tag.GetSrc() << " dst=" << entry.tag.GetDst()
-                  << " seq=" << entry.tag.GetSeq() << " sf=" << unsigned(entry.tag.GetSf())
-                  << " reason=" << entry.pendingReason << " queueSize=" << m_txQueue.size());
+                << Simulator::Now().GetSeconds() << " node=" << GetNode()->GetId()
+                << " src=" << entry.tag.GetSrc() << " dst=" << entry.tag.GetDst()
+                << " seq=" << entry.tag.GetSeq() << " sf=" << unsigned(entry.tag.GetSf())
+                << " reason=" << entry.pendingReason << " queueSize=" << m_txQueue.size());
 
     ProcessTxQueue();
 }
@@ -2931,11 +2953,11 @@ DvClApp::ProcessTxQueue()
             e.pendingReason = reason;
             e.lastStateChange = Simulator::Now();
             NS_LOG_INFO("FWDTRACE QUEUE_STATE time="
-                          << Simulator::Now().GetSeconds() << " node=" << GetNode()->GetId()
-                          << " src=" << e.tag.GetSrc() << " dst=" << e.tag.GetDst()
-                          << " seq=" << e.tag.GetSeq() << " sf=" << unsigned(e.tag.GetSf())
-                          << " reason=" << reason << " deferCount=" << e.deferCount
-                          << " queueSize=" << m_txQueue.size());
+                        << Simulator::Now().GetSeconds() << " node=" << GetNode()->GetId()
+                        << " src=" << e.tag.GetSrc() << " dst=" << e.tag.GetDst()
+                        << " seq=" << e.tag.GetSeq() << " sf=" << unsigned(e.tag.GetSf())
+                        << " reason=" << reason << " deferCount=" << e.deferCount
+                        << " queueSize=" << m_txQueue.size());
         }
     };
 
@@ -3018,8 +3040,7 @@ DvClApp::ProcessTxQueue()
         entry.deferCount++;
         if (!m_backoffEvt.IsPending())
         {
-            m_backoffEvt =
-                Simulator::Schedule(studySuperframeWait, &DvClApp::ProcessTxQueue, this);
+            m_backoffEvt = Simulator::Schedule(studySuperframeWait, &DvClApp::ProcessTxQueue, this);
         }
         return;
     }
@@ -3086,23 +3107,21 @@ DvClApp::ProcessTxQueue()
         entry.retries++;
         if (entry.retries > m_csmaMaxRetries)
         {
-            NS_LOG_WARN("CSMA: max retries (" << m_csmaMaxRetries
-                        << ") exceeded, dropping seq=" << entry.tag.GetSeq()
+            NS_LOG_WARN("CSMA: max retries ("
+                        << m_csmaMaxRetries << ") exceeded, dropping seq=" << entry.tag.GetSeq()
                         << " dst=0x" << std::hex << entry.tag.GetDst() << std::dec);
             m_dropMaxCsmaRetries++;
             m_txQueue.pop_front();
             ProcessTxQueue();
             return;
         }
-        uint32_t backoffSlots =
-            m_mac ? m_mac->GetBackoffSlots() : m_rng->GetInteger(0, 63);
+        uint32_t backoffSlots = m_mac ? m_mac->GetBackoffSlots() : m_rng->GetInteger(0, 63);
         const bool isControl = (entry.tag.GetDst() == 0xFFFF);
         const double factor = isControl ? m_controlBackoffFactor : m_dataBackoffFactor;
-        const uint32_t scaledSlots = (factor <= 0.0)
-                                         ? 0u
-                                         : std::max<uint32_t>(1,
-                                                              static_cast<uint32_t>(std::ceil(
-                                                                  backoffSlots * factor)));
+        const uint32_t scaledSlots =
+            (factor <= 0.0)
+                ? 0u
+                : std::max<uint32_t>(1, static_cast<uint32_t>(std::ceil(backoffSlots * factor)));
         Time cadDuration = m_mac ? m_mac->GetCadDuration() : m_cadDuration;
         Time backoffTime = (scaledSlots == 0u) ? MicroSeconds(1) : (cadDuration * scaledSlots);
 
@@ -3178,8 +3197,7 @@ DvClApp::ProcessTxQueue()
         setPendingReason(entry, "tx_attempt_air");
         m_txBusy = true;
 
-        Ptr<DvClLoraNetDevice> meshDev =
-            DynamicCast<DvClLoraNetDevice>(dev);
+        Ptr<DvClLoraNetDevice> meshDev = DynamicCast<DvClLoraNetDevice>(dev);
         if (meshDev)
         {
             if (m_mac)
@@ -3208,8 +3226,7 @@ DvClApp::ProcessTxQueue()
             const bool parsedBeacon = ParseBeaconWirePacketPueyo(p, &beaconHdr, &beaconPayload);
             if (parsedBeacon)
             {
-                beaconHdr.SetFlagsTtl(
-                    PackFlagsTtl(DvClPacketType::BEACON, entry.beaconRpCounter));
+                beaconHdr.SetFlagsTtl(PackFlagsTtl(DvClPacketType::BEACON, entry.beaconRpCounter));
                 Ptr<Packet> rebuilt = beaconPayload->Copy();
                 // The header parsed off the air is the header re-emitted: no
                 // rebuild into a second class, which is what used to shift the
@@ -3235,46 +3252,43 @@ DvClApp::ProcessTxQueue()
         const bool ok = dev->Send(p, dst, kProtoMesh);
         // DEBUG: Log para ver qué paquetes salen de la cola
         NS_LOG_INFO("CSMA_TX_QUEUE_OUT node=" << GetNode()->GetId()
-                                                << " tagDst=" << entry.tag.GetDst()
-                                                << " tagSrc=" << entry.tag.GetSrc() << " ok=" << ok
-                                                << " sf=" << unsigned(entry.tag.GetSf()));
+                                              << " tagDst=" << entry.tag.GetDst()
+                                              << " tagSrc=" << entry.tag.GetSrc() << " ok=" << ok
+                                              << " sf=" << unsigned(entry.tag.GetSf()));
         if (m_mac)
         {
         }
 
         NS_LOG_INFO("CSMA: TX ok=" << ok);
-            if (ok)
+        if (ok)
+        {
+            OnPacketTransmitted(entry.tag.GetToaUs());
+            if (entry.tag.GetDst() == 0xFFFF)
             {
-                OnPacketTransmitted(entry.tag.GetToaUs());
-                if (entry.tag.GetDst() == 0xFFFF)
-                {
                 if (entry.beaconRpCounterAssigned)
                 {
                     m_beaconRpCounterTx = static_cast<uint8_t>((entry.beaconRpCounter + 1) & 0x3F);
-                    const char* traceLabel =
-                        "DVTRACE_TX_PUEYO_AIR";
-                    NS_LOG_INFO(traceLabel << " time=" << Simulator::Now().GetSeconds()
-                                             << " node=" << GetNode()->GetId()
-                                             << " seq=" << entry.tag.GetSeq() << " rp_counter="
-                                             << unsigned(entry.beaconRpCounter)
-                                             << " bytes=" << p->GetSize());
+                    const char* traceLabel = "DVTRACE_TX_PUEYO_AIR";
+                    NS_LOG_INFO(traceLabel << " time=" << Simulator::Now().GetSeconds() << " node="
+                                           << GetNode()->GetId() << " seq=" << entry.tag.GetSeq()
+                                           << " rp_counter=" << unsigned(entry.beaconRpCounter)
+                                           << " bytes=" << p->GetSize());
                     if (m_pueyoValidationTrace)
                     {
                         std::vector<uint8_t> raw(p->GetSize());
                         p->CopyData(raw.data(), raw.size());
-                        NS_LOG_INFO("PUEYO_VAL_TX_AIR node=" << GetNode()->GetId()
-                                                               << " packet_hex="
-                                                               << BytesToHex(raw.data(), raw.size()));
+                        NS_LOG_INFO("PUEYO_VAL_TX_AIR node=" << GetNode()->GetId() << " packet_hex="
+                                                             << BytesToHex(raw.data(), raw.size()));
                     }
-                    }
-                    RecordBeaconTxSent(entry.tag.GetSeq());
                 }
-                else
-                {
-                    m_dataTxSent++;
-                }
-                if (entry.logTxMetrics)
-                {
+                RecordBeaconTxSent(entry.tag.GetSeq());
+            }
+            else
+            {
+                m_dataTxSent++;
+            }
+            if (entry.logTxMetrics)
+            {
                 const double energyJ = GetRemainingEnergyJ();
                 const double energyFrac = GetEnergyFraction();
                 LogTxEvent(entry.tag.GetSrc(),
@@ -3295,13 +3309,13 @@ DvClApp::ProcessTxQueue()
             {
                 std::string kind = (entry.tag.GetDst() == 0xFFFF) ? "beacon" : "data";
                 m_stats->RecordOverhead(GetNode()->GetId(),
-                                                   kind,
-                                                   entry.packet->GetSize(),
-                                                   entry.tag.GetSrc(),
-                                                   entry.tag.GetDst(),
-                                                   entry.tag.GetSeq(),
-                                                   entry.tag.GetHops(),
-                                                   entry.tag.GetSf());
+                                        kind,
+                                        entry.packet->GetSize(),
+                                        entry.tag.GetSrc(),
+                                        entry.tag.GetDst(),
+                                        entry.tag.GetSeq(),
+                                        entry.tag.GetHops(),
+                                        entry.tag.GetSf());
             }
         }
         else
@@ -3347,8 +3361,7 @@ DvClApp::GetRealRSSI() const
     Ptr<NetDevice> dev = node->GetDevice(0);
 
     // Usar namespace completo: DvClLoraNetDevice
-    Ptr<DvClLoraNetDevice> meshDev =
-        DynamicCast<DvClLoraNetDevice>(dev);
+    Ptr<DvClLoraNetDevice> meshDev = DynamicCast<DvClLoraNetDevice>(dev);
 
     if (!meshDev)
     {
@@ -3436,12 +3449,12 @@ DvClApp::HandleRouteChange(const RouteEntry& entry, const std::string& action)
     if (m_stats && action != "NONE")
     {
         m_stats->RecordRoute(GetNode()->GetId(),
-                                        entry.destination,
-                                        entry.nextHop,
-                                        entry.hops,
-                                        entry.scoreX100,
-                                        entry.seqNum,
-                                        action);
+                             entry.destination,
+                             entry.nextHop,
+                             entry.hops,
+                             entry.scoreX100,
+                             entry.seqNum,
+                             action);
 
         // =====================================================================
         // THESIS METRIC T50: Track connectivity to sink node
@@ -3514,11 +3527,10 @@ DvClApp::HandleFloodRequest(const DvMessage& msg)
     if (m_mac && !m_mac->CanTransmitNow(toaUs / 1e6))
     {
         NS_LOG_INFO("FWDTRACE duty_defer time="
-                      << Simulator::Now().GetSeconds() << " node=" << GetNode()->GetId()
-                      << " src=" << tag.GetSrc() << " dst=" << tag.GetDst() << " seq="
-                      << tag.GetSeq() << " dutyUsed=" << m_mac->GetDutyCycleUsed()
-                      << " dutyLimit=" << m_mac->GetDutyCycleLimit()
-                      << " reason=duty_wait_queue");
+                    << Simulator::Now().GetSeconds() << " node=" << GetNode()->GetId()
+                    << " src=" << tag.GetSrc() << " dst=" << tag.GetDst() << " seq=" << tag.GetSeq()
+                    << " dutyUsed=" << m_mac->GetDutyCycleUsed()
+                    << " dutyLimit=" << m_mac->GetDutyCycleLimit() << " reason=duty_wait_queue");
     }
 
     // REMOVED: tag.SetRssiDbm - no se serializa
@@ -3528,16 +3540,16 @@ DvClApp::HandleFloodRequest(const DvMessage& msg)
     p->AddPacketTag(tag);
 
     NS_LOG_INFO("POISON_TX node=" << GetNode()->GetId() << " entries=" << msg.entries.size()
-                                    << " seq=" << msg.sequence);
+                                  << " seq=" << msg.sequence);
 
     SendWithCSMA(p, tag, Address());
 }
 
 NeighborLinkInfo
 DvClApp::BuildNeighborLinkInfo(const DvClMetricTag& tag,
-                                 uint32_t toaUs,
-                                 Mac48Address fromMac,
-                                 uint8_t linkSf) const
+                               uint32_t toaUs,
+                               Mac48Address fromMac,
+                               uint8_t linkSf) const
 {
     NeighborLinkInfo link;
     link.neighbor = tag.GetSrc();
@@ -3547,7 +3559,7 @@ DvClApp::BuildNeighborLinkInfo(const DvClMetricTag& tag,
     link.toaUs = toaUs;
     // REMOVED: link.rssiDbm - receptor obtiene de PHY
     link.batt_mV = tag.GetBatt_mV();
-    link.dc_remaining = tag.GetDcRemaining();  // §DC-aware: DC del vecino emisor
+    link.dc_remaining = tag.GetDcRemaining(); // §DC-aware: DC del vecino emisor
     LinkStats stats;
     stats.toaUs = toaUs;
     stats.hops = link.hops;
@@ -3569,8 +3581,8 @@ DvClApp::BuildNeighborLinkInfo(const DvClMetricTag& tag,
 
 std::vector<DvEntry>
 DvClApp::DecodeDvEntries(Ptr<const Packet> p,
-                           const DvClMetricTag& tag,
-                           uint32_t toaUsNeighbor) const
+                         const DvClMetricTag& tag,
+                         uint32_t toaUsNeighbor) const
 {
     std::vector<DvEntry> entries;
     const size_t payloadLen = p->GetSize();
@@ -3583,11 +3595,11 @@ DvClApp::DecodeDvEntries(Ptr<const Packet> p,
             NS_LOG_DEBUG("Beacon payload demasiado pequeño (" << payloadLen
                                                               << " bytes), sin rutas que procesar");
             NS_LOG_INFO("DVTRACE_RX_PARSE time=" << Simulator::Now().GetSeconds() << " node="
-                                                   << GetNode()->GetId() << " src=" << tag.GetSrc()
-                                                   << " seq=" << tag.GetSeq() << " total=0"
-                                                   << " accepted=0"
-                                                   << " drop_small=1"
-                                                   << " payloadBytes=" << payloadLen);
+                                                 << GetNode()->GetId() << " src=" << tag.GetSrc()
+                                                 << " seq=" << tag.GetSeq() << " total=0"
+                                                 << " accepted=0"
+                                                 << " drop_small=1"
+                                                 << " payloadBytes=" << payloadLen);
         }
         return entries;
     }
@@ -3630,28 +3642,28 @@ DvClApp::DecodeDvEntries(Ptr<const Packet> p,
         accepted++;
     }
     NS_LOG_INFO("DVTRACE_RX_PARSE time="
-                  << Simulator::Now().GetSeconds() << " node=" << GetNode()->GetId()
-                  << " src=" << tag.GetSrc() << " seq=" << tag.GetSeq() << " total=" << total
-                  << " accepted=" << accepted << " drop_self=" << dropSelf
-                  << " drop_ttl=" << dropTtl << " payloadBytes=" << payloadLen);
+                << Simulator::Now().GetSeconds() << " node=" << GetNode()->GetId()
+                << " src=" << tag.GetSrc() << " seq=" << tag.GetSeq() << " total=" << total
+                << " accepted=" << accepted << " drop_self=" << dropSelf << " drop_ttl=" << dropTtl
+                << " payloadBytes=" << payloadLen);
     return entries;
 }
 
 void
 DvClApp::ProcessDvPayload(Ptr<const Packet> p,
-                            const DvClMetricTag& tag,
-                            const Mac48Address& fromMac,
-                            uint32_t toaUsNeighbor)
+                          const DvClMetricTag& tag,
+                          const Mac48Address& fromMac,
+                          uint32_t toaUsNeighbor)
 {
     if (!m_routing)
     {
         return;
     }
 
-    Ptr<DvClLoraNetDevice> meshDev =
-        DynamicCast<DvClLoraNetDevice>(m_meshDevice);
+    Ptr<DvClLoraNetDevice> meshDev = DynamicCast<DvClLoraNetDevice>(m_meshDevice);
     const double rxPowerDbm = meshDev ? meshDev->GetLastRxRssi() : -120.0;
-    const uint8_t observedSf = std::clamp<uint8_t>(tag.GetSf(), static_cast<uint8_t>(7), static_cast<uint8_t>(12));
+    const uint8_t observedSf =
+        std::clamp<uint8_t>(tag.GetSf(), static_cast<uint8_t>(7), static_cast<uint8_t>(12));
     const uint8_t linkSf = ResolveSfForLink(observedSf, rxPowerDbm);
     if (m_sfLinkMode == SfLinkMode::DETERMINISTIC_SENSITIVITY)
     {
@@ -3670,11 +3682,10 @@ DvClApp::ProcessDvPayload(Ptr<const Packet> p,
     m_routing->UpdateFromDvMsg(msg, link);
 }
 
-
 bool
 DvClApp::ParseDataWirePacketPueyo7b(Ptr<const Packet> p,
-                                      DvClDataHeader* outHdr,
-                                      Ptr<Packet>* outPayload) const
+                                    DvClDataHeader* outHdr,
+                                    Ptr<Packet>* outPayload) const
 {
     if (!outHdr || !p || p->GetSize() < DvClDataHeader::kSerializedSize)
     {
@@ -3700,11 +3711,10 @@ DvClApp::ParseDataWirePacketPueyo7b(Ptr<const Packet> p,
     return true;
 }
 
-
 bool
 DvClApp::ParseBeaconWirePacketPueyo(Ptr<const Packet> p,
-                                      DvClBeaconHeader* outHdr,
-                                      Ptr<Packet>* outPayload) const
+                                    DvClBeaconHeader* outHdr,
+                                    Ptr<Packet>* outPayload) const
 {
     if (!outHdr || !p || p->GetSize() < kPueyoBeaconHeaderBytes)
     {
@@ -3770,12 +3780,11 @@ DvClApp::ResolveBeaconSequenceFromRpCounter(uint32_t origin, uint8_t rpCounter)
     return m_beaconRpExtendedSeqRx[origin];
 }
 
-
 std::vector<DvEntry>
 DvClApp::DecodeDvEntriesPueyo(Ptr<const Packet> p,
-                                uint32_t payloadOffset,
-                                uint32_t toaUsNeighbor,
-                                uint8_t rxSf) const
+                              uint32_t payloadOffset,
+                              uint32_t toaUsNeighbor,
+                              uint8_t rxSf) const
 {
     (void)toaUsNeighbor;
     (void)rxSf;
@@ -3805,10 +3814,10 @@ DvClApp::DecodeDvEntriesPueyo(Ptr<const Packet> p,
     entries.reserve(received.size());
     if (m_pueyoValidationTrace)
     {
-        NS_LOG_INFO("PUEYO_VAL_RX_DECODE node=" << GetNode()->GetId()
-                                                  << " payload_hex="
-                                                  << BytesToHex(buf.data() + payloadOffset, payloadLen)
-                                                  << " entries=" << FormatDvEntriesPueyo(received));
+        NS_LOG_INFO("PUEYO_VAL_RX_DECODE node="
+                    << GetNode()->GetId()
+                    << " payload_hex=" << BytesToHex(buf.data() + payloadOffset, payloadLen)
+                    << " entries=" << FormatDvEntriesPueyo(received));
     }
     for (const auto& route : received)
     {
@@ -3872,15 +3881,16 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
             if (itPrev == m_linkAddrTable.end() || itPrev->second != fromMac)
             {
                 NS_LOG_INFO("LINKADDR_LEARN node=" << myId << " peer=" << src
-                                                     << " linkAddr learned=" << fromMac);
+                                                   << " linkAddr learned=" << fromMac);
             }
             m_linkAddrTable[src] = fromMac;
             m_linkAddrLastSeen[src] = Simulator::Now();
         }
         else
         {
-            NS_LOG_WARN("L2ReceiveWire beacon: node=" << myId << " src=" << src
-                                                    << " non-Mac48 'from' address, cannot learn linkAddr wrapper");
+            NS_LOG_WARN("L2ReceiveWire beacon: node="
+                        << myId << " src=" << src
+                        << " non-Mac48 'from' address, cannot learn linkAddr wrapper");
         }
         UpdateNeighborLinkSf(src, rxSf);
         const uint8_t linkSf = ResolveSfForLink(rxSf, rxPowerDbm);
@@ -3902,22 +3912,23 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
         link.hops = 1;
         link.sf = linkSf;
         link.toaUs = toaUsNeighbor;
-        const double rxEnergyFrac = SoC8ToFraction(beaconHdr.GetSoc());  // §SoC-wire fix
+        const double rxEnergyFrac = SoC8ToFraction(beaconHdr.GetSoc()); // §SoC-wire fix
         link.batt_mV = static_cast<uint16_t>(EnergyFractionToBatteryMv(rxEnergyFrac));
-        link.dc_remaining = 0xFF; // no DC byte on the 6B wire: always "not available"  // §DC-wire fix: was defaulting to 0xFF
+        link.dc_remaining = 0xFF; // no DC byte on the 6B wire: always "not available"  // §DC-wire
+                                  // fix: was defaulting to 0xFF
         LinkStats stats;
         stats.toaUs = toaUsNeighbor;
         stats.hops = 1;
         stats.sf = rxSf;
         stats.snrDb = 0.0;
         stats.batteryMv = static_cast<double>(link.batt_mV);
-        stats.energyFraction = rxEnergyFrac;  // §SoC-wire fix: was hardcoded 1.0
+        stats.energyFraction = rxEnergyFrac; // §SoC-wire fix: was hardcoded 1.0
         LinkInputs metricIn;
-    metricIn.toaUs = stats.toaUs;
-    metricIn.sf = stats.sf;
-    metricIn.energyFraction = ResolveEnergyFraction(stats.energyFraction, myId);
-    metricIn.batteryMv = stats.batteryMv;
-    const double cost = m_routing->GetMetric()->ComputeLinkCost(metricIn);
+        metricIn.toaUs = stats.toaUs;
+        metricIn.sf = stats.sf;
+        metricIn.energyFraction = ResolveEnergyFraction(stats.energyFraction, myId);
+        metricIn.batteryMv = stats.batteryMv;
+        const double cost = m_routing->GetMetric()->ComputeLinkCost(metricIn);
         link.scoreX100 =
             static_cast<uint16_t>(std::round(std::clamp(1.0 - cost, 0.0, 1.0) * 100.0));
         auto itMac = m_linkAddrTable.find(src);
@@ -3929,16 +3940,15 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
         msg.entries = DecodeDvEntriesPueyo(payload, 0, toaUsNeighbor, rxSf);
         if (m_pueyoValidationTrace)
         {
-            NS_LOG_INFO("PUEYO_VAL_RX_MSG node=" << myId << " origin=" << src
-                                                   << " linkSf=" << unsigned(linkSf)
-                                                   << " rp_counter=" << unsigned(rpCounter)
-                                                   << " seq_ext=" << seqFromRp
-                                                   << " entries=" << FormatDecodedEntries(msg.entries));
+            NS_LOG_INFO("PUEYO_VAL_RX_MSG node="
+                        << myId << " origin=" << src << " linkSf=" << unsigned(linkSf)
+                        << " rp_counter=" << unsigned(rpCounter) << " seq_ext=" << seqFromRp
+                        << " entries=" << FormatDecodedEntries(msg.entries));
         }
         NS_LOG_INFO("DVTRACE_RX_V2 time=" << Simulator::Now().GetSeconds() << " node=" << myId
-                                            << " src=" << src << " rp_counter="
-                                            << unsigned(rpCounter) << " seq_ext=" << seqFromRp
-                                            << " entries=" << msg.entries.size());
+                                          << " src=" << src << " rp_counter=" << unsigned(rpCounter)
+                                          << " seq_ext=" << seqFromRp
+                                          << " entries=" << msg.entries.size());
         if (m_routing)
         {
             m_routing->UpdateFromDvMsg(msg, link);
@@ -4003,29 +4013,19 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
         m_deliveredSet[key] = Simulator::Now();
         m_dataPacketsDelivered++;
 
-        LogRxEvent(src,
-                   dst,
-                   seq16,
-                   ttl,
-                   hopsSeen,
-                   0,
-                   0,
-                   rxSf,
-                   energyJ,
-                   energyFrac,
-                   false);
+        LogRxEvent(src, dst, seq16, ttl, hopsSeen, 0, 0, rxSf, energyJ, energyFrac, false);
         if (m_stats)
         {
             double txTime = m_stats->GetFirstTxTime(src, dst, seq16);
             double delaySec = (txTime >= 0.0) ? (Simulator::Now().GetSeconds() - txTime) : -1.0;
             m_stats->RecordE2eDelay(src,
-                                               dst,
-                                               seq16,
-                                               hopsSeen,
-                                               delaySec,
-                                               payload ? payload->GetSize() : 0,
-                                               rxSf,
-                                               true);
+                                    dst,
+                                    seq16,
+                                    hopsSeen,
+                                    delaySec,
+                                    payload ? payload->GetSize() : 0,
+                                    rxSf,
+                                    true);
             m_stats->RecordEnergySnapshot(myId, energyJ, energyFrac);
         }
         return true;
@@ -4043,24 +4043,18 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
     }
     m_seenOnce[key] = Simulator::Now();
 
-    LogRxEvent(src,
-               dst,
-               seq16,
-               ttl,
-               hopsSeen,
-               0,
-               0,
-               rxSf,
-               energyJ,
-               energyFrac,
-               true);
+    LogRxEvent(src, dst, seq16, ttl, hopsSeen, 0, 0, rxSf, energyJ, energyFrac, true);
 
     ForwardWithTtlV2(payload, src, dst, seq16, ttl);
     return true;
 }
 
 void
-DvClApp::ForwardWithTtlV2(Ptr<const Packet> pIn, uint16_t src, uint16_t dst, uint16_t seq16, uint8_t ttl)
+DvClApp::ForwardWithTtlV2(Ptr<const Packet> pIn,
+                          uint16_t src,
+                          uint16_t dst,
+                          uint16_t seq16,
+                          uint8_t ttl)
 {
     const uint32_t myId = GetNode()->GetId();
     if (ttl == 0)
@@ -4097,7 +4091,6 @@ DvClApp::ForwardWithTtlV2(Ptr<const Packet> pIn, uint16_t src, uint16_t dst, uin
     outHdr.SetFlagsTtl(PackFlagsTtl(DvClPacketType::DATA, nextTtl));
     out->AddHeader(outHdr);
 
-
     DvClMetricTag traceTag;
     traceTag.SetSrc(src);
     traceTag.SetDst(dst);
@@ -4130,66 +4123,66 @@ DvClApp::ForwardWithTtlV2(Ptr<const Packet> pIn, uint16_t src, uint16_t dst, uin
 
 void
 DvClApp::LogTxEvent(uint32_t src,
-                      uint32_t seq,
-                      uint32_t dst,
-                      uint8_t ttl,
-                      uint8_t hops,
-                      uint16_t battery,
-                      uint16_t score,
-                      uint8_t sf,
-                      uint32_t toaUs,
-                      double energyJ,
-                      double energyFrac,
-                      bool ok)
+                    uint32_t seq,
+                    uint32_t dst,
+                    uint8_t ttl,
+                    uint8_t hops,
+                    uint16_t battery,
+                    uint16_t score,
+                    uint8_t sf,
+                    uint32_t toaUs,
+                    double energyJ,
+                    double energyFrac,
+                    bool ok)
 {
     if (m_stats)
     {
         m_stats->RecordTx(GetNode()->GetId(),
-                                     src,
-                                     seq,
-                                     dst,
-                                     ttl,
-                                     hops,
-                                     0, // rssi removed
-                                     battery,
-                                     score,
-                                     sf,
-                                     toaUs,
-                                     energyJ,
-                                     energyFrac,
-                                     ok);
+                          src,
+                          seq,
+                          dst,
+                          ttl,
+                          hops,
+                          0, // rssi removed
+                          battery,
+                          score,
+                          sf,
+                          toaUs,
+                          energyJ,
+                          energyFrac,
+                          ok);
         m_stats->RecordEnergySnapshot(GetNode()->GetId(), energyJ, energyFrac);
     }
 }
 
 void
 DvClApp::LogRxEvent(uint32_t src,
-                      uint32_t dst,
-                      uint32_t seq,
-                      uint8_t ttl,
-                      uint8_t hops,
-                      uint16_t battery,
-                      uint16_t score,
-                      uint8_t sf,
-                      double energyJ,
-                      double energyFrac,
-                      bool forwarded)
+                    uint32_t dst,
+                    uint32_t seq,
+                    uint8_t ttl,
+                    uint8_t hops,
+                    uint16_t battery,
+                    uint16_t score,
+                    uint8_t sf,
+                    double energyJ,
+                    double energyFrac,
+                    bool forwarded)
 {
     if (m_stats)
     {
         m_stats->RecordRx(GetNode()->GetId(),
-                                     src,
-                                     dst,
-                                     seq,
-                                     ttl,
-                                     hops,
-                                     0, // rssi removed
-                                     battery,
-                                     score,
-                                     sf,
-                                     energyJ,
-                                     energyFrac,
-                                     forwarded);
+                          src,
+                          dst,
+                          seq,
+                          ttl,
+                          hops,
+                          0, // rssi removed
+                          battery,
+                          score,
+                          sf,
+                          energyJ,
+                          energyFrac,
+                          forwarded);
         m_stats->RecordEnergySnapshot(GetNode()->GetId(), energyJ, energyFrac);
     }
 }
@@ -4331,8 +4324,8 @@ DvClApp::ComputeStudyForwardDelay(const DvClMetricTag& tag) const
     const uint32_t dst = tag.GetDst();
     const uint32_t seq = tag.GetSeq();
     const uint32_t nodeId = GetNode()->GetId();
-    const uint32_t salt = (nodeId * 1103515245u) ^ (src * 2654435761u) ^ (dst * 2246822519u) ^
-                          (seq * 3266489917u);
+    const uint32_t salt =
+        (nodeId * 1103515245u) ^ (src * 2654435761u) ^ (dst * 2246822519u) ^ (seq * 3266489917u);
     const double extraMs =
         (spreadMs <= 0.0) ? 0.0 : std::fmod(static_cast<double>(salt), spreadMs + 1.0);
     return MilliSeconds(baseMs + extraMs);
@@ -4340,8 +4333,8 @@ DvClApp::ComputeStudyForwardDelay(const DvClMetricTag& tag) const
 
 bool
 DvClApp::ComputeStudySuperframeWait(const TxQueueEntry& entry,
-                                      Time* outWait,
-                                      std::string* outReason) const
+                                    Time* outWait,
+                                    std::string* outReason) const
 {
     if (!m_studySuperframeEnable || m_studySuperframePeriodSec <= 0.0)
     {
@@ -4495,7 +4488,6 @@ DvClApp::SendDataPacket(uint32_t dst)
     SendDataPacketPueyo7b(dst);
 }
 
-
 void
 DvClApp::SendDataPacketPueyo7b(uint32_t dst)
 {
@@ -4504,7 +4496,7 @@ DvClApp::SendDataPacketPueyo7b(uint32_t dst)
     const uint16_t seq16 = static_cast<uint16_t>((++m_dataSeqPerNode) & 0xFFFF);
 
     NS_LOG_INFO("APP_SEND_DATA src=" << myId << " dst=" << dst << " seq=" << seq16
-                                       << " time=" << Simulator::Now().GetSeconds());
+                                     << " time=" << Simulator::Now().GetSeconds());
 
     m_dataPacketsGenerated++;
     if (m_stats)
@@ -4525,8 +4517,8 @@ DvClApp::SendDataPacketPueyo7b(uint32_t dst)
                     << " hasEntry=" << (rs.exists ? 1 : 0) << " expired=" << (rs.expired ? 1 : 0)
                     << " collectorNodeId=" << m_collectorNodeId << " reason=no_route_pueyo7b");
         NS_LOG_INFO("FWDTRACE DATA_NOROUTE time="
-                      << Simulator::Now().GetSeconds() << " node=" << myId << " src=" << myId
-                      << " dst=" << dst << " seq=" << seq16 << " reason=no_route_pueyo7b");
+                    << Simulator::Now().GetSeconds() << " node=" << myId << " src=" << myId
+                    << " dst=" << dst << " seq=" << seq16 << " reason=no_route_pueyo7b");
         m_dataNoRoute++;
         CountDropNoRouteSrc();
         return;
@@ -4580,13 +4572,12 @@ DvClApp::SendDataPacketPueyo7b(uint32_t dst)
                     << " time=" << Simulator::Now().GetSeconds() << "s"
                     << " routesKnown=" << routeCount << " hasGwRoute=" << (hasGwRoute ? 1 : 0)
                     << " hasEntry=" << (rs.exists ? 1 : 0) << " expired=" << (rs.expired ? 1 : 0)
-                    << " collectorNodeId=" << m_collectorNodeId
-                    << " nextHop=" << route->nextHop
+                    << " collectorNodeId=" << m_collectorNodeId << " nextHop=" << route->nextHop
                     << " reason=no_link_addr_for_unicast_pueyo7b");
         NS_LOG_INFO("FWDTRACE DATA_NOROUTE time="
-                      << Simulator::Now().GetSeconds() << " node=" << myId << " src=" << myId
-                      << " dst=" << dst << " seq=" << seq16 << " nextHop=" << route->nextHop
-                      << " reason=no_link_addr_for_unicast_pueyo7b");
+                    << Simulator::Now().GetSeconds() << " node=" << myId << " src=" << myId
+                    << " dst=" << dst << " seq=" << seq16 << " nextHop=" << route->nextHop
+                    << " reason=no_link_addr_for_unicast_pueyo7b");
         m_dataNoRoute++;
         CountDropNoRouteSrc();
         return;
@@ -4595,11 +4586,11 @@ DvClApp::SendDataPacketPueyo7b(uint32_t dst)
     if (m_stats)
     {
         m_stats->RecordRouteUsed(myId,
-                                            dst,
-                                            route->nextHop,
-                                            route->hops,
-                                            route->scoreX100,
-                                            route->seqNum);
+                                 dst,
+                                 route->nextHop,
+                                 route->hops,
+                                 route->scoreX100,
+                                 route->seqNum);
     }
     SendWithCSMA(p, traceTag, Address(routeMac), true);
 }

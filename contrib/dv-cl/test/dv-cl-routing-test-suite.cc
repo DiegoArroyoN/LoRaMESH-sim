@@ -243,8 +243,7 @@ class DvClRoutingMetricSeamTestCase : public TestCase
     }
 
   private:
-    static double
-    InstalledDirectRaw(Ptr<DvClRouting> r, NodeId nb)
+    static double InstalledDirectRaw(Ptr<DvClRouting> r, NodeId nb)
     {
         for (const auto& e : r->GetPrimaryRoutesSnapshot())
         {
@@ -282,9 +281,11 @@ class DvClRoutingMetricSeamTestCase : public TestCase
                     in.energyFraction = EFrac(mv);
                     const double expected = standalone->ComputeLinkCost(in);
                     const double got = InstalledDirectRaw(r, 1);
-                    NS_TEST_ASSERT_MSG_EQ_TOL(got, expected, 1e-12,
-                                              "rawMetric == metric at toa=" << toa
-                                                  << " sf=" << unsigned(sf) << " mv=" << mv);
+                    NS_TEST_ASSERT_MSG_EQ_TOL(got,
+                                              expected,
+                                              1e-12,
+                                              "rawMetric == metric at toa="
+                                                  << toa << " sf=" << unsigned(sf) << " mv=" << mv);
                 }
             }
         }
@@ -300,7 +301,9 @@ class DvClRoutingMetricSeamTestCase : public TestCase
             in.sf = 7;
             in.energyFraction = 1.0; // no penalty expected
             const double expected = standalone->ComputeLinkCost(in);
-            NS_TEST_ASSERT_MSG_EQ_TOL(InstalledDirectRaw(r, 1), expected, 1e-12,
+            NS_TEST_ASSERT_MSG_EQ_TOL(InstalledDirectRaw(r, 1),
+                                      expected,
+                                      1e-12,
                                       "WEnergy=0 via legacy attribute kills the penalty");
             DoubleValue back;
             r->GetAttribute("CompositeWEnergy", back);
@@ -313,7 +316,9 @@ class DvClRoutingMetricSeamTestCase : public TestCase
             r->SetNodeId(0);
             r->SetMetric(CreateObject<ConstMetric>(0.42));
             r->UpdateFromDvMsg(Msg(1, 1, {}), Link(1, 1, 102656));
-            NS_TEST_ASSERT_MSG_EQ_TOL(InstalledDirectRaw(r, 1), 0.42, 1e-12,
+            NS_TEST_ASSERT_MSG_EQ_TOL(InstalledDirectRaw(r, 1),
+                                      0.42,
+                                      1e-12,
                                       "custom metric prices the direct link");
         }
         Simulator::Destroy();

@@ -22,11 +22,11 @@ namespace dvcl
  */
 struct LinkInputs
 {
-    double toaUs{0.0};         //!< accumulated/announced time-on-air, microseconds
-    uint8_t sf{7};             //!< spreading factor the link operates at (7..12)
+    double toaUs{0.0};          //!< accumulated/announced time-on-air, microseconds
+    uint8_t sf{7};              //!< spreading factor the link operates at (7..12)
     double energyFraction{1.0}; //!< next-hop state of charge b in [0,1]; <0 = unknown
-    double batteryMv{-1.0};    //!< next-hop terminal voltage, mV; used only when
-                               //!< energyFraction is unknown (<0)
+    double batteryMv{-1.0};     //!< next-hop terminal voltage, mV; used only when
+                                //!< energyFraction is unknown (<0)
 };
 
 /**
@@ -106,19 +106,15 @@ class DvClCompositeMetric : public DvClRoutingMetric
     // 222 B", which does not match the AN1200.13 value at 222 B; treat
     // them as internal normalization constants (their absolute origin
     // does not affect ranking, only the scale of ToA_hat).
-    static constexpr double kMaxToaUs[6] = {143360.0,
-                                            256512.0,
-                                            462848.0,
-                                            829440.0,
-                                            1810432.0,
-                                            3293184.0};
+    static constexpr double kMaxToaUs[6] =
+        {143360.0, 256512.0, 462848.0, 829440.0, 1810432.0, 3293184.0};
 
-    double m_wToa{0.60};           //!< alpha
-    double m_wHop{0.15};           //!< beta (constant per hop)
-    double m_wEnergy{0.25};        //!< delta
-    double m_energyLo{0.20};       //!< bLo
-    double m_energyHi{0.50};       //!< bHi
-    double m_energyPow{2.0};       //!< p
+    double m_wToa{0.60};            //!< alpha
+    double m_wHop{0.15};            //!< beta (constant per hop)
+    double m_wEnergy{0.25};         //!< delta
+    double m_energyLo{0.20};        //!< bLo
+    double m_energyHi{0.50};        //!< bHi
+    double m_energyPow{2.0};        //!< p
     double m_energyMaxPenalty{1.0}; //!< PsiMax
 };
 

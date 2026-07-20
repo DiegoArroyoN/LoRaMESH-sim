@@ -24,9 +24,8 @@ constexpr double DvClCompositeMetric::kMaxToaUs[6];
 TypeId
 DvClRoutingMetric::GetTypeId()
 {
-    static TypeId tid = TypeId("ns3::dvcl::DvClRoutingMetric")
-                            .SetParent<Object>()
-                            .SetGroupName("DvCl");
+    static TypeId tid =
+        TypeId("ns3::dvcl::DvClRoutingMetric").SetParent<Object>().SetGroupName("DvCl");
     return tid;
 }
 
@@ -127,8 +126,7 @@ DvClCompositeMetric::ComputeLinkCost(const LinkInputs& in) const
     const double toaCost = m_wToa * NormalizeToa(in.toaUs, in.sf);
     const double hopCost = m_wHop;
     const double energyCost = EnergyPenalty(in.energyFraction, in.batteryMv);
-    NS_LOG_DEBUG("link cost: toa=" << toaCost << " hop=" << hopCost
-                                   << " energy=" << energyCost);
+    NS_LOG_DEBUG("link cost: toa=" << toaCost << " hop=" << hopCost << " energy=" << energyCost);
     return toaCost + hopCost + energyCost;
 }
 

@@ -7,7 +7,6 @@
 #include "dv-cl-lora-energy-model-helper.h"
 
 #include "ns3/dv-cl-lora-energy-model.h"
-
 #include "ns3/log.h"
 #include "ns3/names.h"
 
@@ -57,7 +56,7 @@ DvClLoraEnergyModelHelper::Install(Ptr<NetDevice> device, Ptr<energy::EnergySour
 
 energy::DeviceEnergyModelContainer
 DvClLoraEnergyModelHelper::Install(NetDeviceContainer devices,
-                                     energy::EnergySourceContainer sources) const
+                                   energy::EnergySourceContainer sources) const
 {
     energy::DeviceEnergyModelContainer container;
 
