@@ -508,7 +508,10 @@ DvClLoraNetDevice::Receive(Ptr<const Packet> packet)
 // ======== Resto de interfaz NetDevice (boilerplate) ========
 
 bool
-DvClLoraNetDevice::SendFrom(Ptr<Packet> p, const Address& src, const Address& dest, uint16_t proto)
+DvClLoraNetDevice::SendFrom(Ptr<Packet> p,
+                            [[maybe_unused]] const Address& src,
+                            const Address& dest,
+                            uint16_t proto)
 {
     return Send(p, dest, proto);
 }
@@ -606,7 +609,7 @@ DvClLoraNetDevice::IsLinkUp() const
 }
 
 void
-DvClLoraNetDevice::AddLinkChangeCallback(Callback<void> cb)
+DvClLoraNetDevice::AddLinkChangeCallback([[maybe_unused]] Callback<void> cb)
 {
 }
 
@@ -629,13 +632,13 @@ DvClLoraNetDevice::IsMulticast() const
 }
 
 Address
-DvClLoraNetDevice::GetMulticast(Ipv4Address multicastGroup) const
+DvClLoraNetDevice::GetMulticast([[maybe_unused]] Ipv4Address multicastGroup) const
 {
     return GetBroadcast();
 }
 
 Address
-DvClLoraNetDevice::GetMulticast(Ipv6Address addr) const
+DvClLoraNetDevice::GetMulticast([[maybe_unused]] Ipv6Address addr) const
 {
     return GetBroadcast();
 }

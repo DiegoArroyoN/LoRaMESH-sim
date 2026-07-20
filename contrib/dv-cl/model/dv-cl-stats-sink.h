@@ -193,10 +193,10 @@ class DvClStatsSink : public Object
      *
      * Optional: sinks that do not care need not implement it.
      */
-    virtual void RecordDataTerminated(uint32_t src,
-                                      uint32_t dst,
-                                      uint32_t seq,
-                                      const std::string& fate)
+    virtual void RecordDataTerminated([[maybe_unused]] uint32_t src,
+                                      [[maybe_unused]] uint32_t dst,
+                                      [[maybe_unused]] uint32_t seq,
+                                      [[maybe_unused]] const std::string& fate)
     {
     }
 
