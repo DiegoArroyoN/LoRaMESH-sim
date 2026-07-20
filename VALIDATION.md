@@ -363,6 +363,46 @@ estricto pasaron *más* transmisiones (1286 vs 1171), lo que no debería ocurrir
 Tres hipótesis de causa fueron descartadas por medición; la siguiente debe
 probarse con instrumentación, no por inspección.
 
+## 2026-07-20 — Instrumentación del camino de transmisión: NINGUNA TX elude la compuerta
+
+Se instrumentó el único punto donde se consume aire (`NotifyTxStart`, tras el
+único `m_phy->Send` del device). La compuerta registra el instante en que
+autoriza y el ToA que autorizó; toda transmisión que llega al canal sin permiso
+vigente en ese mismo instante se marca `UNGATED_TX`, y toda transmisión más
+larga que lo autorizado, `UNDERPRICED_TX`. Contadores expuestos
+(`GetUngatedTxCount`, `GetGatedTxCount`).
+
+**Resultado (9 nodos, 7200 s, duty 1%, carga alta):**
+
+| disciplina | UNGATED_TX | UNDERPRICED_TX | PDR | duty_blocked |
+|---|---|---|---|---|
+| time_off_air (ETSI) | **0** | **0** | 0.2045 | 52 318 |
+| sliding_window (legacy) | **0** | **0** | 0.2399 | 25 933 |
+
+(El override de disciplina se verificó efectivo: las dos corridas difieren en
+PDR, TX y bloqueos.)
+
+**Conclusión: no hay fuga en el camino de transmisión.** Toda transmisión que
+llega al aire fue autorizada en ese instante y por al menos su duración real.
+Las cuatro hipótesis de causa del sobrepaso que se persiguieron del lado del
+código quedan refutadas por medición:
+
+1. ToA de la compuerta distinto del que consume la PHY — corregido, sin efecto.
+2. Aire transcurrido en vez de comprometido — corregido, sin efecto.
+3. Disciplina no estándar (ventana en vez de time-off-air) — corregido, sin
+   efecto sobre el pico.
+4. Transmisiones que eluden la compuerta — **inexistentes**.
+
+**Lo que queda por validar es la medición, no el código.** La contabilidad
+propia del MAC nunca supera 1.00%; la reconstrucción offline desde logs da
+1.13-1.16%. Antes de seguir tocando el simulador hay que establecer cuál de las
+dos es correcta: reconstruir el duty desde una fuente independiente (p. ej. los
+eventos de la PHY, no los logs del MAC) y comparar. Nota teórica pertinente: la
+disciplina time-off-air acota el cociente asintótico, **no** el supremo sobre
+toda ventana finita — una ventana que capture n ráfagas y solo n-1 silencios
+excede el límite por construcción, así que un supremo levemente superior a 1% es
+esperable bajo el criterio del estándar y no constituye incumplimiento.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
