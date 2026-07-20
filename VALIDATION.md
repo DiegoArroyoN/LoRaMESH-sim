@@ -403,6 +403,44 @@ toda ventana finita — una ventana que capture n ráfagas y solo n-1 silencios
 excede el límite por construcción, así que un supremo levemente superior a 1% es
 esperable bajo el criterio del estándar y no constituye incumplimiento.
 
+## 2026-07-20 — El presupuesto de duty ES por nodo; por qué caía tanto el PDR
+
+Hipótesis planteada: ¿la compuerta bloquea contra un presupuesto global, de
+modo que un nodo saturado silencia a los demás? **Descartada con medición.**
+Cada `DvClApp` construye su propio MAC y lo comparte solo con su device, y el
+aire medido por nodo lo confirma (ejemplo mesh, 9 nodos, 600 s, EU868 1%):
+
+| | aire por nodo | duty por nodo | aire total red |
+|---|---|---|---|
+| time-off-air | 6.3-7.2 s | 1.04-1.21% | 60.98 s |
+
+Con presupuesto global el total estaría topado en 6 s; son diez veces eso. Cada
+nodo gasta su propio ~1%.
+
+**La causa real de la caída de PDR (43.33% → 9.72%) es que la compuerta antigua
+no acotaba la tasa.** El mismo escenario con `sliding_window`:
+
+| disciplina | duty por nodo | aire por nodo | PDR | bloqueos |
+|---|---|---|---|---|
+| sliding_window | **5.92%** | ~36 s / 600 s | 43.33% | 1996 |
+| time_off_air | **1.10%** | ~6.5 s / 600 s | 9.72% | — |
+
+La ventana deslizante suma contra un denominador de 3600 s aunque la simulación
+dure 600 s: deja gastar **el presupuesto completo de una hora dentro de la
+ventana que dure el experimento**. En 600 s eso es 6% del tiempo real, seis
+veces el límite. Bloqueaba (1996 veces) pero solo al agotar los 36 s absolutos,
+no al exceder la tasa.
+
+**Consecuencia:** todo resultado con duty activo y horizonte menor a la ventana
+está inflado por este efecto, en proporción `ventana/duración`. El 43.33% no era
+un número con duty cumplido sino uno sin duty efectivo.
+
+**No afecta a los números publicados**: el perfil `proposal_pueyo_like_csmacad`
+corre con duty deshabilitado por diseño (comparabilidad con Pueyo 2024), y con
+la compuerta apagada la disciplina es irrelevante. Las mediciones duty-on de
+7200 s de esta misma sesión sí superaban la ventana y por eso daban ~1.1% y no
+~6%.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
