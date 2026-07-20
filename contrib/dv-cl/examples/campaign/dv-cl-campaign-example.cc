@@ -1382,12 +1382,7 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     g_metricsCollector->SetEssentialMetricsOnly(enableMetricsEssentialOnly);
     g_metricsCollector->SetStopOnFullDepletion(stopOnFullDepletion);
     const uint32_t dataHeaderBytes = DvClDataHeader::kSerializedSize;
-    // Overhead accounting reports the beacon header as 7 B, the size of the
-    // retired experimental header, while the wire actually carries 6 B — the
-    // same off-by-one as the receive-path probe guard (see
-    // kBeaconProbeMinSize). Kept as-is so the accounting stays comparable
-    // with the published campaign; corrected together with that guard.
-    const uint32_t beaconHeaderBytes = 7U;
+    const uint32_t beaconHeaderBytes = DvClBeaconHeader::kSerializedSize;
     const uint32_t dvEntryBytes = DvClDvEntry::kEntrySize;
     g_metricsCollector->SetWireFormatMetadata(
         wireFormat, dataHeaderBytes, beaconHeaderBytes, dvEntryBytes);
