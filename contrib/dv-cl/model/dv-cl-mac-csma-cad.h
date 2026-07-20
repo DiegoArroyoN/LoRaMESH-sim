@@ -3,6 +3,8 @@
 #ifndef DV_CL_MAC_CSMA_CAD_H
 #define DV_CL_MAC_CSMA_CAD_H
 
+#include "dv-cl-regional-profile.h"
+
 #include "ns3/nstime.h"
 #include "ns3/object.h"
 #include "ns3/ptr.h"
@@ -62,6 +64,16 @@ class DvClCsmaCadMac : public Object
     {
         return m_gatedTx;
     }
+
+    /**
+     * rief Install the region whose rules this MAC obeys.
+     *
+     * Sets the duty cycle from the region and makes its dwell cap
+     * effective. Without one the MAC keeps its own attributes, which is
+     * the EU868 behaviour it has always had.
+     */
+    void SetRegionalProfile(Ptr<DvClRegionalProfile> region);
+    Ptr<DvClRegionalProfile> GetRegionalProfile() const { return m_region; }
 
     void SetDutyEnforcement(const std::string& mode);
     std::string GetDutyEnforcement() const;
@@ -151,6 +163,7 @@ class DvClCsmaCadMac : public Object
     bool m_dutyCycleEnabled;
     DutyEnforcement m_dutyEnforcement{DutyEnforcement::TIME_OFF_AIR};
     Time m_nextTxAllowed{Seconds(0)}; //!< time-off-air gate: earliest next TX
+    Ptr<DvClRegionalProfile> m_region; //!< regional rules; null = MAC attributes alone
     //! Instant at which the gate last authorised a transmission, and the airtime
     //! it authorised. Air consumed without a grant standing at the same instant
     //! is air the gate never priced.

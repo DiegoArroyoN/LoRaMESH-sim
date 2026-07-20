@@ -1654,7 +1654,6 @@ main(int argc, char* argv[])
                                TimeValue(Seconds(beaconIntervalWarmSec)));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::BeaconIntervalStable",
                                TimeValue(Seconds(beaconIntervalStableSec)));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::WireFormat", StringValue(wireFormat));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::PurePueyoBaselineMode",
                                BooleanValue(profileLower == "pueyo2024" ||
                                             profileLower == "pueyo2024_paper_like" ||
@@ -1834,7 +1833,6 @@ main(int argc, char* argv[])
     bool preambleApplied =
         Config::SetDefaultFailSafe("ns3::dvcl::DvClLoraNetDevice::PreambleSymbols",
                                    UintegerValue(preambleSymbols));
-    Config::SetDefaultFailSafe("ns3::dvcl::DvClLoraNetDevice::WireFormat", StringValue(wireFormat));
     if (!txPowerApplied)
     {
         NS_LOG_WARN("No se pudo aplicar Config::SetDefault para DvClLoraNetDevice::TxPowerDbm; se "

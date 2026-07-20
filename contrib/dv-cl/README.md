@@ -25,14 +25,19 @@ repository root carries the full validation log.
 - `model/dv-cl-metric.{h,cc}` — the composite metric behind the
   pluggable `DvClRoutingMetric` interface.
 - `model/dv-cl-stats-sink.h` — the measurement seam.
+- `model/dv-cl-regional-profile.{h,cc}` — the region: carrier, bandwidth,
+  coding rate, SF range, and the access rule it imposes (EU868 duty
+  cycle, US915 dwell time). `DvClEu868Profile` is the default.
 - `model/dv-cl-lora-net-device.{h,cc}`, `model/dv-cl-lora-energy-model.{h,cc}`,
   `model/dv-cl-energy-registry.{h,cc}` — radio, per-state energy ledger
   and reported charge.
 - `helper/dv-cl-helper.{h,cc}` — installs the stack on a NodeContainer.
 
-Two things are meant to be replaced from outside: the metric
-(`DvClRouting::SetMetric`) and the measurement sink
-(`DvClApp::SetStatsSink`). Neither requires touching the protocol.
+Three things are meant to be replaced from outside: the metric
+(`DvClRouting::SetMetric`), the measurement sink
+(`DvClApp::SetStatsSink`) and the region
+(`DvClCsmaCadMac::SetRegionalProfile`). None requires touching the
+protocol.
 
 ## Build and test
 
@@ -58,8 +63,9 @@ gcc 15.
 
 ## Known limitations
 
-- One region (EU868, 125 kHz, CR 4/5) and one channel; regional profiles
-  are the next planned step.
+- Two regions ship (EU868, US915) through `DvClRegionalProfile`, on a
+  single channel each; frequency hopping and sub-band selection are not
+  modelled.
 - Low-data-rate optimisation is off, including at SF11/SF12 where the
   specification enables it.
 - The energy model prices radio states only; MCU and sensing are out of
@@ -68,8 +74,7 @@ gcc 15.
 
 ## Roadmap
 
-1. Regional profiles (EU868 sub-bands, US915 dwell time) as a pluggable
-   `RegionalProfile`.
+1. Sub-band selection and frequency hopping within a region.
 2. Remaining validation suites of the plan's phases 1-2 (Bellman-Ford
    convergence, packet conservation) promoted from scripts to
    TestSuites.

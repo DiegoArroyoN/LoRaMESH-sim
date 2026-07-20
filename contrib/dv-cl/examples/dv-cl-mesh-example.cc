@@ -154,8 +154,8 @@ main(int argc, char* argv[])
     cmd.AddValue("simTime", "simulated seconds", simTime);
     cmd.Parse(argc, argv);
 
-    // Canonical DV-CL configuration: 6-byte wire, all-to-all traffic.
-    Config::SetDefault("ns3::dvcl::DvClApp::WireFormat", StringValue("pueyo7b"));
+    // Canonical DV-CL configuration: all-to-all traffic on the 6-byte wire,
+    // which is the only wire the module implements.
     Config::SetDefault("ns3::dvcl::DvClApp::TrafficMode", StringValue("pueyo_all_to_all"));
     Config::SetDefault("ns3::dvcl::DvClApp::PueyoPacketsPerPair", UintegerValue(5));
     Config::SetDefault("ns3::dvcl::DvClApp::DataStartTimeSec", DoubleValue(60.0));

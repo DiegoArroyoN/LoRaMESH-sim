@@ -97,6 +97,10 @@ class DvClLoraNetDevice : public NetDevice
      * answers with the very parameters Send() will hand the PHY.
      */
     Time GetOnAirTimeFor(Ptr<const Packet> packet, uint8_t sf) const;
+
+    /// Install the region supplying carrier, bandwidth and coding rate.
+    void SetRegionalProfile(Ptr<DvClRegionalProfile> region) { m_region = region; }
+    Ptr<DvClRegionalProfile> GetRegionalProfile() const { return m_region; }
     bool SendFrom(Ptr<Packet> packet,
                   const Address& source,
                   const Address& dest,
@@ -154,6 +158,7 @@ class DvClLoraNetDevice : public NetDevice
     Ptr<Node> m_node;
     lorawan::LoraTxParameters BuildTxParams(uint8_t sf) const;
 
+    Ptr<DvClRegionalProfile> m_region; //!< regional PHY parameters; null = EU868 defaults
     Ptr<DvClCsmaCadMac> m_mac;
     Ptr<DvClEnergyRegistry> m_energyModel;      //!< campaign energy engine (registry)
     Ptr<DvClLoraEnergyModel> m_loraEnergyModel; ///< ns-3 energy framework model

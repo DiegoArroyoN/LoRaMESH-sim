@@ -200,6 +200,16 @@ DvClCsmaCadMac::CanTransmitNow(double toaSeconds)
         return true;
     }
 
+    // A dwell cap is not a budget: a packet longer than the region allows is
+    // illegal however long the radio waits, so it is refused before any
+    // duty-cycle reasoning.
+    if (m_region && !m_region->FitsDwellTime(Seconds(toaSeconds)))
+    {
+        NS_LOG_WARN("DvClCsmaCadMac: " << toaSeconds << "s exceeds the "
+                                       << m_region->GetName() << " dwell cap");
+        return false;
+    }
+
     if (m_dutyEnforcement == DutyEnforcement::TIME_OFF_AIR)
     {
         const bool ready = Simulator::Now() >= m_nextTxAllowed;
@@ -237,6 +247,16 @@ DvClCsmaCadMac::CanTransmitNow(double toaSeconds)
                     << "% limit=" << m_dutyCycleLimit * 100.0 << "%");
     }
     return allowed;
+}
+
+void
+DvClCsmaCadMac::SetRegionalProfile(Ptr<DvClRegionalProfile> region)
+{
+    m_region = region;
+    if (m_region)
+    {
+        SetDutyCycleLimit(m_region->GetDutyCycleLimit());
+    }
 }
 
 void

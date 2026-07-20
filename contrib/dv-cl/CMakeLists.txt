@@ -3,6 +3,7 @@ build_lib(
   SOURCE_FILES
     model/dv-cl-toa.cc
     model/dv-cl-metric.cc
+    model/dv-cl-regional-profile.cc
     model/dv-cl-wire.cc
     model/dv-cl-routing.cc
     model/dv-cl-mac-csma-cad.cc
@@ -18,6 +19,7 @@ build_lib(
   HEADER_FILES
     model/dv-cl-toa.h
     model/dv-cl-metric.h
+    model/dv-cl-regional-profile.h
     model/dv-cl-wire.h
     model/dv-cl-routing.h
     model/dv-cl-mac-csma-cad.h
@@ -41,4 +43,5 @@ build_lib(
     test/dv-cl-routing-test-suite.cc
     test/dv-cl-mac-test-suite.cc
     test/dv-cl-energy-test-suite.cc
+    test/dv-cl-region-test-suite.cc
 )

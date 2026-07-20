@@ -35,6 +35,9 @@ Two seams are meant to be used from outside the module:
 * ``DvClRoutingMetric`` — the cost function. ``DvClCompositeMetric`` is
   the metric of the paper; a different one (ETX, RSSI, learned) is
   plugged with ``DvClRouting::SetMetric`` without touching the protocol.
+* ``DvClRegionalProfile`` — the region. Ships ``DvClEu868Profile``
+  (default) and ``DvClUs915Profile``; a new region is a subclass, not an
+  edit to the protocol.
 * ``DvClStatsSink`` — measurement. The module emits primitive events
   through this interface instead of writing files, so experiments attach
   their own collector and tests attach probes. A null sink is legal.
@@ -74,6 +77,22 @@ above ``EnergyHi``, one below ``EnergyLo``, a power law of exponent
 ``EnergyPow`` in between. Defaults are 0.60, 0.15, 0.25, 0.50, 0.20 and
 2. All are ns-3 Attributes, on the metric and mirrored on the routing.
 
+Regions
+=======
+
+A region states the PHY parameters and the rule bounding channel
+occupancy, and the two rules in use are not variants of one another:
+
+* **EU868** bounds the *fraction* of time occupied — a duty cycle, paid
+  after the fact by staying silent in proportion to the air just used.
+* **US915** bounds the *length of a single* transmission — a 400 ms
+  dwell time, checked before the fact. A packet exceeding it is refused
+  outright; no amount of waiting makes it legal, which is why its uplink
+  spreading factors stop at SF10.
+
+``DvClCsmaCadMac::SetRegionalProfile`` installs one; without it the MAC
+keeps its own attributes, which is the EU868 behaviour it has always had.
+
 Duty cycle
 ==========
 
@@ -99,8 +118,8 @@ without a standing authorisation are counted
 Scope and limitations
 =====================
 
-* One region (EU868, 125 kHz, CR 4/5) and one channel. Multi-region
-  support is the next planned step, behind a regional profile.
+* One channel per region; sub-band selection and frequency hopping are
+  not modelled.
 * Low-data-rate optimisation is off, including at SF11/SF12 where the
   specification enables it.
 * The energy model prices radio states only; MCU and sensing are out of

@@ -343,7 +343,8 @@ DvClLoraNetDevice::Send(Ptr<Packet> packet, const Address& dest, uint16_t protoc
     NotifyRadioStateChange(0); // 0 = TX
 
     // Enviar paquete por PHY (EU868 = 868 MHz)
-    m_phy->Send(txPacket, txParams, 868000000, txPowerDbm);
+    const uint32_t carrierHz = m_region ? m_region->GetFrequencyHz() : 868000000;
+    m_phy->Send(txPacket, txParams, carrierHz, txPowerDbm);
     NS_LOG_INFO("DvClLoraNetDevice::Send EJECUTADO en node " << GetNode()->GetId()
                                                              << " size=" << txPacket->GetSize());
 
@@ -708,8 +709,8 @@ DvClLoraNetDevice::BuildTxParams(uint8_t sf) const
     lorawan::LoraTxParameters p;
     p.sf = sf;
     p.headerDisabled = false;
-    p.codingRate = 1;
-    p.bandwidthHz = 125000;
+    p.codingRate = m_region ? m_region->GetCodingRate() : 1;
+    p.bandwidthHz = m_region ? m_region->GetBandwidthHz() : 125000;
     p.nPreamble = m_preambleSymbols;
     p.crcEnabled = true;
     p.lowDataRateOptimizationEnabled = false;
