@@ -51,6 +51,11 @@ class DvClCsmaCadMac : public Object
         SLIDING_WINDOW, //!< legacy: sum over the trailing window (reproduces old runs)
     };
 
+    /// Transmissions that consumed air without a same-instant gate grant.
+    uint64_t GetUngatedTxCount() const { return m_ungatedTx; }
+    /// Transmissions that were authorised at the instant they went on air.
+    uint64_t GetGatedTxCount() const { return m_gatedTx; }
+
     void SetDutyEnforcement(const std::string& mode);
     std::string GetDutyEnforcement() const;
 
@@ -139,6 +144,13 @@ class DvClCsmaCadMac : public Object
     bool m_dutyCycleEnabled;
     DutyEnforcement m_dutyEnforcement{DutyEnforcement::TIME_OFF_AIR};
     Time m_nextTxAllowed{Seconds(0)}; //!< time-off-air gate: earliest next TX
+    //! Instant at which the gate last authorised a transmission, and the airtime
+    //! it authorised. Air consumed without a grant standing at the same instant
+    //! is air the gate never priced.
+    Time m_lastGrantAt{Seconds(-1)};
+    double m_lastGrantToa{0.0};
+    uint64_t m_ungatedTx{0};
+    uint64_t m_gatedTx{0};
     CadDecisionModel m_cadDecisionModel;
     CadDurationMode m_cadDurationMode;
     uint8_t m_cadSymbols;

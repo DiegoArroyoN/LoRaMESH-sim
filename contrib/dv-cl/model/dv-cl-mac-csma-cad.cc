@@ -202,6 +202,11 @@ DvClCsmaCadMac::CanTransmitNow(double toaSeconds)
     if (m_dutyEnforcement == DutyEnforcement::TIME_OFF_AIR)
     {
         const bool ready = Simulator::Now() >= m_nextTxAllowed;
+        if (ready)
+        {
+            m_lastGrantAt = Simulator::Now();
+            m_lastGrantToa = toaSeconds;
+        }
         if (!ready)
         {
             NS_LOG_WARN("DvClCsmaCadMac: still off air until "
@@ -219,6 +224,11 @@ DvClCsmaCadMac::CanTransmitNow(double toaSeconds)
     }
 
     const bool allowed = projected <= m_dutyCycleLimit;
+    if (allowed)
+    {
+        m_lastGrantAt = Simulator::Now();
+        m_lastGrantToa = toaSeconds;
+    }
     if (!allowed)
     {
         NS_LOG_WARN("DvClCsmaCadMac: DUTY limit exceeded current="
@@ -250,6 +260,22 @@ DvClCsmaCadMac::NotifyTxStart(double toaSeconds)
     const Time duration = Seconds(toaSeconds);
     // ETSI EN 300 220: pay for the air just used before taking any more. Mirrors
     // ns-3's own lorawan module (LogicalLoraChannelHelper::AddEvent).
+    if (m_dutyCycleEnabled && m_lastGrantAt != now)
+    {
+        ++m_ungatedTx;
+        NS_LOG_WARN("UNGATED_TX t=" << now.GetSeconds() << " toa=" << toaSeconds
+                                    << " lastGrantAt=" << m_lastGrantAt.GetSeconds()
+                                    << " grantedToa=" << m_lastGrantToa);
+    }
+    else if (m_dutyCycleEnabled)
+    {
+        ++m_gatedTx;
+        if (toaSeconds > m_lastGrantToa + 1e-9)
+        {
+            NS_LOG_WARN("UNDERPRICED_TX t=" << now.GetSeconds() << " actual=" << toaSeconds
+                                            << " granted=" << m_lastGrantToa);
+        }
+    }
     if (m_dutyCycleLimit > 0.0)
     {
         m_nextTxAllowed = now + Seconds(toaSeconds / m_dutyCycleLimit);
