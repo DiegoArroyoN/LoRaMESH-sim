@@ -699,6 +699,9 @@ main(int argc, char* argv[])
         applyPueyoComparableBase();
         routeMetricMode = "toa_only";
         sfLinkMode = "deterministic_sensitivity";
+        // Sin esto el PHY espera una adquisicion por escaneo que esta apagada y
+        // descarta casi toda recepcion: 13 beacons en 3000 s y ninguna ruta.
+        pueyoFloraLikeRx = true;
         NS_LOG_WARN("Aplicando profile=pueyo2024: defaults estrictos para comparabilidad.");
     }
     else if (profileLower == "pueyo2024_paper_like")
@@ -839,6 +842,9 @@ main(int argc, char* argv[])
         useBeaconBattery = true; // §BatBeacon
         socHysteresisPercent = 5;
         sfLinkMode = "observed_rxsf";
+        // Idem pueyo2024: la combinacion por defecto (sin escaneo y sin
+        // recepcion estilo FLoRa) deja al receptor sin forma de engancharse.
+        pueyoFloraLikeRx = true;
         NS_LOG_WARN("Aplicando profile=proposal_pueyo_like_observed: base Pueyo + composite_score "
                     "+ CSMA + duty 1% + observed_rxsf.");
     }
@@ -1009,6 +1015,8 @@ main(int argc, char* argv[])
     {
         validatePueyoComparableBase(profileLower);
         NS_ABORT_MSG_IF(cfg.enableCsma, "Error: profile=pueyo2024 requiere enableCsma=false");
+        NS_ABORT_MSG_IF(!pueyoFloraLikeRx,
+                        "Error: profile=pueyo2024 requiere pueyoFloraLikeRx=true");
         NS_ABORT_MSG_IF(cfg.enableDutyCycle || cfg.dutyLimit != 1.0,
                         "Error: profile=pueyo2024 requiere duty disabled y dutyLimit=1.0");
         NS_ABORT_MSG_IF(routeMetricMode != "toa_only",
@@ -1165,6 +1173,9 @@ main(int argc, char* argv[])
             NS_ABORT_MSG_IF(
                 !prioritizeBeacons,
                 "Error: profile=proposal_pueyo_like_observed requiere PrioritizeBeacons=true");
+        NS_ABORT_MSG_IF(!pueyoFloraLikeRx,
+                        "Error: profile=proposal_pueyo_like_observed requiere "
+                        "pueyoFloraLikeRx=true");
             NS_ABORT_MSG_IF(pueyoStrictQueueScheduler,
                             "Error: profile=proposal_pueyo_like_observed requiere "
                             "PueyoStrictQueueScheduler=false");
