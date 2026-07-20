@@ -662,6 +662,50 @@ espaciado continuo (lo que hacen los dispositivos reales) no es solo lo
 correcto normativamente, también es lo que mejor rinde** — la conformidad no
 cuesta rendimiento, lo gana.
 
+## 2026-07-20 — HALLAZGO CRÍTICO: la campaña no ejercita el aporte de la tesis
+
+Análisis multi-eje de las 360 corridas (energía, latencia, overhead, balance de
+carga, vida útil), no solo PDR.
+
+**Los cinco perfiles comparables son indistinguibles en TODOS los ejes**, no solo
+en PDR (n=9, media de 10 semillas):
+
+| perfil | PDR | J/entregado | latencia media | overhead | dispersión carga |
+|---|---|---|---|---|---|
+| `pueyo2024_paper_like_csmacad` | 0.1706 | 0.9024 | 0.178 s | 0.161 | 0.0055 |
+| `proposal_pueyo_like_csmacad` | 0.1679 | 0.9081 | 0.178 s | 0.163 | 0.0059 |
+| `csmacad_free_backoff` | 0.1674 | 0.9155 | 0.175 s | 0.161 | 0.0062 |
+| `pueyo2024_paper_like` | 0.1688 | 0.9105 | 0.174 s | 0.161 | 0.0055 |
+| `proposal_pueyo_like_aloha` | 0.1657 | 0.9174 | 0.172 s | 0.165 | 0.0054 |
+| `pueyo2024` (baseline débil) | 0.0733 | **19.45** | 1.87 s | 0.187 | **0.0417** |
+
+**Causa mecánica identificada.** El término energético es delta*Psi(SoC), y
+`Psi(b) = 0` para `b >= EnergyHi = 0.50`. En las 360 corridas:
+
+- **0 de 240 corridas tienen algún nodo muerto** (`fnd_s = -1` en todas).
+- La carga restante mínima es **~0.967**.
+
+Es decir: **todos los nodos permanecen siempre por encima de 0.50, luego Psi = 0
+para todos en todo instante, y la métrica compuesta se reduce a alpha*ToA +
+beta.** El término que constituye el aporte de la tesis **nunca se activa**.
+
+La propuesta no es indistinguible de los baselines de solo-ToA porque el aporte
+falle: **en este régimen la propuesta ES solo-ToA**. La campaña no puede, por
+construcción, medir lo que la tesis afirma.
+
+**Consecuencia:** ningún resultado de esta campaña —ni a favor ni en contra— dice
+nada sobre el aporte energético. Las comparaciones válidas que sí deja son las de
+disciplina de duty (entrada anterior) y la del baseline débil `pueyo2024`, que
+difiere en cuatro factores simultáneos (ALOHA, solo-ToA, rango SF completo,
+recepción no-FLoRa) y por tanto **no aísla ninguna contribución**.
+
+**Qué haría falta para probar la tesis:** que los nodos crucen los umbrales
+`EnergyLo=0.20` y `EnergyHi=0.50`. A la tasa observada (~3% de carga por 2 h) se
+requerirían ~33 h simuladas (~120 000 s) para llegar al 50%. Con 12 s de reloj
+por corrida de 7200 s, una campaña de vida útil costaría ~200 s por corrida:
+**perfectamente viable**. La alternativa más rápida es dimensionar la batería
+inicial para que arranque cerca de los umbrales.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
