@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include "ns3/double.h"
+#include "ns3/string.h"
 #include "ns3/boolean.h"
 #include "ns3/dv-cl-mac-csma-cad.h"
 #include "ns3/random-variable-stream.h"
@@ -70,6 +72,9 @@ class DvClMacDutyRollingTestCase : public TestCase
     void DoRun() override
     {
         m_mac = CreateObject<DvClCsmaCadMac>();
+        // These cases pin the legacy trailing-sum discipline; the default is now
+        // the ETSI time-off-air gate, covered by DvClMacTimeOffAirTestCase.
+        m_mac->SetAttribute("DutyEnforcement", StringValue("sliding_window"));
         // defaults: limit 0.01, window 1h, enabled.
         m_mac->NotifyTxStart(3.6);
         Simulator::Schedule(Seconds(10), &DvClMacDutyRollingTestCase::AtT10, this);
@@ -140,12 +145,58 @@ class DvClMacBackoffBoundsTestCase : public TestCase
  * \ingroup dv-cl
  * The dv-cl-mac test suite.
  */
+/**
+ * \ingroup dv-cl
+ * rief The default duty gate follows ETSI EN 300 220: after transmitting for
+ * T the radio stays silent until T/limit has elapsed, which is what ns-3's own
+ * lorawan module does (LogicalLoraChannelHelper::AddEvent) and what bounds the
+ * ratio over every window rather than only at transmission instants.
+ */
+class DvClMacTimeOffAirTestCase : public TestCase
+{
+  public:
+    DvClMacTimeOffAirTestCase()
+        : TestCase("dv-cl mac duty: ETSI time-off-air gate")
+    {
+    }
+
+  private:
+    Ptr<DvClCsmaCadMac> m_mac;
+
+    void AfterTx()
+    {
+        // 1.8 s of air at 1% owes 180 s of silence measured from the start.
+        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(0.1), false, "still off air at t=100");
+    }
+
+    void WhenFree()
+    {
+        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(0.1), true, "free again at t=181");
+    }
+
+    void DoRun() override
+    {
+        m_mac = CreateObject<DvClCsmaCadMac>();
+        m_mac->SetAttribute("DutyCycleLimit", DoubleValue(0.01));
+        NS_TEST_ASSERT_MSG_EQ(m_mac->GetDutyEnforcement(), "time_off_air", "default is ETSI");
+        NS_TEST_ASSERT_MSG_EQ(m_mac->CanTransmitNow(1.8), true, "idle radio may transmit");
+        m_mac->NotifyTxStart(1.8);
+        Simulator::Schedule(Seconds(100), &DvClMacTimeOffAirTestCase::AfterTx, this);
+        Simulator::Schedule(Seconds(181), &DvClMacTimeOffAirTestCase::WhenFree, this);
+        Simulator::Stop(Seconds(200));
+        Simulator::Run();
+        Simulator::Destroy();
+        m_mac = nullptr;
+    }
+};
+
 class DvClMacTestSuite : public TestSuite
 {
   public:
     DvClMacTestSuite()
         : TestSuite("dv-cl-mac", Type::UNIT)
     {
+        AddTestCase(new DvClMacTimeOffAirTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClMacDutyRollingTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClMacDutyDisabledTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClMacBackoffBoundsTestCase, TestCase::Duration::QUICK);

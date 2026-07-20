@@ -4,6 +4,7 @@
 
 #include "ns3/boolean.h"
 #include "ns3/double.h"
+#include "ns3/string.h"
 #include "ns3/enum.h"
 #include "ns3/log.h"
 #include "ns3/lora-channel.h"
@@ -95,6 +96,17 @@ DvClCsmaCadMac::GetTypeId()
                 TimeValue(Hours(1)),
                 MakeTimeAccessor(&DvClCsmaCadMac::SetDutyCycleWindow, &DvClCsmaCadMac::GetDutyCycleWindow),
                 MakeTimeChecker())
+            .AddAttribute(
+                "DutyEnforcement",
+                "How the duty cycle is enforced: 'time_off_air' follows ETSI EN 300 220 "
+                "and LoRaWAN (after transmitting T the radio stays silent until T/limit "
+                "has elapsed, which bounds the ratio over every window); 'sliding_window' "
+                "keeps the legacy trailing-sum gate, which is only checked at transmission "
+                "instants and lets the true rolling peak exceed the limit.",
+                StringValue("time_off_air"),
+                MakeStringAccessor(&DvClCsmaCadMac::SetDutyEnforcement,
+                                   &DvClCsmaCadMac::GetDutyEnforcement),
+                MakeStringChecker())
             .AddAttribute("DutyCycleEnabled",
                           "Enable/disable duty cycle enforcement.",
                           BooleanValue(true),
@@ -187,6 +199,17 @@ DvClCsmaCadMac::CanTransmitNow(double toaSeconds)
         return true;
     }
 
+    if (m_dutyEnforcement == DutyEnforcement::TIME_OFF_AIR)
+    {
+        const bool ready = Simulator::Now() >= m_nextTxAllowed;
+        if (!ready)
+        {
+            NS_LOG_WARN("DvClCsmaCadMac: still off air until "
+                        << m_nextTxAllowed.GetSeconds() << "s");
+        }
+        return ready;
+    }
+
     CleanOldTxHistory();
     const double dutyCycle = GetDutyCycleUsed();
     double projected = dutyCycle;
@@ -206,11 +229,31 @@ DvClCsmaCadMac::CanTransmitNow(double toaSeconds)
 }
 
 void
+DvClCsmaCadMac::SetDutyEnforcement(const std::string& mode)
+{
+    m_dutyEnforcement = (mode == "sliding_window") ? DutyEnforcement::SLIDING_WINDOW
+                                                   : DutyEnforcement::TIME_OFF_AIR;
+}
+
+std::string
+DvClCsmaCadMac::GetDutyEnforcement() const
+{
+    return (m_dutyEnforcement == DutyEnforcement::SLIDING_WINDOW) ? "sliding_window"
+                                                                  : "time_off_air";
+}
+
+void
 DvClCsmaCadMac::NotifyTxStart(double toaSeconds)
 {
     CleanOldTxHistory();
     const Time now = Simulator::Now();
     const Time duration = Seconds(toaSeconds);
+    // ETSI EN 300 220: pay for the air just used before taking any more. Mirrors
+    // ns-3's own lorawan module (LogicalLoraChannelHelper::AddEvent).
+    if (m_dutyCycleLimit > 0.0)
+    {
+        m_nextTxAllowed = now + Seconds(toaSeconds / m_dutyCycleLimit);
+    }
     m_txHistory.emplace_back(now, duration);
     NS_LOG_DEBUG("DvClCsmaCadMac: TX recorded duration=" << duration.GetSeconds() << "s dc="
                                                      << GetDutyCycleUsed() * 100.0 << "%");

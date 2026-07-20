@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <deque>
+#include <string>
 
 namespace ns3
 {
@@ -42,6 +43,16 @@ class DvClCsmaCadMac : public Object
     static TypeId GetTypeId();
     DvClCsmaCadMac();
     ~DvClCsmaCadMac() override = default;
+
+    /// Duty enforcement discipline; see the DutyEnforcement attribute.
+    enum class DutyEnforcement
+    {
+        TIME_OFF_AIR,   //!< ETSI EN 300 220 / LoRaWAN: silence proportional to airtime
+        SLIDING_WINDOW, //!< legacy: sum over the trailing window (reproduces old runs)
+    };
+
+    void SetDutyEnforcement(const std::string& mode);
+    std::string GetDutyEnforcement() const;
 
     bool CanTransmitNow();
     bool CanTransmitNow(double toaSeconds);
@@ -126,6 +137,8 @@ class DvClCsmaCadMac : public Object
     double m_toaEmaAlpha;
     double m_toaMaxFactor;
     bool m_dutyCycleEnabled;
+    DutyEnforcement m_dutyEnforcement{DutyEnforcement::TIME_OFF_AIR};
+    Time m_nextTxAllowed{Seconds(0)}; //!< time-off-air gate: earliest next TX
     CadDecisionModel m_cadDecisionModel;
     CadDurationMode m_cadDurationMode;
     uint8_t m_cadSymbols;
