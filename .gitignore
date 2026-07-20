@@ -8,6 +8,11 @@ build/
 *.pcap
 *.csv
 *.txt
+# ...but CMake build files are source, not artifacts: the blanket *.txt rule
+# above silently kept the dv-cl module's build system out of the repository,
+# leaving the pushed module unbuildable for anyone who cloned it.
+!CMakeLists.txt
+!**/CMakeLists.txt
 *.png
 *.html
 *.xml

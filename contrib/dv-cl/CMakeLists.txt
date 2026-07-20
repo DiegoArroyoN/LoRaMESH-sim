@@ -1,0 +1,46 @@
+build_lib(
+  LIBNAME dv-cl
+  SOURCE_FILES
+    model/dv-cl-toa.cc
+    model/dv-cl-metric.cc
+    model/dv-cl-wire.cc
+    model/dv-cl-routing.cc
+    model/dv-cl-mac-csma-cad.cc
+    model/dv-cl-lora-energy-model.cc
+    model/dv-cl-metric-tag.cc
+    model/dv-cl-mac-header.cc
+    model/dv-cl-lora-net-device.cc
+    model/dv-cl-stats-sink.cc
+    model/dv-cl-energy-registry.cc
+    model/dv-cl-legacy-wire-v2.cc
+    model/dv-cl-app.cc
+    helper/dv-cl-helper.cc
+    helper/dv-cl-lora-energy-model-helper.cc
+  HEADER_FILES
+    model/dv-cl-toa.h
+    model/dv-cl-metric.h
+    model/dv-cl-wire.h
+    model/dv-cl-routing.h
+    model/dv-cl-mac-csma-cad.h
+    model/dv-cl-lora-energy-model.h
+    model/dv-cl-metric-tag.h
+    model/dv-cl-mac-header.h
+    model/dv-cl-lora-net-device.h
+    model/dv-cl-stats-sink.h
+    model/dv-cl-energy-registry.h
+    model/dv-cl-legacy-wire-v2.h
+    model/dv-cl-app.h
+    helper/dv-cl-helper.h
+    helper/dv-cl-lora-energy-model-helper.h
+  LIBRARIES_TO_LINK
+    ${libcore}
+    ${libnetwork}
+    ${liblorawan}
+    ${libenergy}
+  TEST_SOURCES
+    test/dv-cl-test-suite.cc
+    test/dv-cl-wire-test-suite.cc
+    test/dv-cl-routing-test-suite.cc
+    test/dv-cl-mac-test-suite.cc
+    test/dv-cl-energy-test-suite.cc
+)
