@@ -48,19 +48,6 @@ using namespace ns3::lorawan;
 
 namespace
 {
-std::string
-NormalizeWireFormat(std::string value)
-{
-    for (char& ch : value)
-    {
-        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-    }
-    if (value != "v2" && value != "pueyo7b")
-    {
-        value = "v1";
-    }
-    return value;
-}
 
 Mac48Address
 LogicalIdToPseudoMac48(uint16_t logicalId)
@@ -87,14 +74,6 @@ DvClLoraNetDevice::GetTypeId()
                                           DoubleValue(14.0),
                                           MakeDoubleAccessor(&DvClLoraNetDevice::m_txPowerDbm),
                                           MakeDoubleChecker<double>())
-                            .AddAttribute("WireFormat",
-                                          "Packet wire format selector: pueyo7b (current "
-                                          "comparable default) | v2 (legacy generic seq16) | "
-                                          "v1 (legacy).",
-                                          StringValue("pueyo7b"),
-                                          MakeStringAccessor(&DvClLoraNetDevice::SetWireFormat,
-                                                             &DvClLoraNetDevice::GetWireFormat),
-                                          MakeStringChecker())
                             .AddAttribute("PreambleSymbols",
                                           "LoRa preamble symbols used to build PHY TX parameters.",
                                           UintegerValue(8),
@@ -249,17 +228,7 @@ DvClLoraNetDevice::~DvClLoraNetDevice()
 {
 }
 
-void
-DvClLoraNetDevice::SetWireFormat(const std::string& format)
-{
-    m_wireFormat = NormalizeWireFormat(format);
-}
 
-std::string
-DvClLoraNetDevice::GetWireFormat() const
-{
-    return m_wireFormat;
-}
 
 void
 DvClLoraNetDevice::SetPhy(Ptr<LoraPhy> phy)
@@ -329,26 +298,7 @@ DvClLoraNetDevice::Send(Ptr<Packet> packet, const Address& dest, uint16_t protoc
     }
 
     Ptr<Packet> txPacket = packet;
-    if (m_wireFormat == "v1")
-    {
-        // v1: Adjuntar cabecera L2 explícita.
-        DvClMacHeader macHdr;
-        macHdr.SetSrc(m_address);
-        Address resolvedDest = dest;
-        if (resolvedDest.IsInvalid())
-        {
-            resolvedDest = GetBroadcast();
-        }
-        if (!resolvedDest.IsInvalid())
-        {
-            macHdr.SetDst(Mac48Address::ConvertFrom(resolvedDest));
-        }
-        else
-        {
-            macHdr.SetDst(Mac48Address("ff:ff:ff:ff:ff:ff"));
-        }
-        txPacket->AddHeader(macHdr);
-    }
+
 
     // Volcado pcap de TX
     if (m_pcapTx)
@@ -494,19 +444,8 @@ DvClLoraNetDevice::Receive(Ptr<const Packet> packet)
     // Esto evita que el parser DV interprete bytes de header como payload de rutas.
     Address srcAddr = Address();
     DvClMacHeader macHdr;
-    if (m_wireFormat == "v1" && pktForUpper->GetSize() >= macHdr.GetSerializedSize())
-    {
-        const uint32_t rawSize = pktForUpper->GetSize();
-        const uint32_t removed = pktForUpper->RemoveHeader(macHdr);
-        if (removed == macHdr.GetSerializedSize())
-        {
-            srcAddr = macHdr.GetSrc();
-            NS_LOG_DEBUG("NETDEV_RX_STRIP_L2 node=" << (m_node ? m_node->GetId() : -1)
-                                                    << " rawSize=" << rawSize
-                                                    << " payloadSize=" << pktForUpper->GetSize());
-        }
-    }
-    else if (m_wireFormat != "v1" && pktForUpper->GetSize() >= kBeaconProbeMinSize)
+
+    if (pktForUpper->GetSize() >= kBeaconProbeMinSize)
     {
         // Recover the logical src from the on-air beacon header and expose it
         // as the callback "from" address so the upper layer can learn the
@@ -539,20 +478,7 @@ DvClLoraNetDevice::Receive(Ptr<const Packet> packet)
         else
         {
             // v1: filtro por expectedNextHop desde DvClMetricTag.
-            if (m_wireFormat == "v1")
-            {
-                uint32_t myId = m_node ? m_node->GetId() : 0;
-                uint16_t expectedNextHop = rxTag.GetExpectedNextHop();
-                uint16_t finalDst = rxTag.GetDst();
-                if (myId != expectedNextHop && myId != finalDst)
-                {
-                    NS_LOG_DEBUG("UNICAST_FILTER: node=" << myId
-                                                         << " DROP: expectedNextHop="
-                                                         << expectedNextHop
-                                                         << " finalDst=" << finalDst);
-                    return;
-                }
-            }
+
         }
         // Compute RX duration: use ToA from tag if available, else compute from packet
         double duration = rxTag.GetToaUs() / 1e6;

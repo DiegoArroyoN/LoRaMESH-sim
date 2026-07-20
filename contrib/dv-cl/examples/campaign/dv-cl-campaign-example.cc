@@ -1257,8 +1257,8 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     NS_ABORT_MSG_IF(preambleSymbols < 6 || preambleSymbols > 64,
                     "Error: preambleSymbols debe estar en [6,64], valor actual: "
                         << preambleSymbols);
-    NS_ABORT_MSG_IF(wireFormat != "v1" && wireFormat != "v2" && wireFormat != "pueyo7b",
-                    "Error: wireFormat debe ser 'pueyo7b', 'v2' (legacy) o 'v1' (legacy), "
+    NS_ABORT_MSG_IF(wireFormat != "pueyo7b",
+                    "Error: el modulo implementa un unico wire (pueyo7b), "
                     "valor actual: "
                         << wireFormat);
     NS_ABORT_MSG_IF(sfControl < 7 || sfControl > 12,
@@ -1381,13 +1381,14 @@ cmd.AddValue("stopOnFullDepletion",                 "Hook dinámico: detener sim
     g_metricsCollector->SetEndWindowSec(std::max(0.0, pdrEndWindowSec));
     g_metricsCollector->SetEssentialMetricsOnly(enableMetricsEssentialOnly);
     g_metricsCollector->SetStopOnFullDepletion(stopOnFullDepletion);
-    const uint32_t dataHeaderBytes = (wireFormat == "v1")
-                                         ? 12U
-                                         : ((wireFormat == "pueyo7b")
-                                                ? DvClDataHeader::kSerializedSize
-                                                : DataWireHeaderV2::kSerializedSize);
-    const uint32_t beaconHeaderBytes = (wireFormat == "v1") ? 12U : BeaconWireHeaderV2::kSerializedSize;
-    const uint32_t dvEntryBytes = (wireFormat == "v1") ? 6U : BeaconWireHeaderV2::kEntrySize;
+    const uint32_t dataHeaderBytes = DvClDataHeader::kSerializedSize;
+    // Overhead accounting reports the beacon header as 7 B, the size of the
+    // retired experimental header, while the wire actually carries 6 B — the
+    // same off-by-one as the receive-path probe guard (see
+    // kBeaconProbeMinSize). Kept as-is so the accounting stays comparable
+    // with the published campaign; corrected together with that guard.
+    const uint32_t beaconHeaderBytes = 7U;
+    const uint32_t dvEntryBytes = DvClDvEntry::kEntrySize;
     g_metricsCollector->SetWireFormatMetadata(
         wireFormat, dataHeaderBytes, beaconHeaderBytes, dvEntryBytes);
     auto trafficIntervalFromLoad = [&trafficLoad]() {

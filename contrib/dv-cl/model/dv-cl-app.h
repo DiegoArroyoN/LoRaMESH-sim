@@ -2,7 +2,6 @@
 
 #pragma once
 #include "dv-cl-wire.h"
-#include "dv-cl-legacy-wire-v2.h"
 #include "dv-cl-metric-tag.h"
 #include "dv-cl-stats-sink.h"
 
@@ -114,8 +113,6 @@ class DvClApp : public Application
         m_collectorNodeId = collectorNodeId;
     }
 
-    void SetWireFormat(std::string format);
-    std::string GetWireFormat() const;
 
     void StartApplication() override;
     void StopApplication() override;
@@ -301,7 +298,6 @@ class DvClApp : public Application
     bool m_de{true};
 
     uint32_t m_seq{0};
-    std::string m_wireFormat{"pueyo7b"};
     uint32_t m_dataSeq{0};
     Time m_beaconWarmupEnd{Seconds(60)};
     double m_beaconWarmupSec{60.0};

@@ -131,16 +131,6 @@ FormatDecodedEntries(const std::vector<ns3::dvcl::DvEntry>& entries)
     return oss.str();
 }
 
-std::string
-NormalizeWireFormat(std::string value)
-{
-    value = ToLower(std::move(value));
-    if (value != "v2" && value != "pueyo7b")
-    {
-        value = "v1";
-    }
-    return value;
-}
 
 constexpr double kBatteryMvMin = 3000.0;
 constexpr double kBatteryMvMax = 4200.0;
@@ -643,12 +633,6 @@ DvClApp::GetTypeId()
                           BooleanValue(true),
                           MakeBooleanAccessor(&DvClApp::m_avoidImmediateBacktrack),
                           MakeBooleanChecker())
-            .AddAttribute("WireFormat",
-                          "Packet wire format selector: pueyo7b (current comparable default) | "
-                          "v2 (legacy generic) | v1 (legacy).",
-                          StringValue("pueyo7b"),
-                          MakeStringAccessor(&DvClApp::SetWireFormat, &DvClApp::GetWireFormat),
-                          MakeStringChecker())
             .AddAttribute("PurePueyoBaselineMode",
                           "Enable strict Pueyo baseline semantics for beacon selection/advertisement.",
                           BooleanValue(false),
@@ -1087,17 +1071,7 @@ DvClApp::SetRouteTimeoutFactor(double factor)
     UpdateRouteTimeout();
 }
 
-void
-DvClApp::SetWireFormat(std::string format)
-{
-    m_wireFormat = NormalizeWireFormat(std::move(format));
-}
 
-std::string
-DvClApp::GetWireFormat() const
-{
-    return m_wireFormat;
-}
 
 void
 DvClApp::BootstrapLinkAddrTableFromRx()
@@ -1117,126 +1091,7 @@ DvClApp::BootstrapLinkAddrTableFromRx()
 void
 DvClApp::BuildAndSendDv(uint8_t sf)
 {
-    if (m_wireFormat == "pueyo7b")
-    {
-        BuildAndSendDvPueyo(sf);
-        return;
-    }
-
-    // Si DV broadcasts están deshabilitados, no hacer nada
-    if (!m_enableDvBroadcast)
-    {
-        return;
-    }
-
-    const uint8_t beaconSf = sf;
-    DvClMetricTag tag;
-    tag.SetSrc(GetNode()->GetId());
-    tag.SetDst(0xFFFF);
-    tag.SetSeq(++m_seq);
-    tag.SetPrevHop(GetNode()->GetId());
-    tag.SetTtl(m_initTtl);
-    tag.SetHops(0);
-    tag.SetSf(beaconSf);
-    if (m_routing)
-    {
-        m_routing->SetSequence(m_seq);
-    }
-
-    uint16_t realBatt = GetBatteryVoltageMv();
-    // REMOVED: tag.SetRssiDbm - no se serializa, el receptor mide RSSI
-    tag.SetBatt_mV(realBatt);
-
-    // ---------------------- NUEVO: Top-N mejor score ------------------------
-    const uint32_t maxRoutes = GetBeaconRouteCapacity();
-    NS_LOG_INFO("Beacon capacity (max routes)=" << maxRoutes);
-    if (m_routing)
-    {
-        m_routing->SetMaxRoutes(maxRoutes);
-    }
-
-    std::vector<DvClMetricTag::RoutePayloadEntry> payload;
-    if (m_routing)
-    {
-        auto announcements = m_routing->GetBestRoutes(maxRoutes);
-        payload.reserve(announcements.size());
-        for (const auto& ann : announcements)
-        {
-            DvClMetricTag::RoutePayloadEntry r;
-            r.dst = ann.destination;
-            r.hops = ann.hops;
-            r.sf = ann.sf;
-            r.score = ann.scoreX100;
-            r.batt_mV = ann.batt_mV;
-            // REMOVED: rssi_dBm - no se usa en métrica
-            payload.push_back(r);
-        }
-    }
-
-    // ========================================================================
-    // FIX CRÍTICO: Crear paquete con al menos 1 byte si payload está vacío
-    // ========================================================================
-    size_t len = payload.size() * DvClMetricTag::GetRoutePayloadEntrySize();
-    uint32_t payloadSizeBytes = static_cast<uint32_t>(len);
-    if (payloadSizeBytes == 0)
-    {
-        // Beacon without routes: use 1-byte dummy to avoid empty packet
-        payloadSizeBytes = 1;
-    }
-    Ptr<Packet> p;
-
-    std::vector<uint8_t> buffer(payloadSizeBytes, 0);
-    if (len > 0)
-    {
-        DvClMetricTag::SerializeRoutePayload(payload, buffer.data(), buffer.size());
-        NS_LOG_INFO("Node " << GetNode()->GetId() << " Beacon con " << payload.size()
-                            << " rutas en payload");
-    }
-    else
-    {
-        NS_LOG_INFO("Node " << GetNode()->GetId() << " Beacon sin rutas, enviando payload dummy de "
-                            << payloadSizeBytes << " bytes");
-    }
-    p = Create<Packet>(buffer.data(), buffer.size());
-    // ------------------- FIN FIX --------------------------------------------
-
-    NS_LOG_INFO("DVTRACE_TX time=" << Simulator::Now().GetSeconds()
-                                     << " node=" << GetNode()->GetId() << " seq=" << tag.GetSeq()
-                                     << " entries=" << payload.size() << " bytes=" << buffer.size()
-                                     << " maxRoutes=" << maxRoutes
-                                     << " active=" << m_activeDestinations.size()
-                                     << " phase=" << GetBeaconPhaseLabel());
-
-    const uint32_t toaUs = ComputeLoRaToAUs(beaconSf, m_bw, m_cr, payloadSizeBytes);
-    tag.SetToaUs(toaUs);
-
-    if (m_mac && !m_mac->CanTransmitNow(toaUs / 1e6))
-    {
-        NS_LOG_INFO("FWDTRACE duty_defer time="
-                      << Simulator::Now().GetSeconds() << " node=" << GetNode()->GetId()
-                      << " src=" << tag.GetSrc() << " dst=" << tag.GetDst() << " seq="
-                      << tag.GetSeq() << " dutyUsed=" << m_mac->GetDutyCycleUsed()
-                      << " dutyLimit=" << m_mac->GetDutyCycleLimit()
-                      << " reason=duty_wait_queue");
-    }
-
-    m_lastDvBeaconTime = Simulator::Now();
-
-    const uint16_t scoreX100 = ComputeScoreX100(tag);
-    tag.SetScoreX100(scoreX100);
-
-    p->AddPacketTag(tag);
-
-    std::ostringstream oss;
-    tag.Print(oss);
-    NS_LOG_INFO("DV OUT: " << oss.str());
-    NS_LOG_INFO("BEACON_TX SF" << unsigned(beaconSf) << " node=" << GetNode()->GetId()
-                                 << " time=" << Simulator::Now().GetSeconds());
-    NS_LOG_INFO("DV_TX node" << GetNode()->GetId() << " dst=" << tag.GetDst()
-                               << " metric=" << scoreX100 << " nextHop=" << -1);
-
-    RecordBeaconScheduled(tag.GetSeq());
-    SendWithCSMA(p, tag, Address(), true);
+    BuildAndSendDvPueyo(sf);
 }
 
 void
@@ -1416,7 +1271,6 @@ DvClApp::StartApplication()
             {
                 m_meshDevice = dev;
             }
-            meshDev->SetWireFormat(m_wireFormat);
             if (m_mac)
             {
                 meshDev->SetMac(m_mac);
@@ -1926,358 +1780,7 @@ DvClApp::L2Receive(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, cons
         return false;
     }
 
-    if (m_wireFormat != "v1")
-    {
-        return L2ReceiveWire(dev, p, proto, from);
-    }
-
-    DvClMetricTag tag;
-    bool has = p->PeekPacketTag(tag);
-    NS_LOG_INFO("PeekPacketTag: node=" << GetNode()->GetId() << " has=" << has
-                                         << " dst=" << tag.GetDst() << " src=" << tag.GetSrc());
-
-    if (!has)
-    {
-        NS_LOG_INFO("RX (node=" << GetNode()->GetId() << "): packet sin DvClMetricTag");
-        return true;
-    }
-
-    // Trazas detalladas de recepción para correlacionar rutas planeadas vs recorridas.
-    NS_LOG_INFO("FWDTRACE rx time="
-                  << Simulator::Now().GetSeconds() << " node=" << GetNode()->GetId()
-                  << " src=" << tag.GetSrc() << " dst=" << tag.GetDst() << " seq=" << tag.GetSeq()
-                  << " ttl=" << unsigned(tag.GetTtl()) << " hopsSeen=" << unsigned(tag.GetHops())
-                  << " sf=" << unsigned(tag.GetSf()));
-
-    // Aprender dirección de enlace del emisor (wrapper Mac48 interno) para mapear ID lógico -> next-hop.
-    Mac48Address fromMac = Mac48Address::ConvertFrom(from);
-    uint32_t prevHop = tag.GetPrevHop();
-    if (prevHop == 0xFFFF)
-    {
-        prevHop = tag.GetSrc();
-    }
-    m_linkAddrTable[prevHop] = fromMac;
-    m_linkAddrLastSeen[prevHop] = Simulator::Now();
-
-    uint32_t myId = GetNode()->GetId();
-    uint32_t dst = tag.GetDst();
-    double energyJ = GetRemainingEnergyJ();
-    double energyFrac = GetEnergyFraction();
-    bool isData = (dst != 0xFFFF);
-    bool seenBefore = false;
-    SeenDataInfo* seenInfo = nullptr;
-    std::tuple<uint32_t, uint32_t, uint32_t> dataKey;
-    if (isData)
-    {
-        // DEBUG: Log para rastrear flujo de datos
-        NS_LOG_INFO("L2RX_DATA_ENTRY node=" << myId << " src=" << tag.GetSrc() << " dst=" << dst
-                                              << " seq=" << tag.GetSeq() << " myId==dst? "
-                                              << (myId == dst ? "YES" : "NO"));
-        NS_LOG_INFO("DATA_RX detail: node=" << myId << " src=" << tag.GetSrc() << " dst=" << dst
-                                            << " seq=" << tag.GetSeq()
-                                            << " time=" << Simulator::Now().GetSeconds() << "s"
-                                            << " sf=" << unsigned(tag.GetSf()));
-        CleanOldDedupCaches();
-        CleanOldSeenData();
-        dataKey = std::make_tuple(tag.GetSrc(), tag.GetDst(), tag.GetSeq());
-        auto itSeen = m_seenData.find(dataKey);
-        if (itSeen != m_seenData.end())
-        {
-            seenBefore = true;
-            seenInfo = &itSeen->second;
-        }
-    }
-
-    // ========================================================================
-    // CASO 1: Paquete llegó a su destino final (YO soy el destino)
-    // ========================================================================
-    if (myId == dst)
-    {
-        if (isData)
-        {
-            if (!seenBefore)
-            {
-                SeenDataInfo info;
-                info.firstSeen = Simulator::Now();
-                info.hadRoute = true;
-                info.forwarded = false;
-                m_seenData[dataKey] = info;
-            }
-            else if (seenInfo)
-            {
-                seenInfo->hadRoute = true;
-            }
-        }
-        // Entrega en sink con control de duplicados
-        auto deliveredKey = std::make_tuple(tag.GetSrc(), tag.GetDst(), tag.GetSeq());
-        if (m_deliveredSet.find(deliveredKey) != m_deliveredSet.end())
-        {
-            NS_LOG_INFO("FWDTRACE drop_dup_sink_delivered time="
-                          << Simulator::Now().GetSeconds() << " node=" << myId << " src="
-                          << tag.GetSrc() << " dst=" << tag.GetDst() << " seq=" << tag.GetSeq());
-            return true;
-        }
-        m_deliveredSet[deliveredKey] = Simulator::Now();
-        m_dataPacketsDelivered++;
-        NS_LOG_INFO(">>> DATA DELIVERED: node=" << myId << " src=" << tag.GetSrc() << " dst="
-                                                << tag.GetDst() << " seq=" << tag.GetSeq()
-                                                << " hops=" << (int)tag.GetHops());
-
-        // Registrar recepción final como ENTREGADA en red mesh (no forward).
-        LogRxEvent(tag.GetSrc(),
-                   tag.GetDst(),
-                   tag.GetSeq(),
-                   tag.GetTtl(),
-                   tag.GetHops(),
-                   tag.GetBatt_mV(),
-                   tag.GetScoreX100(),
-                   tag.GetSf(),
-                   energyJ,
-                   energyFrac,
-                   false);
-
-        if (m_stats)
-        {
-            double txTime =
-                m_stats->GetFirstTxTime(tag.GetSrc(), tag.GetDst(), tag.GetSeq());
-            double delaySec = (txTime >= 0.0) ? (Simulator::Now().GetSeconds() - txTime) : -1.0;
-            m_stats->RecordE2eDelay(tag.GetSrc(),
-                                               tag.GetDst(),
-                                               tag.GetSeq(),
-                                               tag.GetHops(),
-                                               delaySec,
-                                               p->GetSize(),
-                                               tag.GetSf(),
-                                               true);
-            m_stats->RecordEnergySnapshot(myId, energyJ, energyFrac);
-        }
-        NS_LOG_INFO("FWDTRACE deliver time=" << Simulator::Now().GetSeconds() << " node=" << myId
-                                               << " src=" << tag.GetSrc() << " dst=" << tag.GetDst()
-                                               << " seq=" << tag.GetSeq() << " hops="
-                                               << unsigned(tag.GetHops()) << " reason=dst_local");
-        return true; // NO forward si ya llegó a destino
-    }
-
-    // ========================================================================
-    // CASO 2: Beacon DV (broadcast) - Actualizar tabla de rutas
-    // ========================================================================
-    if (dst == 0xFFFF)
-    {
-        // SF EMPÍRICO: aprender SF solo desde beacons de control, no desde datos.
-        UpdateNeighborLinkSf(prevHop, tag.GetSf());
-
-        NS_LOG_INFO("DV_RX node" << myId << " from=" << tag.GetSrc() << " dst=" << tag.GetDst()
-                                   << " metric=" << tag.GetScoreX100()
-                                   << " hops=" << unsigned(tag.GetHops()));
-        NS_LOG_INFO("DVTRACE_RX_OK time="
-                      << Simulator::Now().GetSeconds() << " node=" << myId << " src="
-                      << tag.GetSrc() << " seq=" << tag.GetSeq() << " size=" << p->GetSize()
-                      << " prevHop=" << tag.GetPrevHop() << " ttl=" << unsigned(tag.GetTtl())
-                      << " hopsSeen=" << unsigned(tag.GetHops()) << " sf=" << unsigned(tag.GetSf())
-                      << " sf=" << unsigned(tag.GetSf()));
-        // 1. Aprende ruta directa hacia el vecino que transmitió el beacon
-        NS_LOG_INFO("Intento aprender ruta directa: src=" << tag.GetSrc()
-                                                          << " en node=" << GetNode()->GetId());
-        // REMOVED: neighborRssi - no se usa en métrica, obtenemos de PHY si necesario
-        // Usar el SF con el que se recibió el beacon para reflejar el enlace real.
-        uint8_t sfForNeighbor = tag.GetSf();
-        uint32_t toaUsNeighbor = ComputeLoRaToAUs(sfForNeighbor, m_bw, m_cr, p->GetSize());
-        NS_LOG_INFO("  → SF=" << unsigned(sfForNeighbor) << " toa=" << toaUsNeighbor << "us");
-        ProcessDvPayload(p, tag, fromMac, toaUsNeighbor);
-        m_lastDvRxTime = Simulator::Now();
-        uint32_t currentRoutes = m_routing ? m_routing->GetRouteCount() : 0;
-        NS_LOG_INFO("Tabla rutas tras aprender: size=" << currentRoutes);
-
-        LogRxEvent(tag.GetSrc(),
-                   tag.GetDst(),
-                   tag.GetSeq(),
-                   tag.GetTtl(),
-                   tag.GetHops(),
-                   tag.GetBatt_mV(),
-                   tag.GetScoreX100(),
-                   tag.GetSf(),
-                   energyJ,
-                   energyFrac,
-                   false);
-
-        if (m_enableDvFlooding)
-        {
-            uint8_t ttl = tag.GetTtl();
-            if (ttl == 0)
-            {
-                return true;
-            }
-            ttl -= 1;
-            uint8_t hops = tag.GetHops() + 1;
-            DvClMetricTag newTag = tag;
-            newTag.SetTtl(ttl);
-            newTag.SetHops(hops);
-            newTag.SetPrevHop(myId);
-            newTag.SetSf(m_sfControl);
-            // REMOVED: SetRssiDbm - no se serializa
-            newTag.SetBatt_mV(GetBatteryVoltageMv());
-            newTag.SetToaUs(ComputeLoRaToAUs(newTag.GetSf(), m_bw, m_cr, p->GetSize()));
-            newTag.SetScoreX100(ComputeScoreX100(newTag));
-            if (ttl > 0)
-            {
-                Simulator::Schedule(MilliSeconds(5 + (myId % 5)),
-                                    &DvClApp::ForwardWithTtl,
-                                    this,
-                                    p,
-                                    newTag);
-            }
-        }
-        return true;
-    }
-
-    // ========================================================================
-    // CASO 3: Datos unicast - Verificar si debemos forward
-    // ========================================================================
-    const RouteEntry* route = m_routing ? m_routing->GetRoute(dst) : nullptr;
-    uint8_t ttl = tag.GetTtl();
-    uint8_t hops = tag.GetHops() + 1;
-
-    bool allowForward = true;
-    bool noRoute = false;
-    bool seenDrop = false;
-    if (isData)
-    {
-        if (seenBefore)
-        {
-            if (route && seenInfo && !seenInfo->forwarded)
-            {
-                seenInfo->forwarded = true;
-                seenInfo->hadRoute = true;
-            }
-            else
-            {
-                seenDrop = true;
-                allowForward = false;
-            }
-        }
-        else
-        {
-            SeenDataInfo info;
-            info.firstSeen = Simulator::Now();
-            info.hadRoute = (route != nullptr);
-            info.forwarded = (route != nullptr);
-            m_seenData[dataKey] = info;
-            if (!route)
-            {
-                noRoute = true;
-                allowForward = false;
-            }
-        }
-    }
-
-    bool canForward = allowForward && (route != nullptr) && (ttl > 0);
-    bool backtrackDrop = false;
-    if (allowForward && route && m_avoidImmediateBacktrack)
-    {
-        const uint32_t incomingPrevHop = tag.GetPrevHop();
-        if (incomingPrevHop != 0xFFFF && route->nextHop == incomingPrevHop)
-        {
-            backtrackDrop = true;
-            allowForward = false;
-            canForward = false;
-        }
-    }
-
-    // Registrar RX aun si no se reenvía (para métricas de PDR).
-    LogRxEvent(tag.GetSrc(),
-               tag.GetDst(),
-               tag.GetSeq(),
-               tag.GetTtl(),
-               tag.GetHops(),
-               tag.GetBatt_mV(),
-               tag.GetScoreX100(),
-               tag.GetSf(),
-               energyJ,
-               energyFrac,
-               canForward);
-
-    if (!allowForward)
-    {
-        if (noRoute)
-        {
-            NS_LOG_WARN("Node " << myId << " RX DROP: No route to dst=" << dst);
-            const uint32_t routeCount = m_routing ? m_routing->GetRouteCount() : 0;
-            const bool hasGwRoute = m_routing ? m_routing->HasRoute(m_collectorNodeId) : false;
-            RouteStatus rs = ValidateRoute(dst); // REFACTORING: usar helper
-            NS_LOG_INFO("DATA_NOROUTE detail: node="
-                        << myId << " src=" << tag.GetSrc() << " dst=" << dst << " seq="
-                        << tag.GetSeq() << " time=" << Simulator::Now().GetSeconds() << "s"
-                        << " routesKnown=" << routeCount << " hasGwRoute=" << (hasGwRoute ? 1 : 0)
-                        << " hasEntry=" << (rs.exists ? 1 : 0) << " expired="
-                        << (rs.expired ? 1 : 0) << " collectorNodeId=" << m_collectorNodeId);
-            NS_LOG_INFO("FWDTRACE DATA_NOROUTE time=" << Simulator::Now().GetSeconds() << " node="
-                                                        << myId << " src=" << tag.GetSrc()
-                                                        << " dst=" << dst << " seq=" << tag.GetSeq()
-                                                        << " reason=no_route_rx");
-            CountDropNoRouteRelay();
-            DumpFullTable("DATA_NOROUTE_RX");
-        }
-        else if (seenDrop)
-        {
-            NS_LOG_INFO("FWDTRACE drop_seen_once time="
-                          << Simulator::Now().GetSeconds() << " node=" << myId
-                          << " src=" << tag.GetSrc() << " dst=" << dst << " seq=" << tag.GetSeq()
-                          << " reason=seen_data");
-        }
-        else if (backtrackDrop)
-        {
-            NS_LOG_INFO("FWDTRACE backtrack_drop time="
-                          << Simulator::Now().GetSeconds() << " node=" << myId
-                          << " src=" << tag.GetSrc() << " dst=" << dst << " seq=" << tag.GetSeq()
-                          << " nextHop=" << (route ? route->nextHop : 0)
-                          << " prevHopInPacket=" << tag.GetPrevHop() << " reason=avoid_backtrack");
-            m_dropBacktrack++;
-        }
-        return true;
-    }
-
-    // ========================================================================
-    // FILTRO CRÍTICO: Solo forward si SOY uno de los posibles next-hops
-    // En broadcast, todos reciben, pero solo nodos con ruta válida forwardean
-    // ========================================================================
-    if (ttl == 0)
-    {
-        NS_LOG_WARN("Node " << myId << " RX DROP: TTL=0");
-        NS_LOG_INFO("FWDTRACE drop_ttl time=" << Simulator::Now().GetSeconds() << " node=" << myId
-                                                << " src=" << tag.GetSrc() << " dst=" << dst
-                                                << " seq=" << tag.GetSeq()
-                                                << " reason=ttl_expired");
-        m_dropTtlExpired++;
-        return true;
-    }
-
-    ttl -= 1;
-
-    DvClMetricTag newTag = tag;
-    newTag.SetTtl(ttl);
-    newTag.SetHops(hops);
-    newTag.SetPrevHop(myId);
-    uint8_t selectedSf = m_sf;
-    newTag.SetSf(selectedSf);
-    newTag.SetToaUs(ComputeLoRaToAUs(selectedSf, m_bw, m_cr, p->GetSize()));
-    // REMOVED: SetRssiDbm - no se serializa, receptor mide RSSI
-    newTag.SetBatt_mV(GetBatteryVoltageMv());
-    newTag.SetScoreX100(ComputeScoreX100(newTag));
-
-    NS_LOG_INFO("RX DATA: src=" << tag.GetSrc() << " dst=" << dst << " seq=" << tag.GetSeq()
-                                << " hops=" << (int)tag.GetHops());
-    NS_LOG_INFO("FWD DATA: src=" << newTag.GetSrc() << " dst=" << dst << " seq=" << newTag.GetSeq()
-                                 << " hops=" << (int)hops << " nextHop=" << route->nextHop);
-    NS_LOG_INFO("FWDTRACE plan time="
-                  << Simulator::Now().GetSeconds() << " node=" << myId << " src=" << newTag.GetSrc()
-                  << " dst=" << dst << " seq=" << newTag.GetSeq() << " ttlAfter=" << unsigned(ttl)
-                  << " hopsPlanned=" << unsigned(route->hops) << " nextHop=" << route->nextHop
-                  << " reason=route_found");
-
-    // Forward datos con delay para evitar colisiones.
-    Simulator::Schedule(ComputeStudyForwardDelay(newTag), &DvClApp::ForwardWithTtl, this, p, newTag);
-
-    return true;
+    return L2ReceiveWire(dev, p, proto, from);
 }
 
 // Realiza el forwarding cuando el TTL lo permite.
@@ -2678,138 +2181,8 @@ DvClApp::PurgeExpiredRoutes()
 void
 DvClApp::SendDataToDestination(uint32_t dst, Ptr<Packet> payload)
 {
-    if (m_wireFormat == "pueyo7b")
-    {
-        (void)payload;
-        SendDataPacketPueyo7b(dst);
-        return;
-    }
-
-    TrackActiveDestination(dst);
-    const RouteEntry* route = m_routing ? m_routing->GetRoute(dst) : nullptr;
-    if (!route)
-    {
-        uint32_t nextSeq = m_dataSeq + 1;
-        NS_LOG_WARN("No route to dst=" << dst);
-        const uint32_t routeCount = m_routing ? m_routing->GetRouteCount() : 0;
-        const bool hasGwRoute = m_routing ? m_routing->HasRoute(m_collectorNodeId) : false;
-        RouteStatus rs = ValidateRoute(dst); // REFACTORING: usar helper
-        NS_LOG_INFO("DATA_NOROUTE detail: node="
-                    << GetNode()->GetId() << " src=" << GetNode()->GetId() << " dst=" << dst
-                    << " seq=" << nextSeq << " time=" << Simulator::Now().GetSeconds() << "s"
-                    << " routesKnown=" << routeCount << " hasGwRoute=" << (hasGwRoute ? 1 : 0)
-                    << " hasEntry=" << (rs.exists ? 1 : 0) << " expired=" << (rs.expired ? 1 : 0)
-                    << " collectorNodeId=" << m_collectorNodeId);
-        NS_LOG_INFO("FWDTRACE DATA_NOROUTE time="
-                      << Simulator::Now().GetSeconds() << " node=" << GetNode()->GetId()
-                      << " src=" << GetNode()->GetId() << " dst=" << dst << " seq=" << nextSeq
-                      << " reason=no_route");
-        DumpFullTable("DATA_NOROUTE_SRC");
-        DumpRoute(dst, "DATA_NOROUTE");
-        m_dataNoRoute++;
-        CountDropNoRouteSrc();
-        return;
-    }
-
-    DvClMetricTag dataTag;
-    dataTag.SetSrc(GetNode()->GetId());
-    dataTag.SetDst(dst);
-    dataTag.SetSeq(++m_dataSeq);
-    dataTag.SetPrevHop(GetNode()->GetId());
-    dataTag.SetTtl(m_initTtl);
-    dataTag.SetHops(0);
-    uint8_t dataSf = m_sf;
-    if (m_useRouteSfForData)
-    {
-        dataSf = route->sf;
-    }
-    if (m_useEmpiricalSfForData)
-    {
-        dataSf = GetDataSfForNeighbor(route->nextHop);
-    }
-    dataSf = std::clamp<uint8_t>(dataSf, m_sfMin, m_sfMax);
-    NS_LOG_DEBUG("DATA_SF_SELECT node="
-                 << GetNode()->GetId() << " nextHop=" << route->nextHop
-                 << " sf=" << unsigned(dataSf) << " routeSf=" << unsigned(route->sf)
-                 << " empirical=" << (m_useEmpiricalSfForData ? 1 : 0));
-
-    dataTag.SetSf(dataSf);
-    dataTag.SetToaUs(ComputeLoRaToAUs(dataSf, m_bw, m_cr, payload->GetSize()));
-    // REMOVED: SetRssiDbm - no se serializa
-    dataTag.SetBatt_mV(GetBatteryVoltageMv());
-    dataTag.SetScoreX100(ComputeScoreX100(dataTag));
-    // FILTRADO UNICAST: Indicar quién debe recibir este paquete
-    dataTag.SetExpectedNextHop(route->nextHop);
-
-    if (m_stats)
-    {
-        m_stats->RecordDataGenerated(dataTag.GetSrc(), dataTag.GetDst(), dataTag.GetSeq());
-    }
-
-    payload->AddPacketTag(dataTag);
-
-    Mac48Address routeMac;
-    bool usingStaleMac = false;
-    const bool hasUsableMac = ResolveUnicastNextHopLinkAddr(route->nextHop, &routeMac, &usingStaleMac);
-    const bool macFound = (m_linkAddrTable.find(route->nextHop) != m_linkAddrTable.end());
-    const bool macFresh = IsLinkAddrFresh(route->nextHop);
-    NS_LOG_INFO("LINKADDR_CHECK node" << GetNode()->GetId() << " nextHop=" << route->nextHop
-                                   << " linkAddrFound=" << (macFound ? "YES" : "NO")
-                                   << " linkAddrFresh=" << (macFresh ? "YES" : "NO")
-                                   << " staleAllowed="
-                                   << (m_allowStaleLinkAddrForUnicastData ? "YES" : "NO")
-                                   << " usingStale=" << (usingStaleMac ? "YES" : "NO"));
-
-    Ptr<Node> n = GetNode();
-    Ptr<NetDevice> dev = m_meshDevice;
-    if (!dev)
-    {
-        for (uint32_t i = 0; i < n->GetNDevices(); ++i)
-        {
-            Ptr<NetDevice> d = n->GetDevice(i);
-            if (d)
-            {
-                dev = d;
-                break;
-            }
-        }
-    }
-    if (!dev)
-    {
-        return;
-    }
-
-    Address dstAddr = hasUsableMac ? Address(routeMac) : Address();
-    if (!hasUsableMac || dstAddr.IsInvalid())
-    {
-        const uint32_t routeCount = m_routing ? m_routing->GetRouteCount() : 0;
-        const bool hasGwRoute = m_routing ? m_routing->HasRoute(m_collectorNodeId) : false;
-        RouteStatus rs = ValidateRoute(dst); // REFACTORING: usar helper
-        NS_LOG_INFO("DATA_NOROUTE detail: node="
-                    << GetNode()->GetId() << " src=" << dataTag.GetSrc() << " dst=" << dst
-                    << " seq=" << dataTag.GetSeq() << " time=" << Simulator::Now().GetSeconds()
-                    << "s"
-                    << " routesKnown=" << routeCount << " hasGwRoute=" << (hasGwRoute ? 1 : 0)
-                    << " hasEntry=" << (rs.exists ? 1 : 0) << " expired=" << (rs.expired ? 1 : 0)
-                    << " collectorNodeId=" << m_collectorNodeId << " reason=no_link_addr_for_unicast");
-        NS_LOG_INFO("FWDTRACE DATA_NOROUTE time="
-                      << Simulator::Now().GetSeconds() << " node=" << GetNode()->GetId() << " src="
-                      << dataTag.GetSrc() << " dst=" << dst << " seq=" << dataTag.GetSeq()
-                      << " nextHop=" << route->nextHop << " reason=no_link_addr_for_unicast");
-        DumpFullTable("DATA_NOROUTE_SRC");
-        DumpRoute(dst, "DATA_NOROUTE");
-        m_dataNoRoute++;
-        CountDropNoRouteSrc();
-        return;
-    }
-
-    const bool ok = dev->Send(payload, dstAddr, kProtoMesh);
-    NS_LOG_INFO("DATA_TX SF" << unsigned(dataTag.GetSf()) << " node=" << GetNode()->GetId()
-                               << " src=" << dataTag.GetSrc() << " dst=" << dst
-                               << " seq=" << dataTag.GetSeq());
-
-    NS_LOG_INFO("DATA TX: dst=" << dst << " via=" << route->nextHop << " seq=" << m_dataSeq
-                                << " ok=" << ok);
+    (void)payload;
+    SendDataPacketPueyo7b(dst);
 }
 
 Address
@@ -3814,7 +3187,7 @@ DvClApp::ProcessTxQueue()
         p->RemoveAllPacketTags();
         p->AddPacketTag(entry.tag);
 
-        if (entry.tag.GetDst() == 0xFFFF && m_wireFormat != "v1")
+        if (entry.tag.GetDst() == 0xFFFF)
         {
             if (!entry.beaconRpCounterAssigned)
             {
@@ -3829,20 +3202,10 @@ DvClApp::ProcessTxQueue()
                 beaconHdr.SetFlagsTtl(
                     PackFlagsTtl(DvClPacketType::BEACON, entry.beaconRpCounter));
                 Ptr<Packet> rebuilt = beaconPayload->Copy();
-                if (m_wireFormat == "pueyo7b")
-                {
-                    // §wire-fix: emit a real 5B pueyo header on air (was V2 7B)
-                    DvClBeaconHeader phRebuild;
-                    phRebuild.SetSrc(beaconHdr.GetSrc());
-                    phRebuild.SetDst(beaconHdr.GetDst());
-                    phRebuild.SetFlagsTtl(beaconHdr.GetFlagsTtl());
-                    phRebuild.SetSoc(beaconHdr.GetSoc());  // 6B-fix: propagate SoC through rebuild
-                    rebuilt->AddHeader(phRebuild);
-                }
-                else
-                {
-                    rebuilt->AddHeader(beaconHdr);
-                }
+                // The header parsed off the air is the header re-emitted: no
+                // rebuild into a second class, which is what used to shift the
+                // DV entries (see dv-cl-wire.h).
+                rebuilt->AddHeader(beaconHdr);
                 p = rebuilt;
             }
             else
@@ -3876,7 +3239,7 @@ DvClApp::ProcessTxQueue()
                 OnPacketTransmitted(entry.tag.GetToaUs());
                 if (entry.tag.GetDst() == 0xFFFF)
                 {
-                if (m_wireFormat != "v1" && entry.beaconRpCounterAssigned)
+                if (entry.beaconRpCounterAssigned)
                 {
                     m_beaconRpCounterTx = static_cast<uint8_t>((entry.beaconRpCounter + 1) & 0x3F);
                     const char* traceLabel =
@@ -3886,7 +3249,7 @@ DvClApp::ProcessTxQueue()
                                              << " seq=" << entry.tag.GetSeq() << " rp_counter="
                                              << unsigned(entry.beaconRpCounter)
                                              << " bytes=" << p->GetSize());
-                    if (m_pueyoValidationTrace && m_wireFormat == "pueyo7b")
+                    if (m_pueyoValidationTrace)
                     {
                         std::vector<uint8_t> raw(p->GetSize());
                         p->CopyData(raw.data(), raw.size());
@@ -4555,7 +3918,7 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
         msg.origin = src;
         msg.sequence = seqFromRp;
         msg.entries = DecodeDvEntriesPueyo(payload, 0, toaUsNeighbor, rxSf);
-        if (m_pueyoValidationTrace && m_wireFormat == "pueyo7b")
+        if (m_pueyoValidationTrace)
         {
             NS_LOG_INFO("PUEYO_VAL_RX_MSG node=" << myId << " origin=" << src
                                                    << " linkSf=" << unsigned(linkSf)
@@ -4582,22 +3945,19 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
     uint16_t via = 0;
     uint16_t seq16 = 0;
     uint8_t ttl = 0;
-    if (m_wireFormat == "pueyo7b")
+    DvClDataHeader dataHdr;
+    if (!ParseDataWirePacketPueyo7b(p, &dataHdr, &payload))
     {
-        DvClDataHeader dataHdr;
-        if (!ParseDataWirePacketPueyo7b(p, &dataHdr, &payload))
-        {
-            return true;
-        }
-        src = dataHdr.GetSrc();
-        dst = dataHdr.GetDst();
-        via = dataHdr.GetVia();
-        ttl = dataHdr.GetTtl();
-        DvClMetricTag traceTag;
-        if (p->PeekPacketTag(traceTag))
-        {
-            seq16 = static_cast<uint16_t>(traceTag.GetSeq() & 0xFFFF);
-        }
+        return true;
+    }
+    src = dataHdr.GetSrc();
+    dst = dataHdr.GetDst();
+    via = dataHdr.GetVia();
+    ttl = dataHdr.GetTtl();
+    DvClMetricTag traceTag;
+    if (p->PeekPacketTag(traceTag))
+    {
+        seq16 = static_cast<uint16_t>(traceTag.GetSeq() & 0xFFFF);
     }
 
     const uint8_t hopsSeen = (m_initTtl > ttl) ? static_cast<uint8_t>(m_initTtl - ttl) : 0;
@@ -4721,25 +4081,13 @@ DvClApp::ForwardWithTtlV2(Ptr<const Packet> pIn, uint16_t src, uint16_t dst, uin
     Ptr<Packet> payload = pIn ? pIn->Copy() : Create<Packet>(0);
     Ptr<Packet> out = payload->Copy();
 
-    if (m_wireFormat == "pueyo7b")
-    {
-        DvClDataHeader outHdr;
-        outHdr.SetSrc(src);
-        outHdr.SetDst(dst);
-        outHdr.SetVia(static_cast<uint16_t>(route->nextHop));
-        outHdr.SetFlagsTtl(PackFlagsTtl(DvClPacketType::DATA, nextTtl));
-        out->AddHeader(outHdr);
-    }
-    else
-    {
-        DataWireHeaderV2 outHdr;
-        outHdr.SetSrc(src);
-        outHdr.SetDst(dst);
-        outHdr.SetVia(static_cast<uint16_t>(route->nextHop));
-        outHdr.SetFlagsTtl(PackFlagsTtl(DvClPacketType::DATA, nextTtl));
-        outHdr.SetSeq16(seq16);
-        out->AddHeader(outHdr);
-    }
+    DvClDataHeader outHdr;
+    outHdr.SetSrc(src);
+    outHdr.SetDst(dst);
+    outHdr.SetVia(static_cast<uint16_t>(route->nextHop));
+    outHdr.SetFlagsTtl(PackFlagsTtl(DvClPacketType::DATA, nextTtl));
+    out->AddHeader(outHdr);
+
 
     DvClMetricTag traceTag;
     traceTag.SetSrc(src);
@@ -5135,197 +4483,7 @@ DvClApp::GenerateDataTraffic()
 void
 DvClApp::SendDataPacket(uint32_t dst)
 {
-    if (m_wireFormat == "pueyo7b")
-    {
-        SendDataPacketPueyo7b(dst);
-        return;
-    }
-
-    TrackActiveDestination(dst);
-    uint32_t nextSeq = m_dataSeqPerNode + 1;
-    uint32_t myId = GetNode()->GetId();
-
-    NS_LOG_INFO("APP_SEND_DATA src=" << myId << " dst=" << dst << " seq=" << nextSeq
-                                       << " time=" << Simulator::Now().GetSeconds());
-
-    // Dump de tabla DV en la ventana de interés (70s-90s)
-    double nowSec = Simulator::Now().GetSeconds();
-    if (nowSec > 70.0 && nowSec < 90.0 && m_routing)
-    {
-        NS_LOG_INFO("DV_DUMP_FULL node" << myId << " t=" << nowSec);
-        m_routing->DebugDumpRoutingTable();
-    }
-
-    const RouteEntry* route = m_routing ? m_routing->GetRoute(dst) : nullptr;
-    bool routeExists = (route != nullptr);
-    uint32_t routeNextHop = routeExists ? route->nextHop : 0;
-    uint8_t routeHops = routeExists ? route->hops : 0;
-
-    NS_LOG_INFO("FWDTRACE data_tx_attempt time="
-                  << Simulator::Now().GetSeconds() << " node=" << myId << " src=" << myId
-                  << " dst=" << dst << " seq=" << nextSeq << " routeExists=" << routeExists
-                  << " nextHop=" << routeNextHop << " hops=" << unsigned(routeHops));
-
-    m_dataPacketsGenerated++;
-    if (m_stats)
-    {
-        m_stats->RecordDataGenerated(myId, dst, nextSeq);
-    }
-
-    if (!route)
-    {
-        const uint32_t routeCount = m_routing ? m_routing->GetRouteCount() : 0;
-        const bool hasGwRoute = m_routing ? m_routing->HasRoute(m_collectorNodeId) : false;
-        RouteStatus rs = ValidateRoute(dst); // REFACTORING: usar helper
-        NS_LOG_INFO("DATA_NOROUTE detail: node="
-                    << myId << " src=" << myId << " dst=" << dst << " seq=" << nextSeq
-                    << " time=" << Simulator::Now().GetSeconds() << "s"
-                    << " routesKnown=" << routeCount << " hasGwRoute=" << (hasGwRoute ? 1 : 0)
-                    << " hasEntry=" << (rs.exists ? 1 : 0) << " expired=" << (rs.expired ? 1 : 0)
-                    << " collectorNodeId=" << m_collectorNodeId);
-        NS_LOG_INFO("FWDTRACE DATA_NOROUTE time=" << Simulator::Now().GetSeconds() << " node="
-                                                    << myId << " src=" << myId << " dst=" << dst
-                                                    << " seq=" << nextSeq << " reason=no_route");
-        m_dataNoRoute++;
-        CountDropNoRouteSrc();
-        return;
-    }
-
-    // Crear paquete de datos
-    DvClMetricTag dataTag;
-    dataTag.SetSrc(myId);
-    dataTag.SetDst(dst); // Destino final (GW)
-    dataTag.SetSeq(nextSeq);
-    dataTag.SetPrevHop(myId);
-    m_dataSeqPerNode = nextSeq;
-    dataTag.SetTtl(m_initTtl);
-    dataTag.SetHops(0);
-    uint8_t dataSf = m_sf;
-    if (m_useRouteSfForData && route)
-    {
-        dataSf = route->sf;
-    }
-    if (m_useEmpiricalSfForData && route)
-    {
-        dataSf = GetDataSfForNeighbor(route->nextHop);
-    }
-    dataSf = std::clamp<uint8_t>(dataSf, m_sfMin, m_sfMax);
-    dataTag.SetSf(dataSf);
-
-    const uint32_t toaUs = ComputeLoRaToAUs(dataSf, m_bw, m_cr, m_dataPayloadSize);
-    dataTag.SetToaUs(toaUs);
-
-    uint16_t realBatt = GetBatteryVoltageMv();
-
-    // REMOVED: dataTag.SetRssiDbm - no se serializa
-    dataTag.SetBatt_mV(realBatt);
-    dataTag.SetScoreX100(ComputeScoreX100(dataTag));
-    // FILTRADO UNICAST: Indicar quién debe recibir este paquete
-    dataTag.SetExpectedNextHop(route->nextHop);
-
-    Ptr<Packet> p = Create<Packet>(m_dataPayloadSize);
-    p->AddPacketTag(dataTag);
-
-    Mac48Address routeMac;
-    bool usingStaleMac = false;
-    const bool hasUsableMac = ResolveUnicastNextHopLinkAddr(route->nextHop, &routeMac, &usingStaleMac);
-    const bool macFound = (m_linkAddrTable.find(route->nextHop) != m_linkAddrTable.end());
-    const bool macFresh = IsLinkAddrFresh(route->nextHop);
-    NS_LOG_INFO("LINKADDR_CHECK node" << myId << " nextHop=" << route->nextHop
-                                   << " linkAddrFound=" << (macFound ? "YES" : "NO")
-                                   << " linkAddrFresh=" << (macFresh ? "YES" : "NO")
-                                   << " staleAllowed="
-                                   << (m_allowStaleLinkAddrForUnicastData ? "YES" : "NO")
-                                   << " usingStale=" << (usingStaleMac ? "YES" : "NO"));
-
-    NS_LOG_INFO("DATA src=" << dataTag.GetSrc() << " dst=" << dataTag.GetDst() << " seq="
-                            << dataTag.GetSeq() << " nextHop=" << route->nextHop // ← USAR NEXT-HOP
-                            << " toaUs=" << dataTag.GetToaUs()
-                            << " sf=" << unsigned(dataTag.GetSf()));
-
-    // Log de ruta usada para este envío (snapshot coherente con routes_raw)
-    if (m_stats)
-    {
-        m_stats->RecordRouteUsed(myId,
-                                            dataTag.GetDst(),
-                                            route->nextHop,
-                                            route->hops,
-                                            route->scoreX100,
-                                            route->seqNum);
-    }
-
-    // Log explícito de TX con linkAddr resuelta (Mac48Address como wrapper interno).
-    std::string macStr = "(unset)";
-    {
-        std::ostringstream macOss;
-        macOss << routeMac;
-        macStr = macOss.str();
-    }
-    NS_LOG_INFO("FWD_TX node" << myId << " dst=" << dst << " nextHop=" << route->nextHop
-                                << " linkAddrWrapper=" << macStr);
-    NS_LOG_INFO("LINKADDR_DUMP node" << myId << " nextHop=" << route->nextHop
-                                       << " linkAddrWrapper=" << macStr);
-
-    if (m_mac && !m_mac->CanTransmitNow(toaUs / 1e6))
-    {
-        NS_LOG_INFO("FWDTRACE duty_defer time="
-                      << Simulator::Now().GetSeconds() << " node=" << myId
-                      << " src=" << dataTag.GetSrc() << " dst=" << dst << " seq="
-                      << dataTag.GetSeq() << " dutyUsed=" << m_mac->GetDutyCycleUsed()
-                      << " dutyLimit=" << m_mac->GetDutyCycleLimit()
-                      << " reason=duty_wait_queue");
-    }
-
-    // No enviar datos sin dirección de enlace unicast resolvible (stale permitido por política).
-    Address dstAddr = hasUsableMac ? Address(routeMac) : Address();
-    if (!hasUsableMac || dstAddr.IsInvalid())
-    {
-        const uint32_t routeCount = m_routing ? m_routing->GetRouteCount() : 0;
-        const bool hasGwRoute = m_routing ? m_routing->HasRoute(m_collectorNodeId) : false;
-        RouteStatus rs = ValidateRoute(dst); // REFACTORING: usar helper
-        NS_LOG_INFO("DATA_NOROUTE detail: node="
-                    << myId << " src=" << dataTag.GetSrc() << " dst=" << dst << " seq="
-                    << dataTag.GetSeq() << " time=" << Simulator::Now().GetSeconds() << "s"
-                    << " routesKnown=" << routeCount << " hasGwRoute=" << (hasGwRoute ? 1 : 0)
-                    << " hasEntry=" << (rs.exists ? 1 : 0) << " expired=" << (rs.expired ? 1 : 0)
-                    << " collectorNodeId=" << m_collectorNodeId << " reason=no_link_addr_for_unicast");
-        NS_LOG_INFO("FWDTRACE DATA_NOROUTE time="
-                      << Simulator::Now().GetSeconds() << " node=" << myId << " src="
-                      << dataTag.GetSrc() << " dst=" << dst << " seq=" << dataTag.GetSeq()
-                      << " nextHop=" << route->nextHop << " reason=no_link_addr_for_unicast");
-        m_dataNoRoute++;
-        CountDropNoRouteSrc();
-        return;
-    }
-
-    double txPowerDbm = -1.0;
-    Ptr<DvClLoraNetDevice> meshDevTx =
-        DynamicCast<DvClLoraNetDevice>(GetNode()->GetDevice(0));
-    if (meshDevTx)
-    {
-        txPowerDbm = meshDevTx->GetTxPowerDbm();
-    }
-    const uint32_t cadFailures = m_mac ? m_mac->GetFailureCount() : 0;
-    const uint32_t lastBackoff = m_mac ? m_mac->GetLastBackoffSlots() : 0;
-    const uint32_t lastWindow = m_mac ? m_mac->GetLastBackoffWindowSlots() : 0;
-    const double cadLoad = m_mac ? m_mac->GetCadLoadEstimate() : 0.0;
-    NS_LOG_INFO("DATA_TX detail: node="
-                << myId << " src=" << dataTag.GetSrc() << " dst=" << dst
-                << " seq=" << dataTag.GetSeq() << " time=" << Simulator::Now().GetSeconds() << "s"
-                << " nextHop=" << route->nextHop << " sf=" << unsigned(dataTag.GetSf())
-                << " txPowerDbm=" << txPowerDbm << " cadFailures=" << cadFailures
-                << " backoffSlotsLast=" << lastBackoff << " windowSlotsLast=" << lastWindow
-                << " cadLoad=" << cadLoad);
-    NS_LOG_INFO("FWDTRACE fwd time=" << Simulator::Now().GetSeconds() << " node=" << myId
-                                       << " src=" << dataTag.GetSrc() << " dst=" << dst
-                                       << " seq=" << dataTag.GetSeq()
-                                       << " nextHop=" << route->nextHop << " tx_mode=unicast"
-                                       << " reason=ok");
-    NS_LOG_INFO("DATA_TX SF" << unsigned(dataTag.GetSf()) << " node=" << myId
-                               << " src=" << dataTag.GetSrc() << " dst=" << dst
-                               << " seq=" << dataTag.GetSeq());
-
-    SendWithCSMA(p, dataTag, dstAddr, true);
+    SendDataPacketPueyo7b(dst);
 }
 
 

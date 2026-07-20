@@ -12,7 +12,6 @@ build_lib(
     model/dv-cl-lora-net-device.cc
     model/dv-cl-stats-sink.cc
     model/dv-cl-energy-registry.cc
-    model/dv-cl-legacy-wire-v2.cc
     model/dv-cl-app.cc
     helper/dv-cl-helper.cc
     helper/dv-cl-lora-energy-model-helper.cc
@@ -28,7 +27,6 @@ build_lib(
     model/dv-cl-lora-net-device.h
     model/dv-cl-stats-sink.h
     model/dv-cl-energy-registry.h
-    model/dv-cl-legacy-wire-v2.h
     model/dv-cl-app.h
     helper/dv-cl-helper.h
     helper/dv-cl-lora-energy-model-helper.h

@@ -67,8 +67,6 @@ class DvClLoraNetDevice : public NetDevice
         return m_txPowerDbm;
     }
 
-    void SetWireFormat(const std::string& format);
-    std::string GetWireFormat() const;
 
     // Habilita volcados pcap (TX/RX) desde Send/Receive.
     void SetPcap(Ptr<PcapFileWrapper> tx, Ptr<PcapFileWrapper> rx)
@@ -157,7 +155,6 @@ class DvClLoraNetDevice : public NetDevice
     uint32_t m_ifIndex;
     Mac48Address m_address;
     uint16_t m_mtu;
-    std::string m_wireFormat{"pueyo7b"};
     NetDevice::ReceiveCallback m_rxCallback;
     NetDevice::PromiscReceiveCallback m_promiscRxCallback;
 };
