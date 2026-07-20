@@ -519,6 +519,36 @@ perfiles van a usarse como comparación hay que decidir si les corresponde
 resultados. **No se modificaron**: cambiar qué significa un baseline es decisión
 de los autores.
 
+## 2026-07-20 — Endurecimiento: warnings y robustez de parámetros
+
+**Compilación con avisos agresivos** (`-Wall -Wextra -Wshadow`): el módulo queda
+**limpio**. Los únicos avisos eran `unused-parameter` (cuatro del no-op por
+defecto del hook opcional del sink, cuatro de métodos de la interfaz NetDevice
+que este device no usa), marcados `[[maybe_unused]]`. **Nada sustantivo**: sin
+shadowing, sin lecturas no inicializadas, sin comparaciones de signo, sin
+destructores no virtuales. Los avisos que restan provienen de cabeceras del
+propio ns-3 (`callback.h`, `ptr.h`, `buffer.h`).
+
+**Barrido de robustez de parámetros** (19 combinaciones, perfil
+`proposal_pueyo_like_csmacad`):
+
+| familia | casos | resultado |
+|---|---|---|
+| tamaño de red | nEd = 1, 4, 9, 16, 25 | ok (incluye el nodo único) |
+| tamaño inválido | nEd = 2, 3 | **aborta con mensaje**: "nEd debe ser cuadrado perfecto" |
+| separación | 1 m, 10 m, 400 m, 3 km, 20 km | ok (incluye sin conectividad) |
+| carga | low, medium, high, saturation | ok |
+| borde | 0 paquetes/par, línea, aleatorio | ok |
+| borde inválido | stopSec < dataStartSec | **aborta con mensaje** explícito |
+
+**Los tres abortos son validación de entrada deliberada**, no fallos: el binario
+rechaza configuraciones imposibles de inmediato y diciendo por qué, que es el
+comportamiento deseable en un lote — la corrida inválida muere sola, ruidosa y
+sin contaminar las demás.
+
+Conclusión operativa: el simulador tolera todo el rango razonable de parámetros
+y falla rápido y claro fuera de él.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
