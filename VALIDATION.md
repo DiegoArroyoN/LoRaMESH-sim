@@ -479,6 +479,46 @@ la compuerta apagada la disciplina es irrelevante. Las mediciones duty-on de
 7200 s de esta misma sesión sí superaban la ventana y por eso daban ~1.1% y no
 ~6%.
 
+## 2026-07-20 — Barrido de perfiles: 2 de 8 no convergen (pueyoFloraLikeRx)
+
+Endurecimiento previo a lanzar campañas. Dos verificaciones sistemáticas:
+
+**(1) Rutas de atributos.** Las 105 rutas `Config::SetDefault*` del ejemplo de
+campaña se comprobaron contra el sistema de TypeId: **105/105 resuelven**, cero
+tipos o atributos inexistentes. Importa porque `SetDefaultFailSafe` **no falla**
+si la ruta no existe: simplemente no aplica el valor, y la campaña correría con
+una configuración distinta a la pedida sin avisar. Verificador reutilizable en
+`tools/validation/attr_path_check.cc`.
+
+**(2) Los 8 perfiles arrancan y terminan** sin abortar (4 nodos, 300 s). Pero
+con horizonte real (9 nodos, 3000 s, 10 paq/par) **dos no convergen**:
+
+| perfil | beacon_rx_ok | rutas | entregados | PDR |
+|---|---|---|---|---|
+| `pueyo2024` | 13 | 7 | 0 | 0.0000 |
+| `pueyo2024` + `pueyoFloraLikeRx` | 315 | 138 | 87 | 0.0366 |
+| `proposal_pueyo_like_observed` | 18 | 7 | 0 | 0.0000 |
+| `..._observed` + `pueyoFloraLikeRx` | 294 | 126 | 95 | 0.0400 |
+| `pueyo2024_paper_like` (ya lo trae) | — | 142 | 392 | 0.1650 |
+| `proposal_pueyo_like_csmacad` (ya lo trae) | — | 136 | 390 | 0.1641 |
+
+**El interruptor es `pueyoFloraLikeRx`.** Los seis perfiles que funcionan lo
+activan en su bloque; `pueyo2024` y `proposal_pueyo_like_observed` no. Sin él la
+recepción de beacons prácticamente no ocurre (13-18 en 3000 s con 9 nodos), el
+plano de control no converge y el PDR es 0 por falta de rutas, no por el
+protocolo.
+
+Descartado que sea consecuencia de los cambios de esta sesión: se reprodujo
+igual con `DutyEnforcement=sliding_window` (2 rutas, 2 entregas) y acotando el
+rango de SF a 7-8. `enableSfScanRx` no lo altera.
+
+**Decisión pendiente (científica, no técnica):** un baseline que recibe 13
+beacons en 3000 s no es un baseline conservador, es uno inoperante. Si esos dos
+perfiles van a usarse como comparación hay que decidir si les corresponde
+`pueyoFloraLikeRx=true` — y en tal caso son configuraciones erróneas, no
+resultados. **No se modificaron**: cambiar qué significa un baseline es decisión
+de los autores.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
