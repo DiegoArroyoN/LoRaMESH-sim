@@ -3110,6 +3110,13 @@ DvClApp::ProcessTxQueue()
             NS_LOG_WARN("CSMA: max retries ("
                         << m_csmaMaxRetries << ") exceeded, dropping seq=" << entry.tag.GetSeq()
                         << " dst=0x" << std::hex << entry.tag.GetDst() << std::dec);
+            if (m_stats)
+            {
+                m_stats->RecordDataTerminated(entry.tag.GetSrc(),
+                                              entry.tag.GetDst(),
+                                              entry.tag.GetSeq(),
+                                              "max_csma_retries");
+            }
             m_dropMaxCsmaRetries++;
             m_txQueue.pop_front();
             ProcessTxQueue();
@@ -4033,6 +4040,10 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
 
     if (ttl == 0)
     {
+        if (m_stats)
+        {
+            m_stats->RecordDataTerminated(src, dst, seq16, "ttl_expired");
+        }
         m_dropTtlExpired++;
         return true;
     }
@@ -4065,6 +4076,10 @@ DvClApp::ForwardWithTtlV2(Ptr<const Packet> pIn,
     const RouteEntry* route = m_routing ? m_routing->GetRoute(dst) : nullptr;
     if (!route)
     {
+        if (m_stats)
+        {
+            m_stats->RecordDataTerminated(src, dst, seq16, "no_route_relay");
+        }
         CountDropNoRouteRelay();
         return;
     }
@@ -4113,6 +4128,10 @@ DvClApp::ForwardWithTtlV2(Ptr<const Packet> pIn,
     (void)usingStale;
     if (!hasUsableMac)
     {
+        if (m_stats)
+        {
+            m_stats->RecordDataTerminated(src, dst, seq16, "no_route_relay");
+        }
         CountDropNoRouteRelay();
         return;
     }
@@ -4519,6 +4538,10 @@ DvClApp::SendDataPacketPueyo7b(uint32_t dst)
         NS_LOG_INFO("FWDTRACE DATA_NOROUTE time="
                     << Simulator::Now().GetSeconds() << " node=" << myId << " src=" << myId
                     << " dst=" << dst << " seq=" << seq16 << " reason=no_route_pueyo7b");
+        if (m_stats)
+        {
+            m_stats->RecordDataTerminated(myId, dst, seq16, "no_route_src");
+        }
         m_dataNoRoute++;
         CountDropNoRouteSrc();
         return;
@@ -4578,6 +4601,10 @@ DvClApp::SendDataPacketPueyo7b(uint32_t dst)
                     << Simulator::Now().GetSeconds() << " node=" << myId << " src=" << myId
                     << " dst=" << dst << " seq=" << seq16 << " nextHop=" << route->nextHop
                     << " reason=no_link_addr_for_unicast_pueyo7b");
+        if (m_stats)
+        {
+            m_stats->RecordDataTerminated(myId, dst, seq16, "no_route_src");
+        }
         m_dataNoRoute++;
         CountDropNoRouteSrc();
         return;

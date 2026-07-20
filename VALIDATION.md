@@ -196,7 +196,45 @@ Validation" del paper y la respuesta preempaquetada a revisores.
   centro 2480 J: el centro reenvía más). Sin sesgos de orden de eventos
   ni de inicialización.
 
-## 2026-07-18 — F2.4 Conservación de paquetes (PARCIAL — hallazgo)
+## 2026-07-20 — F2.4 Conservación de paquetes: CERRADO como TestSuite
+
+El hallazgo del 2026-07-18 (abajo) pedía instrumentación: sin ledger de
+generación y con contadores de drop que son **conteos de eventos** (una trama
+descartada en tres relays incrementa tres contadores), la identidad
+`generados = entregados + Σdrops` no puede cerrar por construcción.
+
+Instrumentado y promovido a test (`dv-cl-conservation`, tipo SYSTEM):
+
+- `RecordDataGenerated(src,dst,seq)` — ledger de generación (ya existía en el
+  seam, ahora ejercitado).
+- `RecordDataTerminated(src,dst,seq,fate)` — **nuevo**: destino final de toda
+  trama que no se entregará, en los cinco sitios donde el paquete se abandona
+  definitivamente (sin ruta en origen ×2, sin ruta en relay ×2, TTL agotado,
+  máximo de reintentos CSMA). Hook opcional: los sinks que no lo necesiten no
+  lo implementan.
+
+El test verifica **por paquete**, no por contador:
+
+- una trama se genera una vez y se entrega a lo sumo una vez;
+- entregados y terminados son **disjuntos** (nada se entrega y además se da
+  por perdido);
+- ambos son subconjuntos de lo generado (nada se entrega ni descarta sin
+  haber existido).
+
+Corrida de referencia (4 nodos, grilla, duty 1%, 500 s): `generados=36
+entregados=11 terminados=1 en-vuelo=24`. **PASS.**
+
+El residual (en-vuelo) se **reporta, no se asevera cero**: son tramas aún
+encoladas cuando termina la corrida, un desenlace legítimo — y con duty al 1%
+mayoritario, porque la compuerta las va espaciando. Lo que sí sería ilegítimo
+—y es lo que el test bloquea— es una trama en ningún conjunto habiendo salido
+de la red, o en ambos a la vez.
+
+Pendiente menor: que la app reporte al detenerse las tramas encoladas con un
+destino final propio, para que el residual quede explicado por construcción en
+vez de por inferencia.
+
+## 2026-07-18 — F2.4 Conservación de paquetes (PARCIAL — hallazgo, superado)
 
 - **Verificado:** el ledger de entregados (`_delay.csv`) es consistente
   3/3 goldens (filas = delivered del summary, sin duplicados src/dst/seq).

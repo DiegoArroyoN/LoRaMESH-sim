@@ -182,6 +182,24 @@ class DvClStatsSink : public Object
                                 uint32_t bytes,
                                 uint8_t sf,
                                 bool delivered) = 0;
+    /**
+     * rief Terminal fate of a data packet that will never be delivered.
+     *
+     * The counterpart of RecordDataGenerated: together they let an
+     * experiment check conservation per packet rather than by counters.
+     * Drop counters cannot do it — they count events, and one frame
+     * dropped at three relays counts three times — which is why the
+     * identity generated = delivered + lost only closes with identities.
+     *
+     * Optional: sinks that do not care need not implement it.
+     */
+    virtual void RecordDataTerminated(uint32_t src,
+                                      uint32_t dst,
+                                      uint32_t seq,
+                                      const std::string& fate)
+    {
+    }
+
     /// Beacon scheduling-to-transmission delay sample, seconds.
     virtual void RecordBeaconDelay(double delaySec) = 0;
     /// First-transmission time of a packet, or a negative value if unknown.
