@@ -30,6 +30,20 @@ namespace ns3
 {
 namespace dvcl
 {
+
+/**
+ * Minimum received size that triggers the beacon source-address probe.
+ *
+ * Faithful to the campaign: its guard was the size of the (now retired)
+ * experimental v2 beacon header, 7 B, even though the header it parses is the
+ * 6 B one. The gap is not cosmetic — a beacon advertising no routes is exactly
+ * 6 B, so the campaign never rewrites the "from" address for empty beacons and
+ * therefore never learns a nodeId<->MAC mapping from them. Probing at 6 B makes
+ * the module learn mappings the campaign does not, which shifts route
+ * availability and relaying. Kept at 7 so runs stay comparable; revisit
+ * together with the v1/v2 excision.
+ */
+static constexpr uint32_t kBeaconProbeMinSize = 7;
 using namespace ns3::lorawan;
 
 namespace
@@ -492,7 +506,7 @@ DvClLoraNetDevice::Receive(Ptr<const Packet> packet)
                                                     << " payloadSize=" << pktForUpper->GetSize());
         }
     }
-    else if (m_wireFormat != "v1" && pktForUpper->GetSize() >= DvClBeaconHeader::kSerializedSize)
+    else if (m_wireFormat != "v1" && pktForUpper->GetSize() >= kBeaconProbeMinSize)
     {
         // Recover the logical src from the on-air beacon header and expose it
         // as the callback "from" address so the upper layer can learn the
