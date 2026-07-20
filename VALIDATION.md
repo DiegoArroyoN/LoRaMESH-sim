@@ -706,6 +706,45 @@ por corrida de 7200 s, una campaña de vida útil costaría ~200 s por corrida:
 **perfectamente viable**. La alternativa más rápida es dimensionar la batería
 inicial para que arranque cerca de los umbrales.
 
+## 2026-07-20 — CAMPAÑA DE VIDA ÚTIL DETENIDA: la métrica no ve la batería
+
+Al calibrar la campaña de vida útil apareció la causa de fondo del resultado
+nulo. **No es solo que el horizonte sea corto.**
+
+**Defecto 1 — el SoC inicial heterogéneo nunca llega a la métrica.**
+`DvClEnergyRegistry::RegisterNode(NodeId)` inicializa `remainingMah =
+m_capacityMah`, capacidad completa, y se le invoca sin parámetro de carga. El
+SoC aleatorio U[60,100]% que la campaña asigna va al `BasicEnergySource` de ns-3,
+**no al registro**, que es el modelo que `DvClApp::GetRemainingEnergyJ()` lee y
+que alimenta `Psi(SoC)`. Evidencia: `mesh_dv_metrics_energy.csv` reporta
+`energyInitialJ = 3887.97` (capacidad llena) para **todos** los nodos, mientras
+el log del framework dice "Node 8 initial SOC: 75.1% (2919.8J / 3888.0J)".
+
+**Defecto 2 — dos capacidades para una batería.** La fracción se calcula como
+`remainingJ / m_batteryFullCapacityJ`, donde el numerador viene del registro y el
+denominador es un atributo distinto de la app (default 38880 J). Pasar
+`--batteryFullCapacityJ=120` cambia el divisor pero no la capacidad del registro,
+de modo que la fracción sale `3571/120 = 29.8` clampeada a **1.0**: el flag no
+achica la batería, **corrompe la medición**. Cualquier corrida que lo use produce
+energía sin sentido.
+
+Es el mismo patrón que los dos headers de beacon y los dos cálculos de ToA: **dos
+fuentes de verdad para una magnitud física**.
+
+**Consecuencia para la tesis:** el término `delta*Psi(SoC)` recibe ~1.0 para todos
+los nodos en todo instante, por construcción y no por el horizonte. La campaña de
+360 corridas no midió el aporte, y **una campaña de vida útil lanzada sobre este
+código tampoco lo mediría**. Lanzamiento detenido.
+
+**Fix requerido antes de cualquier campaña energética:**
+
+1. `RegisterNode(id, initialCharge)` — que la carga inicial heterogénea entre al
+   registro.
+2. Que la fracción divida por la capacidad del **propio registro**, eliminando el
+   atributo paralelo de la app (fuente única).
+
+Ambos cambian resultados: son corrección, no ajuste.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
