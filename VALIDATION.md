@@ -549,6 +549,44 @@ sin contaminar las demás.
 Conclusión operativa: el simulador tolera todo el rango razonable de parámetros
 y falla rápido y claro fuera de él.
 
+## 2026-07-20 — Ensayo de lote completo (24 corridas): artefactos sanos
+
+Matriz 6 perfiles x {9,16} nodos x 2 semillas, horizonte 2000 s, métricas
+completas (no essential-only). Verificado por corrida: código de salida, número
+de CSV, summary parseable, PDR en [0,1], ausencia de NaN/Inf en todo el JSON, y
+consistencia de ancho de columnas en cada CSV.
+
+**24/24 limpias**: `rc=0`, 9 CSV, summary válido, sin valores no finitos. La
+generación es idéntica por (nodos, semilla) entre perfiles — 1476/1478 con 9
+nodos, 2650/2631 con 16 — lo que confirma que el tráfico ofrecido no depende del
+perfil y las comparaciones parten de la misma base.
+
+**Anomalía de formato (menor):** `mesh_dv_metrics_lifetime.csv` contiene **dos
+tablas en un archivo** separadas por línea en blanco (resumen `metric,value_s` y
+log de muertes `timestamp,nodeId,energyFrac,reason`). No es corrupción, pero un
+`read_csv` estándar lo mal-parsea. Hoy **ningún script del repo lo lee**, así que
+no rompe nada; queda anotado para quien añada ese análisis.
+
+**Hallazgo metodológico: los perfiles NO son comparables en PDR entre sí.**
+
+| perfil | bloqueos de duty | PDR (9 nodos) |
+|---|---|---|
+| `proposal_pueyo_like` | 16 102 | 0.0339 |
+| `proposal_pueyo_like_aloha` | 0 | 0.1775 |
+| `proposal_pueyo_like_csmacad` | 0 | 0.1741 |
+| `pueyo2024_paper_like` | 0 | 0.1653 |
+| `pueyo2024_paper_like_csmacad` | 0 | 0.1612 |
+| `csmacad_free_backoff` | 0 | 0.1768 |
+
+**Uno de seis paga duty cycle; cinco no** (heredan `enableDutyCycle=false` de
+`applyPueyoComparableBase`). La diferencia de ~5x en PDR es el costo del 1%, no
+una diferencia de encaminamiento. Cualquier tabla que ponga estos perfiles lado
+a lado sin decirlo estará atribuyendo al protocolo lo que es régimen regulatorio.
+
+Descartado que la disciplina de duty lo explique: `proposal_pueyo_like` entrega
+**más** con `time_off_air` (50) que con `sliding_window` (42), y los perfiles sin
+duty dan resultado idéntico bajo ambas.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
