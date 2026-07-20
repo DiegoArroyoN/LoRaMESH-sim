@@ -745,6 +745,52 @@ código tampoco lo mediría**. Lanzamiento detenido.
 
 Ambos cambian resultados: son corrección, no ajuste.
 
+## 2026-07-20 — Campaña de vida útil: el aporte energético, MEDIDO
+
+Tras el fix de energía (SoC heterogéneo llega al registro, fracción de fuente
+única), primera campaña que **puede** medir delta*Psi(SoC). 60 corridas, {9,25,49}
+nodos, 10 semillas, horizonte 300 000 s, SoC inicial U[15,35]% para que la red
+llegue a agotarse. 60/60 sin fallo. Índice en
+`tools/validation/lifetime_20260720_index.csv`.
+
+**Comparación que aísla el aporte**: `composite_score` vs `toa_only`, idénticas
+en todo lo demás (ambas pueyo-comparable + CSMA/CAD; difieren SOLO en el término
+energético de la métrica). FND = primer nodo muerto, T50 = mitad de la red
+muerta.
+
+| n | métrica | FND (s) | T50 (s) | PDR | composite vs toa |
+|---|---|---|---|---|---|
+| 9 | composite | 89691±7760 | 139929±16070 | 0.1693 | FND +1.3%, T50 +0.6% |
+| 9 | toa_only | 88575±7497 | 139125±16071 | 0.1698 | |
+| 25 | composite | 60163±7255 | 107512±10161 | 0.0773 | FND +5.6%, T50 +3.6% |
+| 25 | toa_only | 56953±7378 | 103775±9752 | 0.0779 | |
+| 49 | composite | 36985±2035 | 75715±6078 | 0.0378 | FND +4.8%, **T50 +6.6%** |
+| 49 | toa_only | 35300±2064 | 71042±5708 | 0.0392 | |
+
+**Lectura honesta:**
+
+1. **El aporte existe y crece con la densidad.** El término energético alarga la
+   vida de la red, y el efecto es mayor cuanto más grande la red: T50 pasa de
+   +0.6% (9 nodos) a +6.6% (49 nodos). Tiene sentido mecánico: con más nodos hay
+   más rutas alternativas que evitar los de batería baja, así que el balanceo
+   tiene de dónde elegir.
+
+2. **En 9 nodos el efecto es indistinguible del ruido** (+1.3% FND con σ≈8%). La
+   red es demasiado pequeña para que el balanceo importe. La topología de la
+   campaña principal (9 nodos, sin agotamiento) no habría mostrado nada aunque
+   el fix hubiera estado — doble razón por la que no aparecía.
+
+3. **Cuesta un poco de PDR** (−0.3% a −3.6%, creciente con n): desviar tráfico de
+   los nodos con mejor enlace hacia los de más batería usa rutas algo peores.
+   Es el compromiso esperado vida-útil/entrega, y a 49 nodos es medible: **+6.6%
+   de T50 por −3.6% de entregados**.
+
+**Este es el resultado defendible de la tesis**, y es un compromiso, no una
+victoria en todos los ejes: la métrica compuesta **compra vida de red con una
+fracción de PDR**, y el trato mejora con la densidad. Reportarlo como tal —con
+FND/T50 y el costo de PDR lado a lado— es más fuerte que afirmar superioridad
+uniforme, que los datos no respaldan.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
