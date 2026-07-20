@@ -321,6 +321,20 @@ class DvClApp : public Application
     double m_initialDvDelayBase{1.0};
     double m_initialDvJitterMax{8.0};
     double m_initialDvNodeSpacing{0.5};
+    /**
+     * rief Charge of \p nodeId for the metric, mirroring the campaign metric:
+     * an unknown fraction (<0) is resolved from the energy registry before the
+     * link is priced; the voltage fallback then lives in the metric itself.
+     */
+    double ResolveEnergyFraction(double statsFraction, uint32_t nodeId) const
+    {
+        if (statsFraction < 0.0 && m_energyModel)
+        {
+            return m_energyModel->GetEnergyFraction(nodeId);
+        }
+        return statsFraction;
+    }
+
     Ptr<DvClEnergyRegistry> m_energyModel;
     double m_lastAppliedRxScanTimeS{0.0};
     Ptr<DvClRouting> m_routing;

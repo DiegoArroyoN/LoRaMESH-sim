@@ -85,11 +85,25 @@ DvClCompositeMetric::NormalizeToa(double toaUs, uint8_t sf) const
 }
 
 double
-DvClCompositeMetric::EnergyPenalty(double energyFraction) const
+DvClCompositeMetric::EnergyPenalty(double energyFraction, double batteryMv) const
 {
-    if (!std::isfinite(energyFraction) || energyFraction < 0.0)
+    if (!std::isfinite(energyFraction))
     {
-        return 0.0; // unknown charge prices as full battery
+        return 0.0; // unusable reading prices as full battery
+    }
+    if (energyFraction < 0.0)
+    {
+        // Charge unknown: fall back to the terminal voltage, as the campaign
+        // metric does (Li-Ion 18650: 3000 mV = empty, 4200 mV = full). Without
+        // this the link would price as a full battery and the energy term would
+        // silently vanish for every neighbour that never reported a fraction.
+        if (!std::isfinite(batteryMv) || batteryMv < 0.0)
+        {
+            return 0.0;
+        }
+        constexpr double vMin = 3000.0;
+        constexpr double vMax = 4200.0;
+        energyFraction = std::clamp((batteryMv - vMin) / (vMax - vMin), 0.0, 1.0);
     }
     const double lo = std::clamp(std::min(m_energyLo, m_energyHi), 0.0, 1.0);
     const double hi = std::clamp(std::max(m_energyLo, m_energyHi), 0.0, 1.0);
@@ -112,7 +126,7 @@ DvClCompositeMetric::ComputeLinkCost(const LinkInputs& in) const
 {
     const double toaCost = m_wToa * NormalizeToa(in.toaUs, in.sf);
     const double hopCost = m_wHop;
-    const double energyCost = EnergyPenalty(in.energyFraction);
+    const double energyCost = EnergyPenalty(in.energyFraction, in.batteryMv);
     NS_LOG_DEBUG("link cost: toa=" << toaCost << " hop=" << hopCost
                                    << " energy=" << energyCost);
     return toaCost + hopCost + energyCost;

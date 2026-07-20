@@ -25,6 +25,8 @@ struct LinkInputs
     double toaUs{0.0};         //!< accumulated/announced time-on-air, microseconds
     uint8_t sf{7};             //!< spreading factor the link operates at (7..12)
     double energyFraction{1.0}; //!< next-hop state of charge b in [0,1]; <0 = unknown
+    double batteryMv{-1.0};    //!< next-hop terminal voltage, mV; used only when
+                               //!< energyFraction is unknown (<0)
 };
 
 /**
@@ -94,7 +96,7 @@ class DvClCompositeMetric : public DvClRoutingMetric
      *        (unknown chargers price as full battery: no penalty)
      * \return weighted penalty in [0, WEnergy * PsiMax]
      */
-    double EnergyPenalty(double energyFraction) const;
+    double EnergyPenalty(double energyFraction, double batteryMv = -1.0) const;
 
   private:
     // Per-SF ToA normalization ceilings, microseconds. Carried over

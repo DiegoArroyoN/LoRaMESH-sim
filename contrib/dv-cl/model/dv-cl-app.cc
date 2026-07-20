@@ -2689,7 +2689,8 @@ DvClApp::ComputeScoreX100(const DvClMetricTag& t) const
     LinkInputs metricIn;
     metricIn.toaUs = stats.toaUs;
     metricIn.sf = stats.sf;
-    metricIn.energyFraction = stats.energyFraction;
+    metricIn.energyFraction = ResolveEnergyFraction(stats.energyFraction, srcId);
+    metricIn.batteryMv = stats.batteryMv;
     const double cost = m_routing->GetMetric()->ComputeLinkCost(metricIn);
     const double score = std::clamp(1.0 - cost, 0.0, 1.0);
     return static_cast<uint16_t>(std::round(score * 100.0));
@@ -4303,7 +4304,8 @@ DvClApp::BuildNeighborLinkInfo(const DvClMetricTag& tag,
     LinkInputs metricIn;
     metricIn.toaUs = stats.toaUs;
     metricIn.sf = stats.sf;
-    metricIn.energyFraction = stats.energyFraction;
+    metricIn.energyFraction = ResolveEnergyFraction(stats.energyFraction, GetNode()->GetId());
+    metricIn.batteryMv = stats.batteryMv;
     const double cost = m_routing->GetMetric()->ComputeLinkCost(metricIn);
     link.scoreX100 = static_cast<uint16_t>(std::round(std::clamp(1.0 - cost, 0.0, 1.0) * 100.0));
     link.mac = fromMac;
@@ -4768,7 +4770,8 @@ DvClApp::L2ReceiveV2(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, co
         LinkInputs metricIn;
     metricIn.toaUs = stats.toaUs;
     metricIn.sf = stats.sf;
-    metricIn.energyFraction = stats.energyFraction;
+    metricIn.energyFraction = ResolveEnergyFraction(stats.energyFraction, myId);
+    metricIn.batteryMv = stats.batteryMv;
     const double cost = m_routing->GetMetric()->ComputeLinkCost(metricIn);
         link.scoreX100 =
             static_cast<uint16_t>(std::round(std::clamp(1.0 - cost, 0.0, 1.0) * 100.0));
