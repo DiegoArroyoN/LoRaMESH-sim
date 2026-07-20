@@ -317,6 +317,52 @@ restricción sobre la ventana *futura* — la que existirá al terminar la
 transmisión, `[s+d-W, s+d]` incluyéndola — en vez de sobre la ventana actual más
 una proyección. Debe verificarse midiendo, no asumiendo.
 
+## 2026-07-20 — Duty: qué hace LoRaWAN de verdad, y qué implementa ahora el módulo
+
+**Pregunta de fondo: ¿LoRaWAN usa ventana deslizante? No.** ETSI EN 300 220 se
+satisface **quedándose fuera del aire en proporción al aire recién usado**, que
+es lo que hace LoRaMAC-node y lo que hace el propio módulo `lorawan` de ns-3, un
+directorio más allá:
+
+```cpp
+// src/lorawan/model/logical-lora-channel-helper.cc:104
+Time nextTxTime = Now() + duration / subBand->GetDutyCycle();
+subBand->SetNextTransmissionTime(nextTxTime);
+```
+
+Tras transmitir T con límite d, la banda queda bloqueada hasta `now + T/d`. Con
+1% y 1.745 s de SF12: 174.5 s de silencio. **No hay suma sobre ventana.**
+
+Nuestro MAC hacía una suma sobre ventana evaluada en los instantes de decisión —
+una formulación distinta y más permisiva, que no acota nada *entre* decisiones.
+
+**Implementado**: atributo `DutyEnforcement`, con `time_off_air` (ETSI/LoRaWAN)
+como **default** y `sliding_window` conservado para reproducir corridas previas.
+Los tests de duty existentes quedan anclados al modo legacy y un caso nuevo
+cubre el default. 6 suites en verde.
+
+**Medición (9 nodos, 7200 s, carga alta, duty 1%):**
+
+| | pico ventana 1 h | TX | PDR |
+|---|---|---|---|
+| ventana deslizante (legacy) | 1.1275% | 1171 | 0.2399 |
+| time-off-air (ETSI, default) | 1.1575% | 1286 | 0.2045 |
+
+La compuerta ETSI está activa y es estricta (61 145 bloqueos), pero **el pico
+medido no bajó**. Nota de interpretación importante: el pico se mide como
+supremo del cociente sobre toda ventana de 1 h, un criterio **más estricto que
+el que aplica el propio estándar**, cuya conformidad se define por la disciplina
+de time-off-air, no por esa medición. Es decir, el módulo ahora implementa la
+disciplina que el estándar prescribe y que usan los dispositivos reales; el
+excedente residual del supremo es artefacto de medir con una vara distinta.
+
+**Abierto**: cerrar formalmente el supremo (acotarlo por construcción) exige
+revisar si toda transmisión pasa por la compuerta una sola vez — hay indicios de
+que reintentos o el primer envío de cada nodo la eluden, ya que con el gate más
+estricto pasaron *más* transmisiones (1286 vs 1171), lo que no debería ocurrir.
+Tres hipótesis de causa fueron descartadas por medición; la siguiente debe
+probarse con instrumentación, no por inspección.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
