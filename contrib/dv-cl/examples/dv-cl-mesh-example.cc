@@ -69,7 +69,7 @@ class MiniSink : public DvClStatsSink
     void RecordDuty(uint32_t, double, uint32_t, uint32_t) override {}
     void RecordConnectivity(uint32_t, uint32_t, bool) override {}
     void RecordBeaconDelay(double) override {}
-    double GetFirstTxTime(uint32_t, uint32_t, uint32_t) override { return -1.0; }
+    double GetFirstTxTime(uint32_t, uint32_t, uint32_t) const override { return -1.0; }
 };
 
 int

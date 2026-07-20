@@ -185,7 +185,7 @@ class DvClStatsSink : public Object
     /// Beacon scheduling-to-transmission delay sample, seconds.
     virtual void RecordBeaconDelay(double delaySec) = 0;
     /// First-transmission time of a packet, or a negative value if unknown.
-    virtual double GetFirstTxTime(uint32_t src, uint32_t dst, uint32_t seq) = 0;
+    virtual double GetFirstTxTime(uint32_t src, uint32_t dst, uint32_t seq) const = 0;
 };
 
 } // namespace dvcl
