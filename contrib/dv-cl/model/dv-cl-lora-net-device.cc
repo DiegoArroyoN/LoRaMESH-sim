@@ -308,13 +308,7 @@ DvClLoraNetDevice::Send(Ptr<Packet> packet, const Address& dest, uint16_t protoc
 
     // Parámetros TX LoRa
     LoraTxParameters txParams;
-    txParams.sf = 10;
-    txParams.headerDisabled = false;
-    txParams.codingRate = 1;
-    txParams.bandwidthHz = 125000;
-    txParams.nPreamble = m_preambleSymbols;
-    txParams.crcEnabled = true;
-    txParams.lowDataRateOptimizationEnabled = false;
+    txParams = BuildTxParams(10);
 
     NS_LOG_INFO("DvClLoraNetDevice::Send params sf="
                   << unsigned(txParams.sf) << " bw=" << txParams.bandwidthHz
@@ -711,6 +705,31 @@ DvClLoraNetDevice::SetLastRxRssi(double rssi)
 // ============================================================================
 // NEW: ns-3 Energy Framework integration - NotifyRadioStateChange
 // ============================================================================
+lorawan::LoraTxParameters
+DvClLoraNetDevice::BuildTxParams(uint8_t sf) const
+{
+    lorawan::LoraTxParameters p;
+    p.sf = sf;
+    p.headerDisabled = false;
+    p.codingRate = 1;
+    p.bandwidthHz = 125000;
+    p.nPreamble = m_preambleSymbols;
+    p.crcEnabled = true;
+    p.lowDataRateOptimizationEnabled = false;
+    return p;
+}
+
+Time
+DvClLoraNetDevice::GetOnAirTimeFor(Ptr<const Packet> packet, uint8_t sf) const
+{
+    if (!packet)
+    {
+        return Seconds(0);
+    }
+    const uint8_t sfUsed = (sf >= 7 && sf <= 12) ? sf : 9;
+    return lorawan::LoraPhy::GetOnAirTime(packet->Copy(), BuildTxParams(sfUsed));
+}
+
 void
 DvClLoraNetDevice::NotifyRadioStateChange(int newState)
 {

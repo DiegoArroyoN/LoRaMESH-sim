@@ -3143,7 +3143,16 @@ DvClApp::ProcessTxQueue()
             return;
         }
 
-        if (m_mac && !m_mac->CanTransmitNow(entry.tag.GetToaUs() / 1e6))
+        // Spend the airtime the radio will actually consume, not the
+        // application's own estimate of it: the two are computed by different
+        // code paths and disagree (see VALIDATION.md), which let the rolling
+        // duty window overshoot the limit.
+        double gateToaSec = entry.tag.GetToaUs() / 1e6;
+        if (auto gateDev = DynamicCast<DvClLoraNetDevice>(dev))
+        {
+            gateToaSec = gateDev->GetOnAirTimeFor(entry.packet, entry.tag.GetSf()).GetSeconds();
+        }
+        if (m_mac && !m_mac->CanTransmitNow(gateToaSec))
         {
             NS_LOG_WARN("CSMA: Duty check failed at dequeue, deferring packet");
             setPendingReason(entry, "duty_wait_queue");

@@ -89,6 +89,15 @@ class DvClLoraNetDevice : public NetDevice
   public:
     // NetDevice interface
     bool Send(Ptr<Packet> packet, const Address& dest, uint16_t protocolNumber) override;
+
+    /**
+     * rief Airtime this device would put on the channel for \p packet at \p sf.
+     *
+     * Single source of truth for time-on-air: the duty-cycle gate must spend the
+     * budget the radio will actually consume, so it asks the device, which
+     * answers with the very parameters Send() will hand the PHY.
+     */
+    Time GetOnAirTimeFor(Ptr<const Packet> packet, uint8_t sf) const;
     bool SendFrom(Ptr<Packet> packet,
                   const Address& source,
                   const Address& dest,
@@ -144,6 +153,8 @@ class DvClLoraNetDevice : public NetDevice
 
     Ptr<lorawan::LoraPhy> m_phy;
     Ptr<Node> m_node;
+    lorawan::LoraTxParameters BuildTxParams(uint8_t sf) const;
+
     Ptr<DvClCsmaCadMac> m_mac;
     Ptr<DvClEnergyRegistry> m_energyModel; //!< campaign energy engine (registry)
     Ptr<DvClLoraEnergyModel> m_loraEnergyModel; ///< ns-3 energy framework model
