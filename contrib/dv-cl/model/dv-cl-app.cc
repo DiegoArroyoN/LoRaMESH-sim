@@ -1033,14 +1033,9 @@ DvClApp::SendExtraDvBeacon(const std::string& reason)
 uint32_t
 DvClApp::GetBeaconRouteCapacity() const
 {
-    const bool wirePueyo = (m_wireFormat == "pueyo7b");
-    const bool wireV2Like = (m_wireFormat == "v2" || wirePueyo);
     if (m_dvPayloadMaxBytes > 0)
     {
-        const uint32_t entrySize = wirePueyo ? kPueyoBeaconEntryBytes
-                                             : (wireV2Like ? BeaconWireHeaderV2::kEntrySize
-                                                           : DvClMetricTag::GetRoutePayloadEntrySize());
-        return std::max(1u, m_dvPayloadMaxBytes / std::max(1u, entrySize));
+        return std::max(1u, m_dvPayloadMaxBytes / std::max(1u, kPueyoBeaconEntryBytes));
     }
 
     uint32_t mtu = 255;
@@ -1061,22 +1056,13 @@ DvClApp::GetBeaconRouteCapacity() const
         }
     }
 
-    const uint32_t entrySize = wirePueyo ? kPueyoBeaconEntryBytes
-                                         : (wireV2Like ? BeaconWireHeaderV2::kEntrySize
-                                                       : DvClMetricTag::GetRoutePayloadEntrySize());
+    const uint32_t entrySize = kPueyoBeaconEntryBytes;
     if (entrySize == 0 || mtu <= 1)
     {
         return 1;
     }
-    uint32_t overheadBytes = m_dvBeaconOverheadBytes;
-    if (wirePueyo)
-    {
-        overheadBytes = std::max<uint32_t>(overheadBytes, kPueyoBeaconHeaderBytes);
-    }
-    else if (wireV2Like)
-    {
-        overheadBytes = std::max<uint32_t>(overheadBytes, BeaconWireHeaderV2::kSerializedSize);
-    }
+    const uint32_t overheadBytes =
+        std::max<uint32_t>(m_dvBeaconOverheadBytes, kPueyoBeaconHeaderBytes);
     const uint32_t overhead = std::min(mtu, overheadBytes);
     const uint32_t usable = (mtu > overhead) ? (mtu - overhead) : 0;
     uint32_t maxRoutes = (usable / entrySize);
@@ -1134,11 +1120,6 @@ DvClApp::BuildAndSendDv(uint8_t sf)
     if (m_wireFormat == "pueyo7b")
     {
         BuildAndSendDvPueyo(sf);
-        return;
-    }
-    if (m_wireFormat != "v1")
-    {
-        BuildAndSendDvV2(sf);
         return;
     }
 
@@ -1373,96 +1354,6 @@ DvClApp::BuildAndSendDvPueyo(uint8_t sf)
     SendWithCSMA(p, traceTag, Address(), true);
 }
 
-void
-DvClApp::BuildAndSendDvV2(uint8_t sf)
-{
-    if (!m_enableDvBroadcast)
-    {
-        return;
-    }
-
-    const uint8_t beaconSf = sf;
-    const uint16_t myId = static_cast<uint16_t>(GetNode()->GetId());
-    const uint32_t maxRoutes = GetBeaconRouteCapacity();
-    if (m_routing)
-    {
-        m_routing->SetMaxRoutes(maxRoutes);
-    }
-
-    std::vector<DvEntryWireV2> entries;
-    if (m_routing)
-    {
-        const auto announcements = m_routing->GetBestRoutes(maxRoutes);
-        entries.reserve(announcements.size());
-        for (const auto& ann : announcements)
-        {
-            DvEntryWireV2 e;
-            e.destination = static_cast<uint16_t>(ann.destination);
-            e.score = static_cast<uint8_t>(std::min<uint16_t>(ann.scoreX100, 255));
-            entries.push_back(e);
-        }
-    }
-
-    const uint32_t payloadSizeBytes = static_cast<uint32_t>(entries.size() * BeaconWireHeaderV2::kEntrySize);
-    std::vector<uint8_t> payload(payloadSizeBytes, 0);
-    if (!entries.empty())
-    {
-        BeaconWireHeaderV2::SerializeDvEntries(entries, payload.data(), payload.size());
-    }
-
-    Ptr<Packet> p = Create<Packet>(payload.data(), payload.size());
-
-    // §DC-wire: presupuesto de DC restante del emisor [0-100]; 0xFF si MAC no disponible.
-    uint8_t dcRem8 = 0xFF;
-    if (m_mac)
-    {
-        const double dcLim = m_mac->GetDutyCycleLimit();
-        const double dcUsed = m_mac->GetDutyCycleUsed();
-        const double dcFrac = (dcLim > 0.0) ? std::clamp(1.0 - dcUsed / dcLim, 0.0, 1.0) : 1.0;
-        dcRem8 = static_cast<uint8_t>(std::round(dcFrac * 100.0));
-    }
-
-    BeaconWireHeaderV2 hdr;
-    hdr.SetSrc(myId);
-    hdr.SetDst(0xFFFF);
-    // v2 wire semantics bugfix:
-    // rp_counter is assigned/committed only on real TX (right before dev->Send succeeds).
-    // Here we keep BEACON type and use a placeholder counter.
-    hdr.SetFlagsTtl(PackFlagsTtl(DvClPacketType::BEACON, 0));
-    hdr.SetSoc(FractionToSoC8(GetEnergyFraction()));  // §SoC-wire
-    (void)dcRem8; // DC byte removed from the 6B wire contract
-    p->AddHeader(hdr);
-
-    DvClMetricTag traceTag;
-    traceTag.SetSrc(myId);
-    traceTag.SetDst(0xFFFF);
-    traceTag.SetSeq(++m_seq);
-    traceTag.SetPrevHop(myId);
-    traceTag.SetTtl(std::min<uint8_t>(m_initTtl, 63));
-    traceTag.SetHops(0);
-    traceTag.SetSf(beaconSf);
-    traceTag.SetToaUs(ComputeLoRaToAUs(beaconSf, m_bw, m_cr, p->GetSize()));
-    traceTag.SetBatt_mV(GetBatteryVoltageMv());
-    traceTag.SetScoreX100(0);
-    traceTag.SetDcRemaining(dcRem8);  // §DC-wire
-    p->AddPacketTag(traceTag);
-
-    if (m_routing)
-    {
-        m_routing->SetSequence(m_seq);
-    }
-
-    NS_LOG_INFO("DVTRACE_TX_V2 time=" << Simulator::Now().GetSeconds()
-                                        << " node=" << GetNode()->GetId() << " seq=" << traceTag.GetSeq()
-                                        << " rp_counter=deferred_tx_real"
-                                        << " entries=" << entries.size() << " bytes=" << p->GetSize()
-                                        << " maxRoutes=" << maxRoutes
-                                        << " phase=" << GetBeaconPhaseLabel());
-
-    m_lastDvBeaconTime = Simulator::Now();
-    RecordBeaconScheduled(traceTag.GetSeq());
-    SendWithCSMA(p, traceTag, Address(), true);
-}
 
 // Inicializa timers, callbacks y generación de tráfico.
 void
@@ -2037,7 +1928,7 @@ DvClApp::L2Receive(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, cons
 
     if (m_wireFormat != "v1")
     {
-        return L2ReceiveV2(dev, p, proto, from);
+        return L2ReceiveWire(dev, p, proto, from);
     }
 
     DvClMetricTag tag;
@@ -2787,12 +2678,6 @@ DvClApp::PurgeExpiredRoutes()
 void
 DvClApp::SendDataToDestination(uint32_t dst, Ptr<Packet> payload)
 {
-    if (m_wireFormat == "v2")
-    {
-        (void)payload;
-        SendDataPacketV2(dst);
-        return;
-    }
     if (m_wireFormat == "pueyo7b")
     {
         (void)payload;
@@ -3995,7 +3880,7 @@ DvClApp::ProcessTxQueue()
                 {
                     m_beaconRpCounterTx = static_cast<uint8_t>((entry.beaconRpCounter + 1) & 0x3F);
                     const char* traceLabel =
-                        (m_wireFormat == "pueyo7b") ? "DVTRACE_TX_PUEYO_AIR" : "DVTRACE_TX_V2_AIR";
+                        "DVTRACE_TX_PUEYO_AIR";
                     NS_LOG_INFO(traceLabel << " time=" << Simulator::Now().GetSeconds()
                                              << " node=" << GetNode()->GetId()
                                              << " seq=" << entry.tag.GetSeq() << " rp_counter="
@@ -4413,34 +4298,6 @@ DvClApp::ProcessDvPayload(Ptr<const Packet> p,
     m_routing->UpdateFromDvMsg(msg, link);
 }
 
-bool
-DvClApp::ParseDataWirePacketV2(Ptr<const Packet> p,
-                                 DataWireHeaderV2* outHdr,
-                                 Ptr<Packet>* outPayload) const
-{
-    if (!outHdr || !p || p->GetSize() < DataWireHeaderV2::kSerializedSize)
-    {
-        return false;
-    }
-
-    Ptr<Packet> copy = p->Copy();
-    DataWireHeaderV2 hdr;
-    const uint32_t removed = copy->RemoveHeader(hdr);
-    if (removed != DataWireHeaderV2::kSerializedSize)
-    {
-        return false;
-    }
-    if (UnpackType(hdr.GetFlagsTtl()) != DvClPacketType::DATA)
-    {
-        return false;
-    }
-    *outHdr = hdr;
-    if (outPayload)
-    {
-        *outPayload = copy;
-    }
-    return true;
-}
 
 bool
 DvClApp::ParseDataWirePacketPueyo7b(Ptr<const Packet> p,
@@ -4471,34 +4328,6 @@ DvClApp::ParseDataWirePacketPueyo7b(Ptr<const Packet> p,
     return true;
 }
 
-bool
-DvClApp::ParseBeaconWirePacketV2(Ptr<const Packet> p,
-                                   BeaconWireHeaderV2* outHdr,
-                                   Ptr<Packet>* outPayload) const
-{
-    if (!outHdr || !p || p->GetSize() < BeaconWireHeaderV2::kSerializedSize)
-    {
-        return false;
-    }
-
-    Ptr<Packet> copy = p->Copy();
-    BeaconWireHeaderV2 hdr;
-    const uint32_t removed = copy->RemoveHeader(hdr);
-    if (removed != BeaconWireHeaderV2::kSerializedSize)
-    {
-        return false;
-    }
-    if (UnpackType(hdr.GetFlagsTtl()) != DvClPacketType::BEACON)
-    {
-        return false;
-    }
-    *outHdr = hdr;
-    if (outPayload)
-    {
-        *outPayload = copy;
-    }
-    return true;
-}
 
 bool
 DvClApp::ParseBeaconWirePacketPueyo(Ptr<const Packet> p,
@@ -4569,57 +4398,6 @@ DvClApp::ResolveBeaconSequenceFromRpCounter(uint32_t origin, uint8_t rpCounter)
     return m_beaconRpExtendedSeqRx[origin];
 }
 
-std::vector<DvEntry>
-DvClApp::DecodeDvEntriesV2(Ptr<const Packet> p,
-                             uint32_t payloadOffset,
-                             uint32_t toaUsNeighbor,
-                             uint8_t rxSf) const
-{
-    (void)toaUsNeighbor;
-    (void)rxSf;
-    std::vector<DvEntry> entries;
-    if (!p)
-    {
-        return entries;
-    }
-
-    const uint32_t totalSize = p->GetSize();
-    if (payloadOffset >= totalSize)
-    {
-        return entries;
-    }
-
-    const uint32_t payloadLen = totalSize - payloadOffset;
-    if (payloadLen < BeaconWireHeaderV2::kEntrySize)
-    {
-        return entries;
-    }
-
-    std::vector<uint8_t> buf(totalSize);
-    p->CopyData(buf.data(), totalSize);
-
-    std::vector<DvEntryWireV2> received;
-    BeaconWireHeaderV2::DeserializeDvEntries(buf.data() + payloadOffset, payloadLen, received);
-    entries.reserve(received.size());
-    for (const auto& route : received)
-    {
-        if (route.destination == GetNode()->GetId())
-        {
-            continue;
-        }
-        DvEntry e;
-        e.destination = route.destination;
-        // v2 on-air beacon entry is score-only: (destination, score).
-        // Non-announced fields stay neutral and are not used for candidate construction.
-        e.hops = 0;
-        e.sf = 0;
-        e.scoreX100 = route.score;
-        e.toaUs = 0;
-        e.batt_mV = 0;
-        entries.push_back(e);
-    }
-    return entries;
-}
 
 std::vector<DvEntry>
 DvClApp::DecodeDvEntriesPueyo(Ptr<const Packet> p,
@@ -4679,7 +4457,7 @@ DvClApp::DecodeDvEntriesPueyo(Ptr<const Packet> p,
 }
 
 bool
-DvClApp::L2ReceiveV2(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, const Address& from)
+DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, const Address& from)
 {
     (void)dev;
     if (proto != kProtoMesh || !p)
@@ -4729,7 +4507,7 @@ DvClApp::L2ReceiveV2(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, co
         }
         else
         {
-            NS_LOG_WARN("L2ReceiveV2 beacon: node=" << myId << " src=" << src
+            NS_LOG_WARN("L2ReceiveWire beacon: node=" << myId << " src=" << src
                                                     << " non-Mac48 'from' address, cannot learn linkAddr wrapper");
         }
         UpdateNeighborLinkSf(src, rxSf);
@@ -4776,8 +4554,7 @@ DvClApp::L2ReceiveV2(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, co
         DvMessage msg;
         msg.origin = src;
         msg.sequence = seqFromRp;
-        msg.entries = (m_wireFormat == "pueyo7b") ? DecodeDvEntriesPueyo(payload, 0, toaUsNeighbor, rxSf)
-                                                   : DecodeDvEntriesV2(payload, 0, toaUsNeighbor, rxSf);
+        msg.entries = DecodeDvEntriesPueyo(payload, 0, toaUsNeighbor, rxSf);
         if (m_pueyoValidationTrace && m_wireFormat == "pueyo7b")
         {
             NS_LOG_INFO("PUEYO_VAL_RX_MSG node=" << myId << " origin=" << src
@@ -4821,19 +4598,6 @@ DvClApp::L2ReceiveV2(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, co
         {
             seq16 = static_cast<uint16_t>(traceTag.GetSeq() & 0xFFFF);
         }
-    }
-    else
-    {
-        DataWireHeaderV2 dataHdr;
-        if (!ParseDataWirePacketV2(p, &dataHdr, &payload))
-        {
-            return true;
-        }
-        src = dataHdr.GetSrc();
-        dst = dataHdr.GetDst();
-        via = dataHdr.GetVia();
-        seq16 = dataHdr.GetSeq16();
-        ttl = dataHdr.GetTtl();
     }
 
     const uint8_t hopsSeen = (m_initTtl > ttl) ? static_cast<uint8_t>(m_initTtl - ttl) : 0;
@@ -5371,11 +5135,6 @@ DvClApp::GenerateDataTraffic()
 void
 DvClApp::SendDataPacket(uint32_t dst)
 {
-    if (m_wireFormat == "v2")
-    {
-        SendDataPacketV2(dst);
-        return;
-    }
     if (m_wireFormat == "pueyo7b")
     {
         SendDataPacketPueyo7b(dst);
@@ -5569,113 +5328,6 @@ DvClApp::SendDataPacket(uint32_t dst)
     SendWithCSMA(p, dataTag, dstAddr, true);
 }
 
-void
-DvClApp::SendDataPacketV2(uint32_t dst)
-{
-    TrackActiveDestination(dst);
-    const uint32_t myId = GetNode()->GetId();
-    const uint16_t seq16 = static_cast<uint16_t>((++m_dataSeqPerNode) & 0xFFFF);
-
-    NS_LOG_INFO("APP_SEND_DATA src=" << myId << " dst=" << dst << " seq=" << seq16
-                                       << " time=" << Simulator::Now().GetSeconds());
-
-    m_dataPacketsGenerated++;
-    if (m_stats)
-    {
-        m_stats->RecordDataGenerated(myId, dst, seq16);
-    }
-
-    const RouteEntry* route = m_routing ? m_routing->GetRoute(dst) : nullptr;
-    if (!route)
-    {
-        const uint32_t routeCount = m_routing ? m_routing->GetRouteCount() : 0;
-        const bool hasGwRoute = m_routing ? m_routing->HasRoute(m_collectorNodeId) : false;
-        RouteStatus rs = ValidateRoute(dst);
-        NS_LOG_INFO("DATA_NOROUTE detail: node="
-                    << myId << " src=" << myId << " dst=" << dst << " seq=" << seq16
-                    << " time=" << Simulator::Now().GetSeconds() << "s"
-                    << " routesKnown=" << routeCount << " hasGwRoute=" << (hasGwRoute ? 1 : 0)
-                    << " hasEntry=" << (rs.exists ? 1 : 0) << " expired=" << (rs.expired ? 1 : 0)
-                    << " collectorNodeId=" << m_collectorNodeId << " reason=no_route_v2");
-        NS_LOG_INFO("FWDTRACE DATA_NOROUTE time="
-                      << Simulator::Now().GetSeconds() << " node=" << myId << " src=" << myId
-                      << " dst=" << dst << " seq=" << seq16 << " reason=no_route_v2");
-        m_dataNoRoute++;
-        CountDropNoRouteSrc();
-        return;
-    }
-
-    uint8_t dataSf = m_sf;
-    if (m_useRouteSfForData)
-    {
-        dataSf = route->sf;
-    }
-    if (m_useEmpiricalSfForData)
-    {
-        dataSf = GetDataSfForNeighbor(route->nextHop);
-    }
-    dataSf = std::clamp<uint8_t>(dataSf, m_sfMin, m_sfMax);
-
-    DataWireHeaderV2 hdr;
-    hdr.SetSrc(static_cast<uint16_t>(myId));
-    hdr.SetDst(static_cast<uint16_t>(dst));
-    hdr.SetVia(static_cast<uint16_t>(route->nextHop));
-    hdr.SetFlagsTtl(PackFlagsTtl(DvClPacketType::DATA, std::min<uint8_t>(m_initTtl, 63)));
-    hdr.SetSeq16(seq16);
-
-    Ptr<Packet> p = Create<Packet>(m_dataPayloadSize);
-    p->AddHeader(hdr);
-
-    DvClMetricTag traceTag;
-    traceTag.SetSrc(static_cast<uint16_t>(myId));
-    traceTag.SetDst(static_cast<uint16_t>(dst));
-    traceTag.SetSeq(seq16);
-    traceTag.SetPrevHop(static_cast<uint16_t>(myId));
-    traceTag.SetExpectedNextHop(static_cast<uint16_t>(route->nextHop));
-    traceTag.SetTtl(std::min<uint8_t>(m_initTtl, 63));
-    traceTag.SetHops(0);
-    traceTag.SetSf(dataSf);
-    traceTag.SetToaUs(ComputeLoRaToAUs(dataSf, m_bw, m_cr, p->GetSize()));
-    traceTag.SetBatt_mV(GetBatteryVoltageMv());
-    traceTag.SetScoreX100(ComputeScoreX100(traceTag));
-    p->AddPacketTag(traceTag);
-
-    Mac48Address routeMac;
-    bool usingStale = false;
-    const bool hasUsableMac = ResolveUnicastNextHopLinkAddr(route->nextHop, &routeMac, &usingStale);
-    (void)usingStale;
-    if (!hasUsableMac)
-    {
-        const uint32_t routeCount = m_routing ? m_routing->GetRouteCount() : 0;
-        const bool hasGwRoute = m_routing ? m_routing->HasRoute(m_collectorNodeId) : false;
-        RouteStatus rs = ValidateRoute(dst);
-        NS_LOG_INFO("DATA_NOROUTE detail: node="
-                    << myId << " src=" << myId << " dst=" << dst << " seq=" << seq16
-                    << " time=" << Simulator::Now().GetSeconds() << "s"
-                    << " routesKnown=" << routeCount << " hasGwRoute=" << (hasGwRoute ? 1 : 0)
-                    << " hasEntry=" << (rs.exists ? 1 : 0) << " expired=" << (rs.expired ? 1 : 0)
-                    << " collectorNodeId=" << m_collectorNodeId
-                    << " nextHop=" << route->nextHop << " reason=no_link_addr_for_unicast_v2");
-        NS_LOG_INFO("FWDTRACE DATA_NOROUTE time="
-                      << Simulator::Now().GetSeconds() << " node=" << myId << " src=" << myId
-                      << " dst=" << dst << " seq=" << seq16 << " nextHop=" << route->nextHop
-                      << " reason=no_link_addr_for_unicast_v2");
-        m_dataNoRoute++;
-        CountDropNoRouteSrc();
-        return;
-    }
-
-    if (m_stats)
-    {
-        m_stats->RecordRouteUsed(myId,
-                                            dst,
-                                            route->nextHop,
-                                            route->hops,
-                                            route->scoreX100,
-                                            route->seqNum);
-    }
-    SendWithCSMA(p, traceTag, Address(routeMac), true);
-}
 
 void
 DvClApp::SendDataPacketPueyo7b(uint32_t dst)

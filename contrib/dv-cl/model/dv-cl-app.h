@@ -147,10 +147,9 @@ class DvClApp : public Application
     void Tick();
     void BuildAndSendDv(uint8_t sf);
     void BuildAndSendDvPueyo(uint8_t sf);
-    void BuildAndSendDvV2(uint8_t sf);
     void ForwardWithTtl(Ptr<const Packet> pIn, const DvClMetricTag& inTag);
     bool L2Receive(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, const Address& from);
-    bool L2ReceiveV2(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, const Address& from);
+    bool L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, const Address& from);
     void ForwardWithTtlV2(Ptr<const Packet> pIn,
                           uint16_t src,
                           uint16_t dst,
@@ -266,23 +265,13 @@ class DvClApp : public Application
     std::vector<DvEntry> DecodeDvEntries(Ptr<const Packet> p,
                                                    const DvClMetricTag& tag,
                                                    uint32_t toaUsNeighbor) const;
-    std::vector<DvEntry> DecodeDvEntriesV2(Ptr<const Packet> p,
-                                                     uint32_t payloadOffset,
-                                                     uint32_t toaUsNeighbor,
-                                                     uint8_t rxSf) const;
     std::vector<DvEntry> DecodeDvEntriesPueyo(Ptr<const Packet> p,
                                                         uint32_t payloadOffset,
                                                         uint32_t toaUsNeighbor,
                                                         uint8_t rxSf) const;
-    bool ParseDataWirePacketV2(Ptr<const Packet> p,
-                               DataWireHeaderV2* outHdr,
-                               Ptr<Packet>* outPayload) const;
     bool ParseDataWirePacketPueyo7b(Ptr<const Packet> p,
                                     DvClDataHeader* outHdr,
                                     Ptr<Packet>* outPayload) const;
-    bool ParseBeaconWirePacketV2(Ptr<const Packet> p,
-                                 BeaconWireHeaderV2* outHdr,
-                                 Ptr<Packet>* outPayload) const;
     bool ParseBeaconWirePacketPueyo(Ptr<const Packet> p,
                                     DvClBeaconHeader* outHdr,
                                     Ptr<Packet>* outPayload) const;
@@ -550,7 +539,6 @@ class DvClApp : public Application
 
     void GenerateDataTraffic();
     void SendDataPacket(uint32_t dst);
-    void SendDataPacketV2(uint32_t dst);
     void SendDataPacketPueyo7b(uint32_t dst);
     void CleanOldSeenData();
     Time ComputeNextDataSlotDelay(Time baseDelay);
