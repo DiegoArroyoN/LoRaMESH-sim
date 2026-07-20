@@ -284,7 +284,7 @@ class DvClApp : public Application
                                  BeaconWireHeaderV2* outHdr,
                                  Ptr<Packet>* outPayload) const;
     bool ParseBeaconWirePacketPueyo(Ptr<const Packet> p,
-                                    BeaconWireHeaderV2* outHdr,
+                                    DvClBeaconHeader* outHdr,
                                     Ptr<Packet>* outPayload) const;
     uint32_t ResolveBeaconSequenceFromRpCounter(uint32_t origin, uint8_t rpCounter);
 

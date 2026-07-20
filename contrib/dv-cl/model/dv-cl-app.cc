@@ -3936,11 +3936,9 @@ DvClApp::ProcessTxQueue()
                 entry.beaconRpCounter = static_cast<uint8_t>(m_beaconRpCounterTx & 0x3F);
                 entry.beaconRpCounterAssigned = true;
             }
-            BeaconWireHeaderV2 beaconHdr;
+            DvClBeaconHeader beaconHdr;
             Ptr<Packet> beaconPayload;
-            const bool parsedBeacon =
-                (m_wireFormat == "pueyo7b") ? ParseBeaconWirePacketPueyo(p, &beaconHdr, &beaconPayload)
-                                             : ParseBeaconWirePacketV2(p, &beaconHdr, &beaconPayload);
+            const bool parsedBeacon = ParseBeaconWirePacketPueyo(p, &beaconHdr, &beaconPayload);
             if (parsedBeacon)
             {
                 beaconHdr.SetFlagsTtl(
@@ -4504,7 +4502,7 @@ DvClApp::ParseBeaconWirePacketV2(Ptr<const Packet> p,
 
 bool
 DvClApp::ParseBeaconWirePacketPueyo(Ptr<const Packet> p,
-                                      BeaconWireHeaderV2* outHdr,
+                                      DvClBeaconHeader* outHdr,
                                       Ptr<Packet>* outPayload) const
 {
     if (!outHdr || !p || p->GetSize() < kPueyoBeaconHeaderBytes)
@@ -4526,8 +4524,7 @@ DvClApp::ParseBeaconWirePacketPueyo(Ptr<const Packet> p,
     outHdr->SetSrc(hdr.GetSrc());
     outHdr->SetDst(hdr.GetDst());
     outHdr->SetFlagsTtl(hdr.GetFlagsTtl());
-    outHdr->SetSoc(hdr.GetSoc());  // §SoC-wire: propagate to v2 output header
-    outHdr->SetDcRemaining(0xFF); // DC byte not on the 6B wire  // §DC-wire: propagate to v2 output header
+    outHdr->SetSoc(hdr.GetSoc()); // §SoC-wire
     if (outPayload)
     {
         *outPayload = copy;
@@ -4706,11 +4703,9 @@ DvClApp::L2ReceiveV2(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, co
         rxPowerDbm = loraTag.GetReceivePower();
     }
 
-    BeaconWireHeaderV2 beaconHdr;
+    DvClBeaconHeader beaconHdr;
     Ptr<Packet> payload;
-    const bool isPueyoBeacon =
-        (m_wireFormat == "pueyo7b") ? ParseBeaconWirePacketPueyo(p, &beaconHdr, &payload)
-                                     : ParseBeaconWirePacketV2(p, &beaconHdr, &payload);
+    const bool isPueyoBeacon = ParseBeaconWirePacketPueyo(p, &beaconHdr, &payload);
     if (isPueyoBeacon)
     {
         const uint16_t src = beaconHdr.GetSrc();
@@ -4759,7 +4754,7 @@ DvClApp::L2ReceiveV2(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, co
         link.toaUs = toaUsNeighbor;
         const double rxEnergyFrac = SoC8ToFraction(beaconHdr.GetSoc());  // §SoC-wire fix
         link.batt_mV = static_cast<uint16_t>(EnergyFractionToBatteryMv(rxEnergyFrac));
-        link.dc_remaining = beaconHdr.GetDcRemaining();  // §DC-wire fix: was defaulting to 0xFF
+        link.dc_remaining = 0xFF; // no DC byte on the 6B wire: always "not available"  // §DC-wire fix: was defaulting to 0xFF
         LinkStats stats;
         stats.toaUs = toaUsNeighbor;
         stats.hops = 1;
