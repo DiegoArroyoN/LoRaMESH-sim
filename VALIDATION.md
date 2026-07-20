@@ -266,6 +266,57 @@ compromete ningún número publicado** en ninguno de los tres tamaños de red.
 Reservas: una sola familia de topología (grilla), tráfico bajo all-to-all y
 ventana de 1200 s. No se midió con movilidad ni con cargas de saturación.
 
+## 2026-07-20 — F1.4b Duty rolling: dos correcciones aplicadas, el sobrepaso SIGUE ABIERTO
+
+**Advertencia de método**: el perfil `proposal_pueyo_like_csmacad` **deshabilita
+el duty a propósito** (`applyPueyoComparableBase`: `enableDutyCycle=false`,
+`dutyLimit=1.0`) para comparabilidad con Pueyo 2024, y su validación lo exige
+salvo `--allowDutyOverride`. Medir cumplimiento de duty sin pasar
+`--allowDutyOverride=true --enableDuty=1 --dutyLimit=0.01` no mide nada.
+
+**Hallazgo (con duty activo, 9 nodos, 7200 s, carga alta):** el pico real de la
+ventana deslizante de 1 h es **1.1275%** contra el límite de 1%, en **9/9
+nodos**, medido con las duraciones exactas que el propio MAC registra. Presente
+igual en el binario de campaña ⇒ **preexistente, no introducido por el módulo**.
+
+**Lo que sí se estableció:** la compuerta es impecable *en sus instantes de
+decisión* — el MAC se auto-reporta un máximo de exactamente 1.00% y **cero**
+violaciones. El exceso vive entre esos instantes: la compuerta evalúa al
+*inicio* de cada transmisión y el supremo de la ventana ocurre al *final*. Para
+EU868 lo que rige es el supremo.
+
+**Dos correcciones aplicadas (ambas correctas por mérito propio, ninguna cierra
+el sobrepaso):**
+
+1. *Fuente única de tiempo al aire.* La compuerta proyectaba con
+   `ComputeLoRaToAUs` de la aplicación (SF12: 1.9087 s) mientras la PHY ocupaba
+   el canal según `LoraPhy::GetOnAirTime` (SF12: 1.7449 s) — dos cálculos
+   independientes de una misma magnitud física, el mismo patrón que los dos
+   headers de beacon. El device pasa a ser el dueño de la respuesta
+   (`BuildTxParams` como único sitio de construcción, `GetOnAirTimeFor` como
+   consulta) y la compuerta le pregunta en vez de confiar en el tag.
+2. *Aire comprometido en vez de transcurrido.* `GetDutyCycleUsed` clampeaba cada
+   registro en `now`, de modo que una transmisión en vuelo aportaba solo lo ya
+   emitido y su presupuesto comprometido se volvía a repartir.
+
+Medición tras ambas: pico **1.1275%** (sin cambio). El efecto es nulo aquí
+porque los solapes de transmisión son marginales (30 de 1162, ≤0.091 s).
+
+**Impacto en resultados (barrido pareado, duty activo, 5 semillas):**
+
+| | PDR medio | |
+|---|---|---|
+| campaña (sin correcciones) | 0.2457 | |
+| módulo (con ambas) | 0.2518 | Δ **+0.0061**, 3 arriba / 2 abajo |
+
+Despreciable, dentro de la variabilidad entre semillas.
+
+**Abierto — no reclamar cerrado.** Dos hipótesis de causa fueron descartadas por
+medición (las dos correcciones de arriba). La siguiente a probar: evaluar la
+restricción sobre la ventana *futura* — la que existirá al terminar la
+transmisión, `[s+d-W, s+d]` incluyéndola — en vez de sobre la ventana actual más
+una proyección. Debe verificarse midiendo, no asumiendo.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
