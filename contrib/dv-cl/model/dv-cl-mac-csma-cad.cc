@@ -249,7 +249,13 @@ DvClCsmaCadMac::GetDutyCycleUsed()
         const Time txStart = record.first;
         const Time txEnd = record.first + record.second;
         const Time overlapStart = std::max(txStart, windowStart);
-        const Time overlapEnd = std::min(txEnd, now);
+        // Charge airtime that is committed, not merely elapsed: a transmission
+        // already on the air will occupy the channel to its end, so clamping
+        // the overlap at `now` lets the gate hand out budget that is already
+        // spent. Measuring only elapsed airtime is what let the true rolling
+        // peak sit above the limit while the gate believed it was at exactly
+        // 1% (see VALIDATION.md).
+        const Time overlapEnd = txEnd;
         if (overlapEnd > overlapStart)
         {
             total += overlapEnd - overlapStart;
