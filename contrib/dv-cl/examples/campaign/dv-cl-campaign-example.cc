@@ -1941,6 +1941,18 @@ main(int argc, char* argv[])
             energy::EnergySourceContainer nodeBattery = batteryHelper.Install(nodes.Get(i));
             batteries.Add(nodeBattery);
 
+            // Seed the SAME initial charge into the application, which forwards it
+            // to the energy registry the composite metric reads. Without this the
+            // registry starts every node full and only ns-3's BasicEnergySource
+            // sees the heterogeneous SoC, so delta*Psi(SoC) never varies.
+            for (uint32_t a = 0; a < nodes.Get(i)->GetNApplications(); ++a)
+            {
+                if (auto capp = DynamicCast<DvClApp>(nodes.Get(i)->GetApplication(a)))
+                {
+                    capp->SetAttribute("InitialSocFraction", DoubleValue(initialSoc));
+                }
+            }
+
             NS_LOG_INFO("Node " << i << " initial SOC: " << std::fixed << std::setprecision(1)
                                 << (initialSoc * 100) << "% (" << initialEnergyJ << "J / "
                                 << fullCapacityJ << "J)");

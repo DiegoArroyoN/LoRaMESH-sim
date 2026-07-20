@@ -368,10 +368,19 @@ DvClApp::GetTypeId()
                           MakeUintegerChecker<uint32_t>(6, 64))
             .AddAttribute(
                 "BatteryFullCapacityJ",
-                "Nominal full battery capacity [J] used to compute SoC from remaining energy.",
+                "Nominal full battery capacity [J]. Kept only as a voltage-fallback "
+                "reference; the state of charge itself comes from the energy registry.",
                 DoubleValue(38880.0),
                 MakeDoubleAccessor(&DvClApp::m_batteryFullCapacityJ),
                 MakeDoubleChecker<double>(1.0))
+            .AddAttribute(
+                "InitialSocFraction",
+                "Initial state of charge in [0,1] seeded into the energy registry at "
+                "startup; <0 leaves the registry at full. This is the charge the "
+                "composite metric sees, so a lifetime study sets it below EnergyHi.",
+                DoubleValue(-1.0),
+                MakeDoubleAccessor(&DvClApp::m_initialSocFraction),
+                MakeDoubleChecker<double>(-1.0, 1.0))
             .AddAttribute("EnableDataSlots",
                           "Enable local micro-slots for data transmissions.",
                           BooleanValue(false),
@@ -1377,6 +1386,13 @@ DvClApp::StartApplication()
     if (m_energyModel)
     {
         m_energyModel->RegisterNode(nodeId);
+        if (m_initialSocFraction >= 0.0)
+        {
+            // The heterogeneous starting charge must reach the model the metric
+            // reads, not only ns-3's BasicEnergySource; without this every node
+            // begins full and delta*Psi(SoC) is dead from t=0.
+            m_energyModel->SetRemainingFraction(nodeId, m_initialSocFraction);
+        }
     }
 
     UpdateRouteTimeout();
@@ -3411,11 +3427,10 @@ DvClApp::GetRemainingEnergyJ() const
 double
 DvClApp::GetEnergyFraction() const
 {
-    const double remainingJ = GetRemainingEnergyJ();
-    if (remainingJ >= 0.0 && m_batteryFullCapacityJ > 0.0)
-    {
-        return std::clamp(remainingJ / m_batteryFullCapacityJ, 0.0, 1.0);
-    }
+    // Single source of truth for the state of charge: the registry, which
+    // divides remaining charge by its own capacity. Dividing the registry's
+    // joules by a separate application-side capacity (as this once did) mixes
+    // two batteries and can push the fraction past 1.
     if (m_energyModel)
     {
         return m_energyModel->GetEnergyFraction(GetNode()->GetId());

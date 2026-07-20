@@ -476,6 +476,7 @@ class DvClApp : public Application
     std::unordered_map<uint32_t, Time> m_beaconScheduledAtBySeq;
     uint32_t m_collectorNodeId{3};          // Data collection node (designated sink)
     double m_batteryFullCapacityJ{38880.0}; // Capacidad nominal total para SOC [J]
+    double m_initialSocFraction{-1.0};      // SoC inicial sembrado al registro; <0 = lleno
     bool m_advertiseAllRoutes{true};
     double m_dataStartTimeSec{90.0}; // Inicio de datos tras convergencia DV
     double m_dataStopTimeSec{-1.0};  // Fin de generación de datos (-1 = deshabilitado)
