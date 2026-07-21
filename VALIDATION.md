@@ -1073,6 +1073,50 @@ variante **con captura** en lugar de la clásica. Para dirimirlo hace falta (a)
 permitir que la línea de comandos sobrescriba el modelo de interferencia del
 perfil, y (b) una fuente de tráfico Poisson.
 
+## 2026-07-20 — Cuánto del PDR depende de suponer SF ortogonales
+
+**Qué modelo produce realmente los resultados.** El módulo `lorawan` trae por
+defecto Goursaud en los dos ejes, pero el perfil de campaña
+(`applyPueyoComparableBase`) fuerza `interferenceModel = pueyo_fixed_capture`. Y
+como ese modelo **nunca consulta la matriz de colisión**, la matriz Goursaud es
+**configuración muerta** en todas las corridas: su valor es indiferente.
+
+Lo que decide las colisiones en los resultados es `PUEYO_FIXED_CAPTURE`, con
+tres reglas:
+
+1. **Ignora por completo la interferencia entre SF distintos** (`continue` sin
+   evaluar). No es cuasi-ortogonalidad con umbrales como Goursaud (−16 a −36 dB):
+   es **ortogonalidad perfecta**.
+2. **Captura por umbral fijo de 6 dB** entre tramas del mismo SF.
+3. **Colisión por temporización de preámbulo** aunque la potencia alcance.
+
+Al describir el modelo en el paper corresponde citar `pueyo_fixed_capture` con
+estas reglas. **Decir "Goursaud" sería incorrecto**: no es el modelo que produjo
+los números.
+
+**Impacto medido de la suposición** (barrido pareado por semilla, 10 semillas,
+perfil `proposal_pueyo_like_csmacad`, SF7-SF12 en juego, 7200 s):
+
+| nEd | PDR con SF ortogonales | PDR con cross-SF (Goursaud) | delta | t pareado |
+|---|---|---|---|---|
+| 9 | 0.1823±0.0041 | 0.1835±0.0044 | +0.6% | 0.54 |
+| 25 | 0.0340±0.0009 | 0.0292±0.0014 | **−14.2%** | −8.11 |
+| 49 | 0.0146±0.0007 | 0.0088±0.0005 | **−39.5%** | −21.56 |
+
+**La suposición infla el rendimiento, y el efecto crece fuerte con la densidad.**
+A 9 nodos es indistinguible de cero (t=0.54): con pocos vecinos apenas hay
+solapes entre SF distintos. A 49 nodos el PDR cae **casi a la mitad** al modelar
+interferencia cross-SF, con t=−21.6 — de los efectos más grandes y significativos
+medidos en toda la sesión.
+
+**Implicación:** los resultados de densidad alta descansan de manera sustancial en
+que los SF no interfieran entre sí. Es una limitación que conviene declarar
+explícitamente, y un revisor puede preguntarlo con razón. La alternativa honesta
+es reportar ambos modelos, o justificar la ortogonalidad citando literatura de
+LoRa que la respalde para las separaciones de SF en uso.
+
+Datos en `tools/validation/cross_sf_orthogonality.csv`.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
