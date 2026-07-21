@@ -982,6 +982,54 @@ en el canal no produce evento terminal a nivel de aplicación en ninguno de los
 dos extremos**, y es correcto que así sea. Por eso el test reporta y atribuye el
 residual en lugar de exigir cero.
 
+## 2026-07-20 — F2.3 ancla ALOHA: NO SE CUMPLE la curva teórica (medido)
+
+Escenario de libro de texto: 30 m de separación (un solo dominio de colisión),
+todos los nodos hacia el nodo 0, un salto, perfil ALOHA (sin CSMA), sin duty. La
+carga ofrecida se barre aumentando el número de nodos. G = aire ocupado /
+ventana; S = entregas x ToA medio / ventana. Datos en
+`tools/validation/aloha_offered_load_sweep.csv`.
+
+| nEd | G | S medido | S = G·e^(−2G) | ratio |
+|---|---|---|---|---|
+| 9 | 0.068 | 0.0489 | 0.0593 | 0.82 |
+| 25 | 0.256 | 0.0770 | 0.1533 | 0.50 |
+| 49 | 0.667 | 0.0548 | 0.1757 | 0.31 |
+| 81 | 1.478 | 0.0548 | 0.0769 | 0.71 |
+| 121 | 2.315 | 0.0320 | 0.0226 | 1.42 |
+| 169 | 3.234 | 0.0326 | 0.0050 | 6.5 |
+| 225 | 4.297 | 0.0315 | 0.0008 | 39 |
+
+**Lo que sí se reproduce (cualitativo):** el colapso por contención. S crece,
+alcanza un máximo y decae al aumentar la carga — el comportamiento característico
+de un acceso aleatorio sin coordinación.
+
+**Lo que NO se reproduce (cuantitativo):** ni la posición del máximo (medido
+G≈0.26, teórico G=0.5), ni su valor (0.077 frente a 0.184 = 1/2e), ni el
+decaimiento asintótico: el simulador **se aplana en S≈0.03** mientras la teoría
+tiende a cero.
+
+**Explicaciones estructurales plausibles**, ninguna aislada todavía: el PHY
+modelado tiene **efecto captura** (una señal fuerte sobrevive la colisión, lo que
+produce exactamente un piso como el observado), el tráfico es **programado y no
+Poisson** (la teoría asume llegadas de Poisson), y conviven **dos SF** (7 y 8)
+que son cuasi-ortogonales y por tanto no colisionan entre sí.
+
+**El experimento de aislamiento quedó bloqueado**: `--interferenceModel=goursaud`
+y `EnableProbabilisticCapture=false` **no tienen efecto** porque el perfil aplica
+`applyPueyoComparableBase()` *después* de parsear la línea de comandos y
+sobrescribe ambos. La corrida "sin captura" dio resultados idénticos byte a byte
+a la corrida con captura, lo que confirma que el flag se ignoró (no que la
+captura sea irrelevante).
+
+**Estado: F2.3 NO validado.** Antes de volver a intentarlo hay que decidir si el
+ancla es siquiera aplicable: la ALOHA pura supone llegadas de Poisson, un único
+canal, colisiones totalmente destructivas y receptores ilimitados; este PHY no
+cumple ninguna de las cuatro. Es posible que el ancla correcta para LoRa sea la
+variante **con captura** en lugar de la clásica. Para dirimirlo hace falta (a)
+permitir que la línea de comandos sobrescriba el modelo de interferencia del
+perfil, y (b) una fuente de tráfico Poisson.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
