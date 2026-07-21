@@ -116,7 +116,12 @@ main(int argc, char* argv[])
     double captureSlope = 0.7;
     double captureMinProb = 0.05;
     double captureMaxProb = 0.95;
-    std::string interferenceModel = "puello"; // goursaud | puello | pueyo | pueyo_fixed_capture
+    // Modelo de interferencia base: goursaud, que sí penaliza la interferencia
+    // entre SF distintos (umbrales -16 a -36 dB) en lugar de ignorarla. El
+    // modelo pueyo_fixed_capture supone SF perfectamente ortogonales, lo que
+    // medimos que infla el PDR hasta un 40% a 49 nodos (VALIDATION.md
+    // 2026-07-20); queda disponible como variante de estudio, no como base.
+    std::string interferenceModel = "goursaud";
     // Matriz de colisión (eje independiente del modelo de captura): 'goursaud'
     // es la realista (misma SF sobrevive con 6 dB de ventaja) y 'aloha' la
     // estricta, en la que dos tramas del mismo SF se destruyen siempre. La
@@ -555,7 +560,9 @@ main(int argc, char* argv[])
                  "(estricta: misma SF siempre se destruyen; para el ancla F2.3)",
                  collisionMatrix);
     cmd.AddValue("interferenceModel",
-                 "PHY interference model: goursaud | puello | pueyo | pueyo_fixed_capture",
+                 "Modelo de interferencia PHY: goursaud (base: penaliza cross-SF) | "
+                 "pueyo_fixed_capture (variante de estudio: supone SF ortogonales) | "
+                 "puello | pueyo (alias del anterior)",
                  interferenceModel);
     cmd.AddValue("puelloCaptureThresholdDb",
                  "Capture threshold [dB] for puello model",
@@ -666,7 +673,7 @@ main(int argc, char* argv[])
         txPowerDbm = 20.0;
         preambleSymbols = 16;
         puelloPreambleSymbols = static_cast<double>(preambleSymbols);
-        interferenceModel = "pueyo_fixed_capture";
+        interferenceModel = "goursaud";
         sfMin = 7;
         sfMax = 12;
         initTtl = 63;
@@ -1001,10 +1008,10 @@ main(int argc, char* argv[])
                         "Error: profile=" << profileName << " requiere tabla DV 2/1024");
         NS_ABORT_MSG_IF(costEncoding != "cost255",
                         "Error: profile=" << profileName << " requiere costEncoding=cost255");
-        NS_ABORT_MSG_IF(
-            interferenceModel != "pueyo_fixed_capture" && interferenceModel != "puello" &&
-                interferenceModel != "pueyo" && !allowInterferenceModelOverride,
-            "Error: profile=" << profileName << " requiere interferenceModel=pueyo_fixed_capture");
+        NS_ABORT_MSG_IF(interferenceModel != "goursaud" && !allowInterferenceModelOverride,
+                        "Error: profile=" << profileName
+                                          << " requiere interferenceModel=goursaud (base); use "
+                                             "--allowInterferenceModelOverride para variar");
         NS_ABORT_MSG_IF(dataPeriodJitterMaxSec != 0.0 && !allowTemporalDesyncVariant,
                         "Error: profile=" << profileName << " requiere dataPeriodJitterMaxSec=0");
         NS_ABORT_MSG_IF(dataStartPhaseMaxSec != kPueyoDefaultDataStartPhaseMaxSec &&
