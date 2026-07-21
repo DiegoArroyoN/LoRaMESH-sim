@@ -1117,6 +1117,39 @@ LoRa que la respalde para las separaciones de SF en uso.
 
 Datos en `tools/validation/cross_sf_orthogonality.csv`.
 
+## 2026-07-20 — Goursaud pasa a ser el modelo BASE (decisión de Diego)
+
+Aplicado: `interferenceModel = goursaud` en todos los perfiles y como valor por
+defecto. `pueyo_fixed_capture` queda disponible como variante de estudio vía
+`--allowInterferenceModelOverride=true`. La validación de perfil pasa a exigir
+goursaud. Los 8 perfiles corren sin abortar.
+
+**Efecto en el PDR** (9 nodos, 2000 s, semilla 1 — antes y después del cambio):
+
+| perfil | pueyo (SF ortogonales) | **goursaud (base)** |
+|---|---|---|
+| `proposal_pueyo_like_aloha` | 0.1775 | **0.1084** |
+| `proposal_pueyo_like_csmacad` | 0.1741 | **0.1375** |
+| `csmacad_free_backoff` | 0.1768 | **0.1308** |
+| `pueyo2024_paper_like` | 0.1653 | **0.1159** |
+| `pueyo2024_paper_like_csmacad` | 0.1612 | **0.1145** |
+| `proposal_pueyo_like` | 0.0339 | **0.0278** |
+| `proposal_pueyo_like_observed` | 0.0407 | **0.0366** |
+| `pueyo2024` | 0.0379 | **0.0420** |
+
+Nota: a 9 nodos el barrido pareado de 10 semillas no había encontrado efecto
+significativo (t=0.54); estas diferencias de una sola semilla son mayores de lo
+que ese resultado sugiere y **no deben leerse como el efecto medio** — el efecto
+medido y significativo aparece a 25 nodos (−14%) y 49 (−40%).
+
+**⚠ CONSECUENCIA: las tres campañas de hoy quedan obsoletas.**
+`campaign_20260720` (360 corridas), `lifetime_20260720` (60) y el barrido de
+densidad (40) se produjeron **todas** con `pueyo_fixed_capture`. Sus números no
+son comparables con nada generado a partir de ahora. Si se van a reportar, hay
+que **recorrerlas con la base nueva**. El costo de cómputo es conocido y bajo (la
+campaña completa tardó minutos), de modo que rehacerlas es viable cuando se
+decida.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
