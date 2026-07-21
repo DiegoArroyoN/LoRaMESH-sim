@@ -965,12 +965,17 @@ Resultado en la corrida de referencia (4 nodos, duty 1%, 500 s):
 | terminados | 1 | **24** |
 | sin explicar | 24 | **1** (perdido en el aire) |
 
-**Hallazgo de método (ns-3):** `Simulator::Stop` en el **mismo instante** que el
-`SetStopTime` de las aplicaciones puede terminar la simulación **antes** de que
-`StopApplication` se ejecute, perdiéndose toda la contabilidad de cierre. Era la
-causa de que 23 tramas encoladas no aparecieran. Las corridas de campaña usan
-`stopSec` mayor que `dataStopSec`, de modo que no las afecta, pero cualquier
-escenario nuevo debe dejar margen.
+**Hallazgo de método (ns-3), RESUELTO en el código:** `Simulator::Stop` en el
+**mismo instante** que el `SetStopTime` de las aplicaciones puede terminar la
+simulación **antes** de que `StopApplication` se ejecute, perdiéndose toda la
+contabilidad de cierre. Era la causa de que 23 tramas encoladas no aparecieran.
+
+En vez de dejarlo como regla a recordar —que cada escenario nuevo tendría que
+redescubrir— se **eliminó el modo de fallo**: `DvClApp::DoDispose()` ancla el
+reporte a la destrucción, que siempre ocurre, y el guardia de flush preexistente
+lo hace idempotente. El test de conservación ahora **para deliberadamente en el
+instante adverso** y sigue cuadrando, de modo que la trampa quedó convertida en
+algo que la suite detectaría en lugar de algo que un comentario pide evitar.
 
 El único residual restante es una trama transmitida que nunca llegó: **la pérdida
 en el canal no produce evento terminal a nivel de aplicación en ninguno de los
