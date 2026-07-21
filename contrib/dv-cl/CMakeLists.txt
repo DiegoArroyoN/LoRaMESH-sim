@@ -47,4 +47,5 @@ build_lib(
     test/dv-cl-conservation-test-suite.cc
     test/dv-cl-convergence-test-suite.cc
     test/dv-cl-aloha-test-suite.cc
+    test/dv-cl-lorawan-equiv-test-suite.cc
 )

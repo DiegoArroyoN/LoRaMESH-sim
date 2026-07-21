@@ -1150,6 +1150,41 @@ que **recorrerlas con la base nueva**. El costo de cómputo es conocido y bajo (
 campaña completa tardó minutos), de modo que rehacerlas es viable cuando se
 decida.
 
+## 2026-07-20 — F2.1 equivalencia con el módulo lorawan: VALIDADA + hallazgo LDRO
+
+Suite `dv-cl-lorawan-equiv`. En un solo salto, lo que el PHY aporta es la
+ocupación del canal, de modo que la equivalencia relevante es la del **tiempo al
+aire**: conviven dos implementaciones independientes de esa magnitud —`DvClToa`
+(verificada contra Semtech AN1200.13) y `LoraPhy::GetOnAirTime` del módulo
+estándar—, y un protocolo que presupuesta con una mientras la radio gasta la otra
+mal-cotiza cada transmisión.
+
+**Resultado: coinciden dentro de 1 µs en las 288 combinaciones** de la rejilla
+(SF7-SF12 x 6 payloads x 4 CR x 2 preámbulos), **siempre que se les pasen los
+mismos parámetros**.
+
+**Hallazgo: no se les pasan los mismos parámetros.** Existe una **tercera**
+implementación —`DvClApp::ComputeLoRaToAUs`, inline en la aplicación— que asume
+`m_de = true`, es decir **LDRO activado**, tal como la especificación LoRa exige
+en SF11/SF12 a 125 kHz. Pero `DvClLoraNetDevice::BuildTxParams` fija
+`lowDataRateOptimizationEnabled = false` **en todos los SF**.
+
+Consecuencia: **el plano de control presupuesta según la norma y la radio
+transmite fuera de norma.** Es el origen de la discrepancia observada al
+instrumentar el duty (1.9087 s presupuestados frente a 1.7449 s reales en SF12,
+~9%). El sentido del error importa: la compuerta **se cobra de más** a sí misma,
+y la métrica **sobrevalora** los SF altos.
+
+El desajuste no es uniforme: depende del `ceil` de la fórmula, de modo que para
+algunos payloads el hueco es exactamente cero y para otros llega a ~9%. La suite
+recorre payloads 1-100 en SF11 y SF12, verifica que LDRO **nunca acorta** una
+trama y acota el hueco máximo, de modo que el día que el device respete LDRO el
+test lo advierte en lugar de pasar en silencio.
+
+**Pendiente de decisión (cambia resultados):** hacer que el device honre LDRO en
+SF11/SF12 alinearía la radio con la especificación y con el presupuesto. Ya está
+declarado como limitación conocida en el README y el RST del módulo.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
