@@ -115,6 +115,17 @@ class DvClApp : public Application
 
     void StartApplication() override;
     void StopApplication() override;
+
+    /**
+     * rief Guarantees the close-out accounting runs exactly once.
+     *
+     * StopApplication reports the final ledger, but ns-3 need not reach it:
+     * a simulation stopped at the same instant the application stops can end
+     * before that event fires, silently taking every queued frame out of the
+     * accounting. Disposal always happens, so the report is anchored here too
+     * and the existing flush guard keeps it from running twice.
+     */
+    void DoDispose() override;
     void ForceFinalFlush(); // §LossFine: flush final stats on early (death-hook) stop
 
   private:

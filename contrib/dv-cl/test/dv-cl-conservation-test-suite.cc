@@ -158,10 +158,10 @@ class DvClConservationTestCase : public TestCase
             }
         }
 
-        // Stop after the applications', not with them: scheduled at the same
-        // instant the simulator can end before StopApplication runs, and with
-        // it the accounting of whatever is still queued.
-        Simulator::Stop(Seconds(cfg.simTimeSec + 1.0));
+        // Deliberately stops at the very instant the applications do. ns-3 may
+        // end the run before their stop event fires, so this pins that the
+        // close-out accounting survives it (DvClApp anchors it to disposal).
+        Simulator::Stop(Seconds(cfg.simTimeSec));
         Simulator::Run();
         Simulator::Destroy();
 

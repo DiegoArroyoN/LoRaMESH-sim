@@ -1526,6 +1526,14 @@ DvClApp::StartApplication()
     }
 }
 
+void
+DvClApp::DoDispose()
+{
+    // Idempotent: StopApplication returns immediately if it already ran.
+    StopApplication();
+    Application::DoDispose();
+}
+
 // Cancela eventos y reporta estadísticas cuando se detiene la app.
 void
 DvClApp::ForceFinalFlush()
