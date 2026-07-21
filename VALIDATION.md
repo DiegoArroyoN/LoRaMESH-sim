@@ -1185,6 +1185,53 @@ test lo advierte en lugar de pasar en silencio.
 SF11/SF12 alinearía la radio con la especificación y con el presupuesto. Ya está
 declarado como limitación conocida en el README y el RST del módulo.
 
+## 2026-07-20 — Fuente única de tiempo al aire + radio alineada con la norma
+
+Cerradas de una vez las dos cosas: la duplicación y la desalineación, que eran
+la misma causa.
+
+**Antes había tres implementaciones** del tiempo al aire: `DvClToa` (validada
+contra Semtech AN1200.13), `LoraPhy::GetOnAirTime` del módulo estándar, y una
+**tercera copia inline en la aplicación** (`DvClApp::ComputeLoRaToAUs`). Las
+fórmulas coincidían; los **parámetros no**: la aplicación asumía LDRO activado
+—como manda la especificación por encima de 16 ms de tiempo de símbolo— mientras
+`DvClLoraNetDevice::BuildTxParams` lo fijaba en `false` para **todos** los SF.
+
+**Ahora:**
+
+- La regla vive en un solo sitio, `LowDataRateOptimizationRequired(sf, bw)`, y
+  **ambos lados la consultan**.
+- La copia inline de la fórmula **se eliminó**; la aplicación delega en la
+  validada.
+- El flag `m_de` propio de la aplicación **se retiró** para que nadie reintroduzca
+  una segunda decisión.
+- **El device honra LDRO en SF11/SF12** (decisión de Diego): las tramas ocupan el
+  aire tanto como lo haría una radio real.
+
+Verificado por grep: **una sola** implementación de la fórmula
+(`dv-cl-toa.cc`) y **una sola** decisión de LDRO en todo el módulo.
+
+**Esto alarga las transmisiones en SF alto, de modo que los resultados se
+mueven** — en la dirección correcta: antes la radio emitía más corto que
+cualquier radio real y la compuerta de duty se cobraba de más a sí misma.
+
+### Patrón recurrente de la sesión
+
+Cuatro defectos independientes resultaron ser el mismo: **múltiples fuentes de
+verdad para una magnitud física**.
+
+| magnitud | fuentes | resolución |
+|---|---|---|
+| formato del beacon | 2 clases byte-idénticas + rebuild en TX | un header, el que se parsea es el que se emite |
+| tiempo al aire | 3 implementaciones, 2 reglas de LDRO | una fórmula, una regla, el device es el dueño |
+| carga de batería | registro + capacidad paralela en la app | el registro es el dueño |
+| presupuesto de duty | ToA del tag vs ToA de la PHY | la compuerta pregunta al device |
+
+En los cuatro casos la corrección **no fue documentar la sutileza sino eliminar
+la posibilidad de divergencia**. Conviene tenerlo como criterio de revisión: si
+una magnitud física se calcula en dos sitios, es cuestión de tiempo que
+discrepen, y el síntoma es silencioso.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen

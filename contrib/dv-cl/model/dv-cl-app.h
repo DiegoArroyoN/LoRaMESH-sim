@@ -310,7 +310,8 @@ class DvClApp : public Application
     uint8_t m_pl{20};
     bool m_crc{true};
     bool m_ih{false};
-    bool m_de{true};
+    // El flag DE propio se retiro: la optimizacion de baja tasa la decide
+    // LowDataRateOptimizationRequired(), unica regla para toda la pila.
 
     uint32_t m_seq{0};
     uint32_t m_dataSeq{0};
