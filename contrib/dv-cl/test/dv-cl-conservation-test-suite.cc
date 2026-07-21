@@ -36,6 +36,7 @@ class ConservationSink : public DvClStatsSink
     std::map<Key, std::string> terminated;
     uint32_t duplicateGenerations{0};
     uint32_t duplicateDeliveries{0};
+    std::set<Key> transmitted;
 
     void RecordDataGenerated(uint32_t src, uint32_t dst, uint32_t seq) override
     {
@@ -69,8 +70,15 @@ class ConservationSink : public DvClStatsSink
     }
 
     // Everything else is irrelevant to conservation.
-    void RecordTx(uint32_t, uint32_t, uint32_t, uint32_t, uint8_t, uint8_t, int16_t, uint16_t,
-                  uint16_t, uint8_t, uint32_t, double, double, bool) override {}
+    /// Origin-side transmissions, to tell channel loss from frames never sent.
+    void RecordTx(uint32_t, uint32_t src, uint32_t seq, uint32_t dst, uint8_t, uint8_t, int16_t,
+                  uint16_t, uint16_t, uint8_t, uint32_t, double, double, bool ok) override
+    {
+        if (ok)
+        {
+            transmitted.insert({src, dst, seq});
+        }
+    }
     void RecordRx(uint32_t, uint32_t, uint32_t, uint32_t, uint8_t, uint8_t, int16_t, uint16_t,
                   uint16_t, uint8_t, double, double, bool) override {}
     void RecordRoute(uint32_t, uint32_t, uint32_t, uint8_t, uint16_t, uint32_t,
@@ -150,7 +158,10 @@ class DvClConservationTestCase : public TestCase
             }
         }
 
-        Simulator::Stop(Seconds(cfg.simTimeSec));
+        // Stop after the applications', not with them: scheduled at the same
+        // instant the simulator can end before StopApplication runs, and with
+        // it the accounting of whatever is still queued.
+        Simulator::Stop(Seconds(cfg.simTimeSec + 1.0));
         Simulator::Run();
         Simulator::Destroy();
 
@@ -199,6 +210,40 @@ class DvClConservationTestCase : public TestCase
         NS_TEST_ASSERT_MSG_LT_OR_EQ(pending,
                                     sink->generated.size(),
                                     "residual cannot exceed what was generated");
+        std::map<std::string, std::size_t> fates;
+        for (const auto& kv : sink->terminated)
+        {
+            ++fates[kv.second];
+        }
+        std::clog << "  [conservation] destinos finales:";
+        for (const auto& f : fates)
+        {
+            std::clog << " " << f.first << "=" << f.second;
+        }
+        std::clog << std::endl;
+        // Attribute the residual: a frame that went on the air and never
+        // arrived was lost in the channel, which produces no application-level
+        // terminal event on either side. One that never went on the air is
+        // still held somewhere and would be a real accounting gap.
+        std::size_t lostOnAir = 0;
+        std::size_t neverSent = 0;
+        for (const auto& k : sink->generated)
+        {
+            if (sink->delivered.count(k) || sink->terminated.count(k))
+            {
+                continue;
+            }
+            if (sink->transmitted.count(k))
+            {
+                ++lostOnAir;
+            }
+            else
+            {
+                ++neverSent;
+            }
+        }
+        std::clog << "  [conservation] residual: perdidas_en_el_aire=" << lostOnAir
+                  << " nunca_transmitidas=" << neverSent << std::endl;
         std::clog << "  [conservation] generated=" << sink->generated.size()
                   << " delivered=" << sink->delivered.size()
                   << " terminated=" << sink->terminated.size() << " in-flight=" << pending

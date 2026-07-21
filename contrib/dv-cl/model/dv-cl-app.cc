@@ -1543,6 +1543,25 @@ DvClApp::StopApplication()
     } // §LossFine
     m_finalFlushed = true;
 
+    // Account for what is still in the transmit queue when the run ends.
+    // Without this, those frames are generated and neither delivered nor
+    // written off, so packet conservation can only be closed by inference;
+    // reporting them makes the ledger complete by construction.
+    if (m_stats)
+    {
+        for (const auto& pending : m_txQueue)
+        {
+            if (pending.tag.GetDst() == 0xFFFF)
+            {
+                continue; // beacons are control, not part of the data ledger
+            }
+            m_stats->RecordDataTerminated(pending.tag.GetSrc(),
+                                          pending.tag.GetDst(),
+                                          pending.tag.GetSeq(),
+                                          "queued_at_stop");
+        }
+    }
+
     if (m_evt.IsPending())
     {
         Simulator::Cancel(m_evt);
@@ -2862,6 +2881,13 @@ DvClApp::SendWithCSMA(Ptr<Packet> packet,
                 NS_LOG_WARN("CSMA: tx queue cap reached ("
                             << m_txQueue.size()
                             << "), dropping oldest data entry seq=" << it->tag.GetSeq());
+                if (m_stats && !isBeacon)
+                {
+                    m_stats->RecordDataTerminated(it->tag.GetSrc(),
+                                                  it->tag.GetDst(),
+                                                  it->tag.GetSeq(),
+                                                  "queue_overflow_evicted");
+                }
                 m_txQueue.erase(it);
                 m_dropQueueOverflow++;
                 evicted = true;
@@ -2875,6 +2901,13 @@ DvClApp::SendWithCSMA(Ptr<Packet> packet,
                         << m_txQueue.size()
                         << "), no evictable entry; dropping incoming packet seq="
                         << entry.tag.GetSeq());
+            if (m_stats && entry.tag.GetDst() != 0xFFFF)
+            {
+                m_stats->RecordDataTerminated(entry.tag.GetSrc(),
+                                              entry.tag.GetDst(),
+                                              entry.tag.GetSeq(),
+                                              "queue_overflow_rejected");
+            }
             m_dropQueueOverflow++;
             return;
         }

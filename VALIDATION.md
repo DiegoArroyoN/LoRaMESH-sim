@@ -929,6 +929,54 @@ todas las campañas de hoy —incluidas las de vida útil y densidad— midieron
 métrica que la tesis no defiende. Si es la del código, el FSD está obsoleto desde
 febrero y debe corregirse.
 
+## 2026-07-20 — Grupo 2: F1.5 como TestSuite y F2.4 cerrado por atribución
+
+**F1.5 Bellman-Ford promovido a TestSuite** (`dv-cl-convergence`). El script
+offline `bf_check.py` post-procesaba CSVs; la suite ahora **conduce el routing
+real**: una red sintética de instancias `DvClRouting` intercambia anuncios por
+`GetBestRoutes`/`UpdateFromDvMsg`, las mismas llamadas que hace la aplicación, de
+modo que no se reimplementa nada de la composición de costos. Sobre una grilla
+3x3 verifica las tres propiedades que un DV debe cumplir: **completitud** (todo
+par conectado tiene ruta), **ausencia de bucles** (seguir next-hops termina) y
+**optimalidad** (ningún camino excede el de Bellman-Ford, calculado aparte). Un
+segundo caso cubre lo que el conteo de saltos no puede: un desvío de dos saltos
+rápidos debe ganarle a un enlace directo lento.
+
+Dos aprendizajes quedaron codificados en la suite:
+
+- Cada `DvClRouting` **debe** recibir `SetNodeId`; con el valor por defecto todas
+  las instancias se creen el nodo 0 y rechazan rutas a ese destino como si fueran
+  a sí mismas. (Era un fallo de mi arnés, no del producto.)
+- El margen de costo del desvío **debe superar la histéresis de conmutación**: la
+  ruta directa se aprende una ronda antes y el routing se niega, correctamente, a
+  conmutar por una mejora marginal.
+
+**F2.4 conservación: residual atribuido, no solo acotado.** Se instrumentaron los
+descartes por desbordamiento de cola (dos sitios que faltaban) y se reporta como
+destino final lo que queda encolado al detenerse la aplicación. El test además
+**atribuye** el residual distinguiendo tramas que llegaron al aire de las que no.
+
+Resultado en la corrida de referencia (4 nodos, duty 1%, 500 s):
+
+| | antes | ahora |
+|---|---|---|
+| generados | 36 | 36 |
+| entregados | 11 | 11 |
+| terminados | 1 | **24** |
+| sin explicar | 24 | **1** (perdido en el aire) |
+
+**Hallazgo de método (ns-3):** `Simulator::Stop` en el **mismo instante** que el
+`SetStopTime` de las aplicaciones puede terminar la simulación **antes** de que
+`StopApplication` se ejecute, perdiéndose toda la contabilidad de cierre. Era la
+causa de que 23 tramas encoladas no aparecieran. Las corridas de campaña usan
+`stopSec` mayor que `dataStopSec`, de modo que no las afecta, pero cualquier
+escenario nuevo debe dejar margen.
+
+El único residual restante es una trama transmitida que nunca llegó: **la pérdida
+en el canal no produce evento terminal a nivel de aplicación en ninguno de los
+dos extremos**, y es correcto que así sea. Por eso el test reporta y atribuye el
+residual en lugar de exigir cero.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
