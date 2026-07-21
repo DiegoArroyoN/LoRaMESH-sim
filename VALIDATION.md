@@ -862,9 +862,23 @@ obsoleto desde febrero de 2026** y quedó corregido.
 3. Ecuación fijada por test (`dv-cl metric: Psi(b) matches Eq. (psi) of the
    thesis`) contra los valores exactos, incluida la monotonía de la rampa.
 
-**Pendiente menor:** los pesos α/β/δ = 0.60/0.15/0.25 del código siguen sin
-confirmar contra la tesis (el FSD decía 0.40/0.30/0.30). La ecuación aportada
-cubre Ψ pero no los pesos.
+**Pesos confirmados (2026-07-20):** α/β/δ = **0.60/0.15/0.25** son los de la
+tesis. El código ya los tenía; el FSD (0.40/0.30/0.30 con salto normalizado)
+queda retirado. Fijados por test `dv-cl metric: alpha, beta and delta are the
+thesis weights`, tanto como defaults de atributo como por descomposición del
+compuesto completo.
+
+Con esto **la métrica está enteramente anclada a la tesis**: la ecuación Ψ y los
+tres pesos, cada uno con su test. Cualquier deriva futura entre código y tesis
+falla en CI en vez de desplazar silenciosamente todos los costos de ruta.
+
+**Trabajo futuro acordado:** barrido de sensibilidad de α/β/δ buscando el punto
+que maximiza PDR. Nota de diseño para cuando se haga: el barrido tendrá una
+tensión intrínseca, porque las campañas de hoy midieron que el término
+energético **cuesta** PDR (−0.3% a −5.7% según densidad). Maximizar PDR
+probablemente empuje δ hacia 0, es decir hacia la métrica solo-ToA. El barrido
+por tanto no debería optimizar PDR aislado sino **exhibir la frontera de Pareto
+PDR/vida-útil**, que es la contribución real.
 
 ## 2026-07-20 — (superado) El diseño documentaba otra fórmula
 

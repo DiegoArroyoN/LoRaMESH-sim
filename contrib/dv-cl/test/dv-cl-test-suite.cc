@@ -223,6 +223,58 @@ class DvClThesisPsiTestCase : public TestCase
     }
 };
 
+/**
+ * \ingroup dv-cl
+ * rief The weights are the thesis weights: alpha/beta/delta = 0.60/0.15/0.25.
+ *
+ * Confirmed against the thesis 2026-07-20, together with Eq. (psi). The
+ * repository's design document had carried 0.40/0.30/0.30 with a hop term
+ * normalised by h_max since February; that specification is retired.
+ *
+ * Pinned here as attribute defaults and as a decomposition of the whole
+ * composite, so a change to any single weight fails loudly rather than
+ * quietly shifting every route cost in a campaign.
+ *
+ * A future study is expected to sweep these weights for delivery; this
+ * test states what the thesis defends today, not what is optimal.
+ */
+class DvClThesisWeightsTestCase : public TestCase
+{
+  public:
+    DvClThesisWeightsTestCase()
+        : TestCase("dv-cl metric: alpha, beta and delta are the thesis weights")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        auto m = CreateObject<DvClCompositeMetric>();
+        DoubleValue v;
+
+        m->GetAttribute("WToa", v);
+        NS_TEST_ASSERT_MSG_EQ_TOL(v.Get(), 0.60, 1e-12, "alpha");
+        m->GetAttribute("WHop", v);
+        NS_TEST_ASSERT_MSG_EQ_TOL(v.Get(), 0.15, 1e-12, "beta");
+        m->GetAttribute("WEnergy", v);
+        NS_TEST_ASSERT_MSG_EQ_TOL(v.Get(), 0.25, 1e-12, "delta");
+
+        // The three terms together, on inputs whose value is exact: half the
+        // SF7 ToA ceiling, and a charge at b_lo so Psi saturates at 1.
+        //   0.60*0.5 + 0.15 + 0.25*1 = 0.70
+        LinkInputs in;
+        in.toaUs = 143360.0 / 2.0;
+        in.sf = 7;
+        in.energyFraction = 0.20;
+        NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(in), 0.70, 1e-12, "alpha+beta+delta");
+
+        // Same link on a healthy battery: the energy term vanishes entirely.
+        //   0.60*0.5 + 0.15 = 0.45
+        in.energyFraction = 0.90;
+        NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(in), 0.45, 1e-12, "well charged");
+    }
+};
+
 class DvClTestSuite : public TestSuite
 {
   public:
@@ -232,6 +284,7 @@ class DvClTestSuite : public TestSuite
         AddTestCase(new DvClToaGoldenTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClMetricAnalyticTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClThesisPsiTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new DvClThesisWeightsTestCase, TestCase::Duration::QUICK);
     }
 };
 
