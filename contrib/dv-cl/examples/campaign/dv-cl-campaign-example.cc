@@ -117,6 +117,12 @@ main(int argc, char* argv[])
     double captureMinProb = 0.05;
     double captureMaxProb = 0.95;
     std::string interferenceModel = "puello"; // goursaud | puello | pueyo | pueyo_fixed_capture
+    // Matriz de colisión (eje independiente del modelo de captura): 'goursaud'
+    // es la realista (misma SF sobrevive con 6 dB de ventaja) y 'aloha' la
+    // estricta, en la que dos tramas del mismo SF se destruyen siempre. La
+    // segunda existe en el módulo lorawan precisamente para contrastar contra
+    // la teoría de ALOHA puro (validación F2.3).
+    std::string collisionMatrix = "goursaud";
     double puelloCaptureThresholdDb = 6.0;
     double puelloAssumedBandwidthHz = 125000.0;
     double puelloPreambleSymbols = 8.0;
@@ -544,6 +550,10 @@ main(int argc, char* argv[])
     cmd.AddValue("captureMaxProb",
                  "Maximum success probability for cross-SF capture",
                  captureMaxProb);
+    cmd.AddValue("collisionMatrix",
+                 "Matriz de colision SNIR: goursaud (realista, con captura) | aloha "
+                 "(estricta: misma SF siempre se destruyen; para el ancla F2.3)",
+                 collisionMatrix);
     cmd.AddValue("interferenceModel",
                  "PHY interference model: goursaud | puello | pueyo | pueyo_fixed_capture",
                  interferenceModel);
@@ -1423,6 +1433,23 @@ main(int argc, char* argv[])
         areaWidth = (side > 1) ? (side - 1) * pueyoGridSpacingM : pueyoGridSpacingM;
         areaHeight = (side > 1) ? (side - 1) * pueyoGridSpacingM : pueyoGridSpacingM;
         pueyoGridSide = side;
+    }
+
+    // La matriz es un miembro estatico leido por el constructor de cada
+    // LoraInterferenceHelper, de modo que debe fijarse antes de crear los PHY.
+    if (collisionMatrix == "aloha")
+    {
+        lorawan::LoraInterferenceHelper::collisionMatrix = lorawan::LoraInterferenceHelper::ALOHA;
+    }
+    else if (collisionMatrix == "goursaud")
+    {
+        lorawan::LoraInterferenceHelper::collisionMatrix =
+            lorawan::LoraInterferenceHelper::GOURSAUD;
+    }
+    else
+    {
+        NS_ABORT_MSG("Error: collisionMatrix debe ser 'goursaud' o 'aloha', valor actual: "
+                     << collisionMatrix);
     }
 
     lorawan::LoraInterferenceHelper::InterferenceModel interferenceModelEnum =
