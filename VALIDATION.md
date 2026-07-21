@@ -832,6 +832,55 @@ vida útil.
 Este es el resultado central defendible de la tesis, y su fuerza está en
 enunciarlo como compromiso cuantificado, no como superioridad.
 
+## 2026-07-20 — NO SE PUEDE CONFIRMAR 0.20/0.50: el diseño documenta otra fórmula
+
+Pregunta: ¿son 0.20/0.50 los umbrales que defiende la tesis? **No se puede
+confirmar desde el repositorio, y la evidencia disponible apunta en contra.**
+
+La única especificación escrita en el repo, `FSD_LLD_Simulador_LoRaMESH.md`
+(fecha: febrero 2026; último cambio en git: 2026-03-05), documenta en §4.3.2 una
+métrica **distinta de la implementada**:
+
+| | FSD_LLD (documento) | código actual (`dv-cl-metric`) |
+|---|---|---|
+| pesos | alpha=0.40, beta=0.30, delta=0.30 | alpha=0.60, beta=0.15, delta=0.25 |
+| término de saltos | `beta * min(hops/h_max,1)`, h_max=10 | `beta` constante por salto |
+| Psi(b) | **`1 - b^2`** (suave, sin umbrales) | **por tramos** con b_lo=0.20, b_hi=0.50, p=2 |
+
+El FSD **no menciona en ningún punto** los pesos implementados ni la forma por
+tramos ni umbral alguno. Es decir: **los umbrales 0.20/0.50 no aparecen en la
+especificación escrita**; provienen del árbol de campaña (`override 2026-05-30`),
+según la propia nota de `dv-cl-metric.h`, que a su vez afirma que esa forma es la
+que "coincide con el paper". **Ambas afirmaciones no pueden ser ciertas a la vez**
+y el paper no está en el repositorio para dirimirlo.
+
+**Por qué esto importa más que una discrepancia de documentación:** las dos
+formas difieren cualitativamente, no solo en constantes.
+
+| b (SoC) | Psi = 1-b^2 (FSD) | Psi por tramos (código) |
+|---|---|---|
+| 0.976 | 0.0474 | **0.0000** |
+| 0.967 | 0.0649 | **0.0000** |
+| 0.800 | 0.3600 | **0.0000** |
+| 0.500 | 0.7500 | 0.0000 |
+| 0.350 | 0.8775 | 0.2500 |
+| 0.150 | 0.9775 | 1.0000 |
+
+`1-b^2` **nunca es cero**: en el rango de la campaña principal (b entre 0.967 y
+0.976) discrimina entre el nodo más y menos cargado por 0.0175 de Psi, aportando
+~0.019 al costo del enlace. La forma por tramos aporta **exactamente 0.000**.
+
+**Consecuencia:** el hallazgo "el aporte energético nunca se activa" es válido
+para la fórmula **implementada**, no para la **documentada**. Con `Psi=1-b^2` el
+término habría estado activo en las 360 corridas de la campaña principal, y sus
+resultados habrían sido otros.
+
+**Decisión requerida (de los autores, no del simulador):** establecer cuál de las
+dos formas defiende la tesis y alinear código y documento. Si es la del FSD,
+todas las campañas de hoy —incluidas las de vida útil y densidad— midieron una
+métrica que la tesis no defiende. Si es la del código, el FSD está obsoleto desde
+febrero y debe corregirse.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
