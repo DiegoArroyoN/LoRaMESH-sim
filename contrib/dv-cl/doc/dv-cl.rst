@@ -120,8 +120,10 @@ Scope and limitations
 
 * One channel per region; sub-band selection and frequency hopping are
   not modelled.
-* Low-data-rate optimisation is off, including at SF11/SF12 where the
-  specification enables it.
+* The interference model is Goursaud, which prices cross-SF interference.
+  ``pueyo_fixed_capture``, which treats spreading factors as perfectly
+  orthogonal, remains selectable for study and is worth about 14% of
+  delivery at 25 nodes and 40% at 49 (VALIDATION.md).
 * The energy model prices radio states only; MCU and sensing are out of
   scope.
 * Routes are per-destination with one backup; no multipath forwarding.

@@ -66,8 +66,9 @@ gcc 15.
 - Two regions ship (EU868, US915) through `DvClRegionalProfile`, on a
   single channel each; frequency hopping and sub-band selection are not
   modelled.
-- Low-data-rate optimisation is off, including at SF11/SF12 where the
-  specification enables it.
+- The interference model is Goursaud, which prices cross-SF interference;
+  `pueyo_fixed_capture`, which treats spreading factors as perfectly
+  orthogonal, is selectable for study.
 - The energy model prices radio states only; MCU and sensing are out of
   scope.
 - One backup route per destination, no multipath forwarding.
