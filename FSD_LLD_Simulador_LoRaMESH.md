@@ -299,13 +299,20 @@ Parámetros tesis:
 
 #### 4.3.2 Métrica Compuesta
 
-```cpp
-// Fórmula según tesis: C_ij = α·ToA_norm + β·Hop_norm + δ·Ψ(b)
-const double alpha = 0.40;  // α: ToA (duty cycle efficiency)
-const double beta = 0.30;   // β: Hop count (path length)
-const double delta = 0.30;  // δ: Battery (network lifetime)
+> **Actualizado 2026-07-20.** Esta sección describía una métrica anterior
+> (α/β/δ = 0.40/0.30/0.30, término de saltos normalizado por `h_max`, y
+> penalización `Ψ(b) = 1 - b²` sin umbrales). Esa especificación quedó
+> obsoleta y **no** corresponde a la ecuación de la tesis ni al código.
+> Se reemplaza por la forma de registro, fijada por el test
+> `dv-cl metric: Psi(b) matches Eq. (psi) of the thesis`.
 
-linkCost = alpha * toaNorm + beta * hopNorm + delta * batteryPenalty
+```cpp
+// Fórmula de la tesis: C_ij = α·ToA_norm + β + δ·Ψ(b_j)
+const double alpha = 0.60;  // α: ToA (eficiencia de duty cycle)
+const double beta  = 0.15;  // β: costo FIJO por salto (no normalizado)
+const double delta = 0.25;  // δ: penalización energética (vida de red)
+
+linkCost = alpha * toaNorm + beta + delta * Psi(b_j)
 // NOTA: RSSI/SNR NO se usa directamente (está embebido en selección de SF)
 ```
 
@@ -324,10 +331,23 @@ Factores considerados:
   - Definición: `hopNorm = min(hops / h_max, 1.0)`
   - En la implementación actual de `CompositeMetric`, `h_max = 10` (constante de normalización de la métrica).
   - **No confundir** con `RoutingDv::m_maxHops` (default 12), que es un límite operativo de rutas/TTL y no la constante de normalización de `CompositeMetric`.
-- **Battery penalty (δ=30%)**:
-  - Definición actual: `Ψ(b) = 1 - b^2`
+- **Battery penalty (δ=25%)**:
+  - Definición de la tesis (Ec. Ψ), **por tramos**:
+
+    ```
+    Ψ(b) = 0                                    si b ≥ b_hi
+         = Ψ_max·((b_hi - b)/(b_hi - b_lo))^p    si b_lo < b < b_hi
+         = Ψ_max                                 si b ≤ b_lo
+    ```
+
+    con `b_lo = 0.20`, `b_hi = 0.50`, `p = 2`, `Ψ_max = 1`.
   - `b` es la fracción de energía remanente del nodo que anuncia el score (potencial relay): `b = E_rem / E_max`, con `b ∈ [0,1]`.
-  - Interpretación: `Ψ(1)=0` (sin penalización), `Ψ(0)=1` (penalización máxima).
+  - Interpretación: penaliza **solo** a los siguientes saltos con batería baja.
+    Por encima de `b_hi` el término es **exactamente cero**, de modo que en una
+    red bien cargada la métrica se reduce a `α·ToA + β`; el aporte energético
+    aparece cuando algún vecino baja del 50%.
+  - Consecuencia experimental medida (2026-07-20, ver `VALIDATION.md`): una
+    campaña cuyos nodos no bajan de `b_hi` **no ejercita este término**.
 
 > En `v2` no se transporta `battery` explícita en beacon: el nodo anunciante internaliza su estado energético local dentro de `score`.
 > Los vecinos consumen `score` como costo anunciado (`pathCost`) sin requerir campo SoC/batería separado on-air.

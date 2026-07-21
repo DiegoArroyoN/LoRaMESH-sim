@@ -154,6 +154,75 @@ class DvClMetricAnalyticTestCase : public TestCase
  * \ingroup dv-cl
  * The dv-cl test suite, runnable with ./test.py -s dv-cl.
  */
+/**
+ * \ingroup dv-cl
+ * rief Psi(b) is Eq. (psi) of the thesis, verbatim.
+ *
+ * Pins the piecewise energy penalty against the equation as written:
+ *
+ *   Psi(b) = 0                                        for b >= b_hi
+ *          = Psi_max * ((b_hi - b)/(b_hi - b_lo))^p    for b_lo < b < b_hi
+ *          = Psi_max                                   for b <= b_lo
+ *
+ * with b_lo = 0.20, b_hi = 0.50, p = 2, Psi_max = 1.
+ *
+ * The test exists because the repository's design document (February
+ * 2026) specifies a different, threshold-free penalty (1 - b^2), and the
+ * two are not interchangeable: above b_hi this one contributes exactly
+ * nothing while 1 - b^2 never does, which decides whether the energy term
+ * influences routing at all in a well-charged network. The thesis
+ * equation is the one of record; this test keeps the code on it.
+ *
+ * EnergyPenalty returns delta*Psi, so the expectations carry the weight.
+ */
+class DvClThesisPsiTestCase : public TestCase
+{
+  public:
+    DvClThesisPsiTestCase()
+        : TestCase("dv-cl metric: Psi(b) matches Eq. (psi) of the thesis")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        auto metric = CreateObject<DvClCompositeMetric>();
+        const double delta = 0.25; // WEnergy default; EnergyPenalty folds it in
+
+        // b >= b_hi: no penalty at all. This is what makes a fully charged
+        // network indistinguishable from a ToA-only metric.
+        NS_TEST_ASSERT_MSG_EQ_TOL(metric->EnergyPenalty(1.00), 0.0, 1e-12, "b=1.00");
+        NS_TEST_ASSERT_MSG_EQ_TOL(metric->EnergyPenalty(0.97), 0.0, 1e-12, "b=0.97");
+        NS_TEST_ASSERT_MSG_EQ_TOL(metric->EnergyPenalty(0.50), 0.0, 1e-12, "at b_hi");
+
+        // b <= b_lo: saturated at Psi_max.
+        NS_TEST_ASSERT_MSG_EQ_TOL(metric->EnergyPenalty(0.20), delta, 1e-12, "at b_lo");
+        NS_TEST_ASSERT_MSG_EQ_TOL(metric->EnergyPenalty(0.05), delta, 1e-12, "below b_lo");
+        NS_TEST_ASSERT_MSG_EQ_TOL(metric->EnergyPenalty(0.00), delta, 1e-12, "empty");
+
+        // Between the thresholds: the quadratic ramp, checked at points whose
+        // value is exact. ((0.5-b)/0.3)^2 at b=0.35 is 0.25, at b=0.20+0.3/2.
+        NS_TEST_ASSERT_MSG_EQ_TOL(metric->EnergyPenalty(0.35), delta * 0.25, 1e-12, "midpoint");
+        NS_TEST_ASSERT_MSG_EQ_TOL(metric->EnergyPenalty(0.40),
+                                  delta * (1.0 / 9.0),
+                                  1e-12,
+                                  "b=0.40 -> (1/3)^2");
+        NS_TEST_ASSERT_MSG_EQ_TOL(metric->EnergyPenalty(0.30),
+                                  delta * (4.0 / 9.0),
+                                  1e-12,
+                                  "b=0.30 -> (2/3)^2");
+
+        // The ramp is monotone decreasing in charge, as a penalty must be.
+        double prev = metric->EnergyPenalty(0.20);
+        for (double b = 0.22; b <= 0.50; b += 0.02)
+        {
+            const double cur = metric->EnergyPenalty(b);
+            NS_TEST_ASSERT_MSG_LT_OR_EQ(cur, prev, "penalty must not rise with charge");
+            prev = cur;
+        }
+    }
+};
+
 class DvClTestSuite : public TestSuite
 {
   public:
@@ -162,6 +231,7 @@ class DvClTestSuite : public TestSuite
     {
         AddTestCase(new DvClToaGoldenTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClMetricAnalyticTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new DvClThesisPsiTestCase, TestCase::Duration::QUICK);
     }
 };
 

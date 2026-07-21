@@ -832,7 +832,41 @@ vida útil.
 Este es el resultado central defendible de la tesis, y su fuerza está en
 enunciarlo como compromiso cuantificado, no como superioridad.
 
-## 2026-07-20 — NO SE PUEDE CONFIRMAR 0.20/0.50: el diseño documenta otra fórmula
+## 2026-07-20 — RESUELTO: 0.20/0.50 SON los umbrales de la tesis; el FSD estaba obsoleto
+
+Diego aportó la ecuación de la tesis (Ec. Ψ):
+
+```
+Ψ(b) = 0                                    si b ≥ b_hi
+     = Ψ_max·((b_hi − b)/(b_hi − b_lo))^p    si b_lo < b < b_hi
+     = Ψ_max                                 si b ≤ b_lo
+```
+
+con `b_lo = 0.20`, `b_hi = 0.50`, `p = 2`, `Ψ_max = 1`.
+
+**El código coincide exactamente** —mismos umbrales, mismo exponente, mismo
+Ψ_max, mismos tres tramos en el mismo orden—, de modo que la discrepancia
+detectada abajo se resuelve a favor del código: **`FSD_LLD` §4.3.2 estaba
+obsoleto desde febrero de 2026** y quedó corregido.
+
+**Consecuencias:**
+
+1. **Las campañas de hoy midieron la métrica correcta.** Los resultados de vida
+   útil y densidad (aporte que satura en ~+6-8% FND / +6% T50 a partir de 81
+   nodos, a cambio de −4 a −6% de PDR) **se sostienen**.
+2. **El hallazgo del término inactivo es una propiedad real de la tesis**, no un
+   defecto: por encima de `b_hi` el término es exactamente cero **por diseño**.
+   La lectura correcta no es "la campaña estaba mal" sino **"la métrica energética
+   solo actúa cuando algún vecino baja del 50%"**, lo cual es una afirmación
+   publicable sobre el régimen de aplicabilidad del aporte.
+3. Ecuación fijada por test (`dv-cl metric: Psi(b) matches Eq. (psi) of the
+   thesis`) contra los valores exactos, incluida la monotonía de la rampa.
+
+**Pendiente menor:** los pesos α/β/δ = 0.60/0.15/0.25 del código siguen sin
+confirmar contra la tesis (el FSD decía 0.40/0.30/0.30). La ecuación aportada
+cubre Ψ pero no los pesos.
+
+## 2026-07-20 — (superado) El diseño documentaba otra fórmula
 
 Pregunta: ¿son 0.20/0.50 los umbrales que defiende la tesis? **No se puede
 confirmar desde el repositorio, y la evidencia disponible apunta en contra.**
