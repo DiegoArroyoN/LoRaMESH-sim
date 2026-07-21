@@ -45,4 +45,5 @@ build_lib(
     test/dv-cl-energy-test-suite.cc
     test/dv-cl-region-test-suite.cc
     test/dv-cl-conservation-test-suite.cc
+    test/dv-cl-convergence-test-suite.cc
 )
