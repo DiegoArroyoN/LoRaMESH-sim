@@ -982,7 +982,44 @@ en el canal no produce evento terminal a nivel de aplicación en ninguno de los
 dos extremos**, y es correcto que así sea. Por eso el test reporta y atribuye el
 residual en lugar de exigir cero.
 
-## 2026-07-20 — F2.3 ancla ALOHA: NO SE CUMPLE la curva teórica (medido)
+## 2026-07-20 — F2.3: la captura explica el piso (aislada por medición)
+
+Habilitado `--collisionMatrix` y repetido el barrido con **ambas** matrices. Para
+que la matriz surta efecto hacen falta **dos** flags, no uno: el modelo
+`pueyo_fixed_capture` que fuerza el perfil resuelve las colisiones por su propia
+vía (`lora-interference-helper.cc:363`) y **nunca consulta la matriz**, que solo
+se lee bajo `GOURSAUD_PROBABILISTIC` (línea 493). La primera tentativa —solo
+`--collisionMatrix`— dio resultados idénticos byte a byte, por eso.
+
+| G | S con matriz ALOHA | S con matriz Goursaud |
+|---|---|---|
+| 0.07 | 0.0383 | 0.0380 |
+| 0.25 | 0.0507 | 0.0664 |
+| 0.65 | 0.0277 | 0.0531 |
+| 1.43 | 0.0211 | 0.0555 |
+| 2.29 | **0.0037** | 0.0385 |
+| 3.19 | **0.0027** | 0.0290 |
+
+**Hipótesis confirmada:** con colisiones totalmente destructivas (matriz ALOHA)
+la curva **decae hacia cero** al saturar, mientras que con Goursaud **se aplana
+en ~0.03**. El piso que se observaba antes **es el efecto captura**, ahora
+demostrado en vez de supuesto. Datos en
+`tools/validation/aloha_matrix_comparison.csv`.
+
+**Sobre el ajuste cuantitativo restante** (ratio 0.16-0.65 frente a la teoría):
+el escenario todavía se aparta del modelo de libro en dos supuestos que no se
+han levantado — el tráfico es **programado, no Poisson**, y conviven **dos SF**
+cuasi-ortogonales. Ambos reducen S respecto de ALOHA puro con un único canal y
+llegadas exponenciales. F2.3 queda por tanto **cualitativamente validado**
+(colapso por contención y decaimiento a cero sin captura) y **cuantitativamente
+abierto**, pendiente de una fuente Poisson y un único SF.
+
+**Recomendación de uso:** `goursaud` (con captura) es el modelo realista y debe
+seguir siendo el de las campañas — es el comportamiento del hardware LoRa. La
+matriz `aloha` es un **instrumento de validación**, no un escenario a reportar:
+existe para contrastar contra la teoría y solo para eso.
+
+## 2026-07-20 — (superado por la entrada anterior) F2.3 primer intento
 
 Escenario de libro de texto: 30 m de separación (un solo dominio de colisión),
 todos los nodos hacia el nodo 0, un salto, perfil ALOHA (sin CSMA), sin duty. La
