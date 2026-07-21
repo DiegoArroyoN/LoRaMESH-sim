@@ -791,6 +791,47 @@ fracción de PDR**, y el trato mejora con la densidad. Reportarlo como tal —co
 FND/T50 y el costo de PDR lado a lado— es más fuerte que afirmar superioridad
 uniforme, que los datos no respaldan.
 
+## 2026-07-20 — Barrido de densidad 81/100: el aporte se estabiliza, no crece sin fin
+
+Extensión de la campaña de vida útil a 81 y 100 nodos (40 corridas, 10 semillas,
+misma config de agotamiento). 40/40 sin fallo. Solo se guardó el summary por
+corrida (CSV por-evento de 2.5 GB borrados al vuelo). Índice en
+`tools/validation/lifetime_20260720_density_index.csv`.
+
+**Serie completa del aporte (composite_score vs toa_only, delta relativo):**
+
+| n | dFND | dT50 | dPDR | significativo T50 |
+|---|---|---|---|---|
+| 9 | +1.3% | +0.6% | -0.3% | no (ruido) |
+| 25 | +5.6% | +3.6% | -0.8% | no |
+| 49 | +4.8% | +6.6% | -3.6% | no |
+| 81 | +7.7% | +5.8% | -4.1% | **sí** |
+| 100 | +7.4% | +6.2% | -5.7% | **sí** |
+
+**El aporte se satura, no diverge.** La ganancia de vida útil sube hasta ~49-81
+nodos y luego se **estabiliza** en torno a +6-8% (FND) y +6% (T50); no sigue
+creciendo. Y solo a partir de 81 nodos el efecto sobre T50 **supera la
+desviación entre semillas** — antes de esa densidad es real en la media pero
+indistinguible del ruido corrida a corrida.
+
+**El costo de PDR, en cambio, sí crece monótonamente** con la densidad: -0.3% ->
+-5.7%. El compromiso empeora en el eje de entrega justo cuando mejora en el de
+vida útil.
+
+**Lectura consolidada para el paper:**
+
+- El término energético compra vida de red, y el beneficio es **estadísticamente
+  sólido solo en redes densas (>=81 nodos)**, donde hay suficientes rutas
+  alternativas para que el balanceo actúe.
+- Es un **compromiso Pareto**, no una mejora gratuita: a 100 nodos, +7.4% FND /
+  +6.2% T50 a cambio de -5.7% PDR. Cuál extremo conviene depende de si la
+  aplicación prioriza cobertura temporal (vida de red) o caudal (PDR).
+- El punto óptimo de demostración es ~81-100 nodos: densidad suficiente para
+  significancia, sin que el costo de PDR domine.
+
+Este es el resultado central defendible de la tesis, y su fuerza está en
+enunciarlo como compromiso cuantificado, no como superioridad.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
