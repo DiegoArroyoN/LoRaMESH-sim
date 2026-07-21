@@ -5,6 +5,7 @@
 #include "dv-cl-lora-energy-model.h"
 #include "dv-cl-mac-header.h"
 #include "dv-cl-metric-tag.h"
+#include "dv-cl-toa.h"
 #include "dv-cl-wire.h"
 
 #include "ns3/double.h"
@@ -716,7 +717,10 @@ DvClLoraNetDevice::BuildTxParams(uint8_t sf) const
     p.bandwidthHz = m_region ? m_region->GetBandwidthHz() : 125000;
     p.nPreamble = m_preambleSymbols;
     p.crcEnabled = true;
-    p.lowDataRateOptimizationEnabled = false;
+    // The specification mandates the optimisation once the symbol time passes
+    // 16 ms, which at 125 kHz is SF11 and SF12. Leaving it off there put frames
+    // on the air shorter than any real radio would send them.
+    p.lowDataRateOptimizationEnabled = LowDataRateOptimizationRequired(sf, p.bandwidthHz);
     return p;
 }
 

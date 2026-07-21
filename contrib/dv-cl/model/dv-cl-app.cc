@@ -2,6 +2,8 @@
 
 #include "dv-cl-app.h"
 
+#include "dv-cl-toa.h"
+
 #include "dv-cl-lora-net-device.h"
 #include "dv-cl-stats-sink.h"
 
@@ -2096,25 +2098,19 @@ DvClApp::ForwardWithTtl(Ptr<const Packet> pIn, const DvClMetricTag& inTag)
 uint32_t
 DvClApp::ComputeLoRaToAUs(uint8_t sf, uint32_t bw, uint8_t cr, uint32_t pl) const
 {
-    const double bwHz = static_cast<double>(bw);
-    const double tSym = std::pow(2.0, sf) / bwHz;
-
-    const bool ih = m_ih;
-    const bool de = m_de;
-    const bool crc = m_crc;
-
-    const int8_t sf_i = static_cast<int8_t>(sf);
-    const double num = (8.0 * static_cast<double>(pl) - 4.0 * sf_i + 28.0 + (crc ? 16.0 : 0.0) -
-                        (ih ? 20.0 : 0.0));
-    const double den = 4.0 * (sf_i - (de ? 2.0 : 0.0));
-    const double ce = std::ceil(std::max(num / den, 0.0));
-    const double paySym = 8.0 + ce * (cr + 4.0);
-
-    const double nPreamble = static_cast<double>(std::max<uint32_t>(6, m_preambleSymbols));
-    const double tPreamble = (nPreamble + 4.25) * tSym;
-    const double tPayload = paySym * tSym;
-    const double tTot = tPreamble + tPayload;
-    return static_cast<uint32_t>(tTot * 1e6 + 0.5);
+    // One implementation of time on air, not three. This used to carry its own
+    // copy of the AN1200.13 formula with its own LDRO assumption, which is how
+    // the application came to budget for a frame the radio never sent: it
+    // assumed the optimisation was on while the device transmitted with it off.
+    // Both now derive the flag from the same rule.
+    return ComputeToaUs(sf,
+                        bw,
+                        cr,
+                        pl,
+                        m_ih,
+                        LowDataRateOptimizationRequired(sf, bw),
+                        m_crc,
+                        static_cast<uint16_t>(std::max<uint32_t>(6, m_preambleSymbols)));
 }
 
 uint16_t

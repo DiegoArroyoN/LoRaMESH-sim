@@ -48,6 +48,22 @@ namespace dvcl
  * \param preambleSymbols number of programmed preamble symbols (default 8)
  * \return time-on-air in integer microseconds (rounded to nearest)
  */
+/**
+ * \ingroup dv-cl
+ * rief Whether the specification mandates low-data-rate optimisation.
+ *
+ * LoRa requires it once the symbol time exceeds 16 ms, which at 125 kHz
+ * means SF11 and SF12. Stated once here because every place that computes
+ * a time on air must apply the same rule: when the application budgeted
+ * with it and the radio transmitted without it, the two disagreed by ~9%
+ * at SF12 and the duty gate over-charged itself (VALIDATION.md, F2.1).
+ *
+ * \param sf spreading factor
+ * \param bwHz bandwidth in Hz
+ * eturn true when LDRO must be enabled
+ */
+bool LowDataRateOptimizationRequired(uint8_t sf, uint32_t bwHz);
+
 uint32_t ComputeToaUs(uint8_t sf,
                       uint32_t bwHz,
                       uint8_t cr,

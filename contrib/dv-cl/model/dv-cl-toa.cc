@@ -10,6 +10,18 @@ namespace ns3
 namespace dvcl
 {
 
+bool
+LowDataRateOptimizationRequired(uint8_t sf, uint32_t bwHz)
+{
+    if (bwHz == 0)
+    {
+        return false;
+    }
+    // Symbol time Ts = 2^SF / BW; the threshold is 16 ms.
+    const double tSymMs = (std::pow(2.0, sf) / static_cast<double>(bwHz)) * 1000.0;
+    return tSymMs > 16.0;
+}
+
 uint32_t
 ComputeToaUs(uint8_t sf,
              uint32_t bwHz,
