@@ -1006,13 +1006,19 @@ en ~0.03**. El piso que se observaba antes **es el efecto captura**, ahora
 demostrado en vez de supuesto. Datos en
 `tools/validation/aloha_matrix_comparison.csv`.
 
-**Sobre el ajuste cuantitativo restante** (ratio 0.16-0.65 frente a la teoría):
-el escenario todavía se aparta del modelo de libro en dos supuestos que no se
-han levantado — el tráfico es **programado, no Poisson**, y conviven **dos SF**
-cuasi-ortogonales. Ambos reducen S respecto de ALOHA puro con un único canal y
-llegadas exponenciales. F2.3 queda por tanto **cualitativamente validado**
-(colapso por contención y decaimiento a cero sin captura) y **cuantitativamente
-abierto**, pendiente de una fuente Poisson y un único SF.
+**Ajuste cuantitativo: CERRADO** (suite `dv-cl-aloha`). Los dos supuestos que
+faltaban por levantar —tráfico Poisson y un único SF— no se pueden satisfacer a
+través de la aplicación, cuyo planificador no es Poisson y usa dos SF. Se
+resolvió **ejercitando el modelo de interferencia directamente**, que es lo que
+el ancla realmente valida: llegadas exponenciales de duración fija, un solo SF,
+igual potencia, matriz ALOHA. Cada trama se registra **en su propio instante**
+mediante eventos agendados, de modo que el modelo ve el patrón real de solapes.
+
+Resultado: **S concuerda con G·e^(−2G) dentro del 15%** en G = 0.1, 0.25, 0.5,
+1.0 y 2.0. El test no puede pasar de forma vacua: si el modelo no destruyera
+nada, el cociente sería e^(2G) ≈ 2.7 en el pico.
+
+**F2.3 VALIDADO**, cualitativa y cuantitativamente.
 
 **Recomendación de uso:** `goursaud` (con captura) es el modelo realista y debe
 seguir siendo el de las campañas — es el comportamiento del hardware LoRa. La

@@ -46,4 +46,5 @@ build_lib(
     test/dv-cl-region-test-suite.cc
     test/dv-cl-conservation-test-suite.cc
     test/dv-cl-convergence-test-suite.cc
+    test/dv-cl-aloha-test-suite.cc
 )
