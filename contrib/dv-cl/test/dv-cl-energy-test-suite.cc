@@ -2,6 +2,7 @@
 
 #include "ns3/basic-energy-source.h"
 #include "ns3/double.h"
+#include "ns3/dv-cl-energy-registry.h"
 #include "ns3/dv-cl-lora-energy-model.h"
 #include "ns3/simulator.h"
 #include "ns3/test.h"
@@ -76,6 +77,84 @@ class DvClEnergyLedgerTestCase : public TestCase
  * The EnergyDepleted TraceSource (the module replacement for the
  * campaign-tree global collector hook) is registered on the TypeId.
  */
+/**
+ * \ingroup dv-cl
+ * \brief F1.3: el libro del registro cierra, y una bateria vacia no entrega
+ *        carga.
+ *
+ * El registro es la fuente de verdad del estado de carga: alimenta el byte SoC
+ * de la baliza, el argumento de Psi en la metrica y la deteccion de muerte del
+ * nodo. Debe cumplir dos cosas. Que lo gastado por categoria mas lo que queda
+ * sume la capacidad inicial -- si no, el desglose por actividad no significa
+ * nada. Y que deje de cobrar al llegar a cero: cobrar el nominal aunque no
+ * quede carga hacia crecer los contadores de por vida despues de la muerte del
+ * nodo, inflando la parte de idle en toda corrida donde alguien muere pronto.
+ */
+class DvClEnergyRegistryClosureTestCase : public TestCase
+{
+  public:
+    DvClEnergyRegistryClosureTestCase()
+        : TestCase("dv-cl registry ledger closes and a flat battery draws nothing")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        auto reg = CreateObject<DvClEnergyRegistry>();
+        const double capacityMah = 1.0; // pequena a proposito: se agota dentro del test
+        reg->SetCapacityMah(capacityMah);
+        reg->RegisterNode(0);
+        reg->SetRemainingFraction(0, 1.0);
+
+        // Un poco de cada actividad, separadas en el tiempo para que el idle
+        // diferido tambien entre en juego.
+        Simulator::Schedule(Seconds(10), [reg]() { reg->UpdateEnergy(0, 120.0, 1.0); });
+        Simulator::Schedule(Seconds(20), [reg]() { reg->UpdateRxEnergy(0, 2.0); });
+        Simulator::Schedule(Seconds(30), [reg]() { reg->UpdateCadEnergy(0, 0.5); });
+
+        Simulator::Schedule(Seconds(40), [this, reg, capacityMah]() {
+            const double spent = reg->GetTxMah(0) + reg->GetRxMah(0) + reg->GetCadMah(0) +
+                                 reg->GetIdleMah(0);
+            const double remaining = reg->GetEnergyFraction(0) * capacityMah;
+            NS_TEST_ASSERT_MSG_EQ_TOL(spent + remaining,
+                                      capacityMah,
+                                      1e-9,
+                                      "gastado por categoria + remanente = capacidad inicial");
+        });
+
+        // Agotar la bateria y seguir pidiendo consumo: nada mas debe cobrarse.
+        Simulator::Schedule(Seconds(50), [reg]() { reg->UpdateEnergy(0, 120.0, 3600.0); });
+        Simulator::Schedule(Seconds(60), [this, reg, capacityMah]() {
+            NS_TEST_ASSERT_MSG_EQ_TOL(reg->GetEnergyFraction(0), 0.0, 1e-12, "bateria agotada");
+            const double spentAtDeath = reg->GetTxMah(0) + reg->GetRxMah(0) + reg->GetCadMah(0) +
+                                        reg->GetIdleMah(0);
+            NS_TEST_ASSERT_MSG_EQ_TOL(spentAtDeath,
+                                      capacityMah,
+                                      1e-9,
+                                      "no se cobra mas que la capacidad que habia");
+            m_spentAtDeath = spentAtDeath;
+        });
+
+        // Mucho despues de la muerte los contadores no pueden haber crecido.
+        Simulator::Schedule(Seconds(100000), [this, reg]() {
+            reg->UpdateRxEnergy(0, 10.0);
+            const double spentLater = reg->GetTxMah(0) + reg->GetRxMah(0) + reg->GetCadMah(0) +
+                                      reg->GetIdleMah(0);
+            NS_TEST_ASSERT_MSG_EQ_TOL(spentLater,
+                                      m_spentAtDeath,
+                                      1e-9,
+                                      "un nodo muerto no sigue consumiendo");
+        });
+
+        Simulator::Stop(Seconds(100001));
+        Simulator::Run();
+        Simulator::Destroy();
+    }
+
+    double m_spentAtDeath{0.0};
+};
+
 class DvClEnergyTraceSourceTestCase : public TestCase
 {
   public:
@@ -106,6 +185,7 @@ class DvClEnergyTestSuite : public TestSuite
         : TestSuite("dv-cl-energy", Type::UNIT)
     {
         AddTestCase(new DvClEnergyLedgerTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new DvClEnergyRegistryClosureTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClEnergyTraceSourceTestCase, TestCase::Duration::QUICK);
     }
 };

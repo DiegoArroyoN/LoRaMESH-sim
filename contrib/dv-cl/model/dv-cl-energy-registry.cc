@@ -71,8 +71,12 @@ DvClEnergyRegistry::UpdateEnergy(NodeId id, double txCurrentMa, double durationS
     ApplyIdleConsumption(state);
     double current = (txCurrentMa > 0.0) ? txCurrentMa : m_txCurrentMa;
     double consumedMah = current * durationSeconds / 3600.0;
-    state.remainingMah = std::max(0.0, state.remainingMah - consumedMah);
-    state.txMah += consumedMah;
+    // Una bateria vacia no entrega carga. Cobrar el nominal aunque no quede
+    // nada hacia crecer los contadores de por vida despues de la muerte del
+    // nodo, e impedia que el libro cerrase (VALIDATION.md, 2026-07-22).
+    const double drawnMah = std::min(consumedMah, state.remainingMah);
+    state.remainingMah -= drawnMah;
+    state.txMah += drawnMah;
     state.lastUpdate = Simulator::Now();
     NS_LOG_DEBUG("DvClEnergyRegistry: Node " << id << " TX consumed=" << consumedMah
                                              << "mAh remaining=" << state.remainingMah);
@@ -84,8 +88,12 @@ DvClEnergyRegistry::UpdateRxEnergy(NodeId id, double durationSeconds)
     NodeEnergyState& state = EnsureNode(id);
     ApplyIdleConsumption(state);
     double consumedMah = m_rxCurrentMa * durationSeconds / 3600.0;
-    state.remainingMah = std::max(0.0, state.remainingMah - consumedMah);
-    state.rxMah += consumedMah;
+    // Una bateria vacia no entrega carga. Cobrar el nominal aunque no quede
+    // nada hacia crecer los contadores de por vida despues de la muerte del
+    // nodo, e impedia que el libro cerrase (VALIDATION.md, 2026-07-22).
+    const double drawnMah = std::min(consumedMah, state.remainingMah);
+    state.remainingMah -= drawnMah;
+    state.rxMah += drawnMah;
     state.lastUpdate = Simulator::Now();
     NS_LOG_DEBUG("DvClEnergyRegistry: Node " << id << " RX consumed=" << consumedMah
                                              << "mAh remaining=" << state.remainingMah);
@@ -97,8 +105,12 @@ DvClEnergyRegistry::UpdateCadEnergy(NodeId id, double durationSeconds)
     NodeEnergyState& state = EnsureNode(id);
     ApplyIdleConsumption(state);
     double consumedMah = m_cadCurrentMa * durationSeconds / 3600.0;
-    state.remainingMah = std::max(0.0, state.remainingMah - consumedMah);
-    state.cadMah += consumedMah;
+    // Una bateria vacia no entrega carga. Cobrar el nominal aunque no quede
+    // nada hacia crecer los contadores de por vida despues de la muerte del
+    // nodo, e impedia que el libro cerrase (VALIDATION.md, 2026-07-22).
+    const double drawnMah = std::min(consumedMah, state.remainingMah);
+    state.remainingMah -= drawnMah;
+    state.cadMah += drawnMah;
     state.lastUpdate = Simulator::Now();
     NS_LOG_DEBUG("DvClEnergyRegistry: Node " << id << " CAD consumed=" << consumedMah
                                              << "mAh remaining=" << state.remainingMah);
@@ -224,8 +236,12 @@ DvClEnergyRegistry::ApplyIdleConsumption(NodeEnergyState& state)
     }
     double dt = (now - state.lastUpdate).GetSeconds();
     double consumedMah = m_idleCurrentMa * dt / 3600.0;
-    state.remainingMah = std::max(0.0, state.remainingMah - consumedMah);
-    state.idleMah += consumedMah;
+    // Una bateria vacia no entrega carga. Cobrar el nominal aunque no quede
+    // nada hacia crecer los contadores de por vida despues de la muerte del
+    // nodo, e impedia que el libro cerrase (VALIDATION.md, 2026-07-22).
+    const double drawnMah = std::min(consumedMah, state.remainingMah);
+    state.remainingMah -= drawnMah;
+    state.idleMah += drawnMah;
     state.lastUpdate = now;
 }
 
