@@ -1347,6 +1347,61 @@ pregunta abierta, no como resultado.
 Datos: `tools/validation/energy_isolation_index.csv` y
 `energy_isolation_topologies.csv`.
 
+## 2026-07-20 — Heterogeneidad máxima: el término energético sigue sin efecto
+
+Última vía para activar `delta*Psi`: carga inicial **bimodal**, mitad de los
+nodos al 20% y mitad al 90% (flag nuevo `--socInitBimodal`, determinista por
+índice). Con `b_lo=0.20` y `b_hi=0.50` eso pone vecinos con **Psi=1 junto a
+vecinos con Psi=0** — el contraste más grande que el término puede recibir.
+Mismo aislamiento estricto: delta=0.25 contra delta=0, 10 semillas pareadas.
+
+| topología | nEd | dPDR | t | dFND | t | dT50 | t |
+|---|---|---|---|---|---|---|---|
+| todos-a-todos | 25 | +1.4% | 2.13 | +2.5% | 2.42 | −0.6% | −0.38 |
+| todos-a-todos | 49 | +0.0% | 0.00 | +0.8% | 0.49 | +1.1% | 0.78 |
+| sumidero único | 25 | −1.3% | −0.39 | +0.0% | 0.01 | −0.0% | −0.22 |
+| sumidero único | 49 | −3.1% | −0.77 | +0.3% | 1.38 | +0.1% | 0.71 |
+
+Dos contrastes rozan t≈2.1-2.4 (todos-a-todos, 25 nodos), pero sobre **12
+contrastes** eso es lo esperable por azar, y los signos se invierten con el
+sumidero. **No hay efecto sostenido.**
+
+**Diagnóstico mecánico:** entre delta=0 y delta=0.25 el número de rutas
+instaladas difiere en **0.02%-1.41%**. Es decir, con el contraste máximo posible,
+el término energético **apenas altera las decisiones de encaminamiento**. No es
+que cambie las rutas y el resultado no mejore: es que casi no cambia las rutas.
+
+*Salvedad del diagnóstico:* se compara el **número** de rutas, no su identidad.
+Dos corridas podrían instalar la misma cantidad eligiendo saltos distintos, así
+que esto acota el efecto pero no lo demuestra a nivel de decisión. La
+comprobación fuerte —comparar el siguiente salto por (nodo, destino) entre ambas
+configuraciones— queda pendiente y es barata.
+
+### Conclusión sobre el aporte energético
+
+Tres experimentos independientes, **300 corridas**, todos negativos:
+
+1. Todos-contra-todos, SoC U[15,35%], 5 tamaños → sin efecto.
+2. Tres patrones de tráfico (a2a, multi-sink, sumidero) → sin efecto.
+3. Heterogeneidad bimodal máxima, dos patrones → sin efecto.
+
+**`delta*Psi`, tal como está formulado, no influye de manera medible en los
+resultados.** Se le dio la señal más fuerte concebible y no la aprovechó, lo que
+apunta a la **formulación** y no al escenario.
+
+**Lo que sí queda en pie, y es sólido:** la métrica compuesta supera a la de
+solo-ToA en entrega y en vida útil (+7% a +17% de PDR, t hasta 16.6), pero el
+mérito es de la **formulación del costo basada en ToA** (`alpha*T_hat + beta`),
+no del término energético.
+
+**Siguiente paso natural** (no ejecutado): comprobar por qué el término no
+reordena rutas. Hipótesis a contrastar, en orden de coste: el término de ToA
+domina el rango de costo (0-0.60 frente a 0-0.25); la penalización se aplica al
+siguiente salto pero se diluye al acumular costo de camino sobre varios saltos;
+o la histéresis de conmutación absorbe la diferencia. Ninguna está verificada.
+
+Datos: `tools/validation/energy_isolation_bimodal.csv`.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
