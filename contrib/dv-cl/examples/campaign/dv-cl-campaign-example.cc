@@ -154,6 +154,12 @@ main(int argc, char* argv[])
     double socInitMin =
         0.60; // §SoCInit: min initial SoC fraction (override flag, default reproduces U[60,100])
     double socInitMax = 1.00; // §SoCInit: max initial SoC fraction (override flag)
+    // §SoCBimodal: reparte la carga inicial en dos grupos (mitad en socInitMin,
+    // mitad en socInitMax) en vez de uniforme. Con umbrales b_lo=0.20 y
+    // b_hi=0.50, un reparto bimodal 0.20/0.90 pone vecinos con Psi=1 junto a
+    // vecinos con Psi=0: el contraste maximo que el termino energetico puede
+    // aprovechar. Con carga uniforme estrecha, Psi varia poco entre vecinos.
+    bool socInitBimodal = false;
     double routeTimeoutFactor = 6.0;
     double pdrEndWindowSec = 0.0;
     double dedupWindowSec =
@@ -392,6 +398,10 @@ main(int argc, char* argv[])
     cmd.AddValue("socInitMin",
                  "§SoCInit: min initial SoC fraction for random battery init [0-1]",
                  socInitMin);
+    cmd.AddValue("socInitBimodal",
+                 "Carga inicial bimodal: mitad de los nodos en socInitMin y mitad en "
+                 "socInitMax, en vez de uniforme. Maximiza el contraste que ve Psi.",
+                 socInitBimodal);
     cmd.AddValue("socInitMax",
                  "§SoCInit: max initial SoC fraction for random battery init [0-1]",
                  socInitMax);
@@ -1965,7 +1975,10 @@ main(int argc, char* argv[])
         energy::EnergySourceContainer batteries;
         for (uint32_t i = 0; i < nodes.GetN(); ++i)
         {
-            double initialSoc = socRng->GetValue();
+            // Bimodal: nodos pares al minimo, impares al maximo. Determinista a
+            // proposito, para que el contraste no dependa de la semilla.
+            double initialSoc = socInitBimodal ? ((i % 2 == 0) ? socInitMin : socInitMax)
+                                               : socRng->GetValue();
             double initialEnergyJ = fullCapacityJ * initialSoc;
 
             BasicEnergySourceHelper batteryHelper;
