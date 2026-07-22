@@ -1827,3 +1827,41 @@ en curso: cortar a 110 ks —por debajo del FND más temprano observado (112.6
 ks), con lo que ningún nodo ha muerto— y comparar a igual duración el mínimo y
 el percentil 10 del SoC. Si el término protege al nodo peor parado, es ahí
 donde debe verse.
+
+## 2026-07-22 (e) — El mecanismo: redistribución de la cola del SoC
+
+Corte a 110 ks (por debajo del FND más temprano, 112.6 ks: ningún nodo ha
+muerto, comparación a igual duración). δ=0.25 frente a δ=0, 8 semillas
+pareadas:
+
+| magnitud | media | t | signo |
+|---|---:|---:|---|
+| SoC mínimo (peor nodo) | **+106.6%** | 1.83 | 8/8 + |
+| SoC percentil 10 | **+23.98%** | 11.57 | 8/8 + |
+| SoC medio | +1.87% | 19.78 | 8/8 + |
+| CV del SoC | **−0.06** | −18.38 | 8/8 − |
+| TX del nodo más cargado | +0.88% | 0.35 | mixto |
+| CV del gasto TX | +0.00 | 0.94 | mixto |
+
+**El término no reduce el consumo, redistribuye la carga restante.** La media
+del SoC apenas cambia (+1.87%), pero la cola inferior se levanta: el nodo peor
+parado más que duplica su batería y el percentil 10 sube 24%, con la dispersión
+comprimiéndose 18σ. El FND lo fija el nodo que muere primero —un estadístico de
+cola— así que un efecto del 0.44% en la media de gasto rinde +9.7% de FND. Esa
+es la resolución de la aparente amplificación de 45x: no hay amplificación, hay
+una media que no se mueve y una cola que sí.
+
+Detalle que cierra el "cómo": el gasto TX **no** se redistribuye de forma
+medible (CV del txMah mixto, t=0.94). El mecanismo no es "el relevo pesado
+transmite menos" sino que Psi(b_j) desvía tráfico de quien esté más bajo *en
+cada instante*. Es un controlador realimentado que apunta al nodo correcto en
+cada momento: mueve poca energía en el agregado, pero siempre se la quita a
+quien está más cerca de morir. Por eso la cola del SoC se mueve mucho mientras
+la dispersión del gasto acumulado no.
+
+Cautela estadística honesta: el SoC mínimo es el estadístico más ruidoso
+(t=1.83, no significativo al 5% con n=8), pero su dirección es 8/8 (test de
+signos p=0.008) y su versión robusta, el percentil 10, es inequívoca (t=11.57).
+La afirmación defendible es sobre la cola, no sobre el mínimo puntual.
+
+Datos: `tools/validation/mechanism_soc_tail.csv`.
