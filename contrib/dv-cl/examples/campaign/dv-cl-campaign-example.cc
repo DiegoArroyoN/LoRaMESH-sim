@@ -200,6 +200,7 @@ main(int argc, char* argv[])
     bool allowShadowOverride = false;
     bool allowPayloadOverride = false;
     bool allowInterferenceModelOverride = false;
+    bool allowPacketsPerPairOverride = false;
     // §DC-sweep: porcentaje de duty cycle aplicado cuando allowDutyOverride=true
     // (default 1%). Permite barrer el DC (ej. 10%) para analisis de sensibilidad.
     double dutyOverridePct = 1.0;
@@ -470,6 +471,12 @@ main(int argc, char* argv[])
     cmd.AddValue("allowPayloadOverride",
                  "§Robustness: allow CLI dataPayloadSizeBytes to override the Pueyo-fixed 20 B.",
                  allowPayloadOverride);
+    cmd.AddValue("allowPacketsPerPairOverride",
+                 "§Vida util: permitir que pueyoPacketsPerPair sobreescriba el valor fijado "
+                 "por el perfil. Con el valor Pueyo (100) el trafico de datos se agota muy "
+                 "pronto y el resto de la corrida es solo balizas, lo que hace que la vida util "
+                 "mida sobre todo el balizado en una red vacia (VALIDATION.md, 2026-07-22).",
+                 allowPacketsPerPairOverride);
     cmd.AddValue("allowInterferenceModelOverride",
                  "§Robustness: allow CLI interferenceModel to override the profile default.",
                  allowInterferenceModelOverride);
@@ -673,6 +680,7 @@ main(int argc, char* argv[])
     const double cliShadowingSigmaDb = shadowingSigmaDb;
     const uint32_t cliDataPayloadSizeBytes = dataPayloadSizeBytes;
     const std::string cliInterferenceModel = interferenceModel;
+    const uint32_t cliPueyoPacketsPerPair = pueyoPacketsPerPair;
 
     constexpr double kPueyoDefaultDataStartPhaseMaxSec = 100.0;
 
@@ -989,6 +997,10 @@ main(int argc, char* argv[])
     {
         interferenceModel = cliInterferenceModel;
     }
+    if (allowPacketsPerPairOverride)
+    {
+        pueyoPacketsPerPair = cliPueyoPacketsPerPair;
+    }
 
     auto validatePueyoComparableBase = [&](const std::string& profileName) {
         NS_ABORT_MSG_IF(wireFormat != "pueyo7b",
@@ -1000,8 +1012,10 @@ main(int argc, char* argv[])
         NS_ABORT_MSG_IF(trafficMode != "pueyo_all_to_all",
                         "Error: profile=" << profileName
                                           << " requiere trafficMode=pueyo_all_to_all");
-        NS_ABORT_MSG_IF(pueyoPacketsPerPair != 100,
-                        "Error: profile=" << profileName << " requiere pueyoPacketsPerPair=100");
+        NS_ABORT_MSG_IF(pueyoPacketsPerPair != 100 && !allowPacketsPerPairOverride,
+                        "Error: profile=" << profileName
+                                          << " requiere pueyoPacketsPerPair=100 (usar "
+                                             "allowPacketsPerPairOverride para sostener trafico)");
         NS_ABORT_MSG_IF(enableDataRandomDest,
                         "Error: profile=" << profileName << " requiere enableDataRandomDest=false");
         NS_ABORT_MSG_IF((beaconIntervalWarmSec != 60.0 || beaconIntervalStableSec != 60.0) &&

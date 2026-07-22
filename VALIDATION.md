@@ -1647,3 +1647,45 @@ dar el término por muerto.
    `DeviceEnergyModel` de ns-3, o la vía framework se elimina.
 
 Datos: `tools/validation/energy_budget_breakdown.csv`. Suites: 10/10 PASS.
+
+## 2026-07-22 (b) — El escenario: los datos se acaban en t=24 ks de 300 ks
+
+Buscando un régimen donde el relevo pese más, apareció algo que subsume el
+hallazgo anterior. En **toda** corrida de vida útil:
+
+| | |
+|---|---|
+| último dato propio transmitido | **24 172 s** |
+| última baliza | 299 964 s |
+| FND | 292 326 s |
+| duración de la corrida | 300 000 s |
+
+`PueyoPacketsPerPair=100` da 25 x 24 x 100 = 60 000 paquetes, y se agotan en
+los primeros 24 ks. **Los 276 ks restantes —el 92% de la corrida— son balizas
+e idle sobre una red sin tráfico.** El primer nodo muere 268 000 s después del
+último dato.
+
+Es decir: **el FND que veníamos midiendo es, casi por entero, cuánto aguanta un
+nodo balizando en una red vacía.** Ningún esquema de encaminamiento puede
+moverlo, porque durante el 92% de la medición no hay nada que encaminar. Esto
+explica el 1.43% del desglose anterior: el relevo pesa poco porque los datos
+ocupan el 8% de la corrida.
+
+Corregido con `--allowPacketsPerPairOverride`, que permite sostener el tráfico
+durante toda la simulación (1400 paq/par cubre 300 ks a la misma cadencia).
+Experimento en curso: aislamiento de delta con tráfico sostenido, 4 semillas.
+
+### Cuarta instancia del patrón de flags ignorados en silencio
+
+`applyPueyoComparableBase()` fija `txPowerDbm=20` y `pueyoPacketsPerPair=100`
+**después** de parsear la CLI, de modo que `--txPowerDbm` y
+`--pueyoPacketsPerPair` se aceptaban y no hacían nada; la guarda posterior
+(`NS_ABORT_MSG_IF`) nunca saltaba porque comprobaba el valor ya sobreescrito.
+Van cuatro casos iguales (`interferenceModel`, `collisionMatrix`,
+`beaconInterval`, y estos dos). Además `--pueyoGridSpacingM` solo actúa en
+modos `pueyo_*` y el perfil corría con placement `random`, así que un barrido
+de densidad sobre este perfil no varía nada.
+
+**Recomendación de método:** toda corrida debería verificar que los flags
+pedidos son los aplicados, comparando la línea de configuración que el binario
+imprime contra lo solicitado, en vez de confiar en que el flag se respetó.
