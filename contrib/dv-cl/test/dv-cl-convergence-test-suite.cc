@@ -30,9 +30,12 @@ class DvNetwork
 {
   public:
     /// \param linkToaUs adjacency: linkToaUs[i][j] > 0 means i and j are neighbours
-    DvNetwork(std::size_t n, const std::vector<std::vector<uint32_t>>& linkToaUs)
+    DvNetwork(std::size_t n,
+              const std::vector<std::vector<uint32_t>>& linkToaUs,
+              const std::vector<uint16_t>& battMv = {})
         : m_n(n),
-          m_toa(linkToaUs)
+          m_toa(linkToaUs),
+          m_batt(battMv.empty() ? std::vector<uint16_t>(n, 4200) : battMv)
     {
         for (std::size_t i = 0; i < n; ++i)
         {
@@ -71,7 +74,7 @@ class DvNetwork
                 link.hops = 1;
                 link.sf = 7;
                 link.toaUs = toa;
-                link.batt_mV = 4200; // healthy: Psi = 0, cost is ToA + hop only
+                link.batt_mV = m_batt[tx]; // the advertising neighbour's charge
                 link.scoreX100 = 0;
 
                 DvMessage msg;
@@ -102,6 +105,7 @@ class DvNetwork
   private:
     std::size_t m_n;
     std::vector<std::vector<uint32_t>> m_toa;
+    std::vector<uint16_t> m_batt;
     std::vector<Ptr<DvClRouting>> m_routing;
 };
 
@@ -333,6 +337,79 @@ class DvClConvergenceCostAwareTestCase : public TestCase
  * \ingroup dv-cl
  * \brief Convergence suite (validation plan F1.5).
  */
+/**
+ * \ingroup dv-cl
+ * rief With links otherwise identical, the fuller neighbour is preferred.
+ *
+ * The narrowest possible statement of what delta*Psi is for. Two paths to
+ * the same destination, equal in hops and in time on air, differing only
+ * in the charge of the relay: the energy term exists to break exactly
+ * this tie in favour of the healthier node.
+ *
+ * Written because three campaigns and three hundred runs found no
+ * measurable effect from that term, even given a charge split of 20%
+ * against 90%. Whether the mechanism works at all is a different question
+ * from whether it changes network outcomes, and this separates them: if
+ * this passes, the term steers routes and the null result is about
+ * dynamics; if it fails, the term never reaches the decision.
+ */
+class DvClEnergyPreferenceTestCase : public TestCase
+{
+  public:
+    DvClEnergyPreferenceTestCase()
+        : TestCase("dv-cl energy: the fuller relay wins an otherwise equal tie")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        //   1 (empty)
+        //  /         // 0   3   <- destination
+        //  \ /
+        //   2 (full)
+        // Both relays are one hop from 0 and one from 3, on identical links.
+        const std::size_t n = 4;
+        const uint32_t kToa = 102656;
+        std::vector<std::vector<uint32_t>> adj(n, std::vector<uint32_t>(n, 0));
+        auto connect = [&](std::size_t a, std::size_t b) { adj[a][b] = adj[b][a] = kToa; };
+        connect(0, 1);
+        connect(0, 2);
+        connect(1, 3);
+        connect(2, 3);
+
+        // 3000 mV is empty and 4200 full on the scale the metric uses, so node 1
+        // sits at Psi = 1 and node 2 at Psi = 0 -- the largest possible gap.
+        std::vector<uint16_t> batt = {4200, 3000, 4200, 4200};
+
+        DvNetwork net(n, adj, batt);
+        for (uint32_t round = 1; round <= 8; ++round)
+        {
+            net.Round(round);
+        }
+
+        const RouteEntry* r = net.At(0)->GetRoute(3);
+        NS_TEST_ASSERT_MSG_NE(r, nullptr, "node 0 must find node 3");
+        NS_TEST_ASSERT_MSG_EQ(r->nextHop, 2u, "the charged relay must be preferred");
+        Simulator::Destroy();
+
+        // Control: swap the charges and the choice must swap with them. Without
+        // this the test would also pass if the routing simply favoured the
+        // higher node id, which happens to be the answer above.
+        std::vector<uint16_t> swapped = {4200, 4200, 3000, 4200};
+        DvNetwork mirror(n, adj, swapped);
+        for (uint32_t round = 1; round <= 8; ++round)
+        {
+            mirror.Round(round);
+        }
+        const RouteEntry* r2 = mirror.At(0)->GetRoute(3);
+        NS_TEST_ASSERT_MSG_NE(r2, nullptr, "node 0 must find node 3 in the mirror");
+        NS_TEST_ASSERT_MSG_EQ(r2->nextHop, 1u, "the choice follows the charge, not the id");
+
+        Simulator::Destroy();
+    }
+};
+
 class DvClConvergenceTestSuite : public TestSuite
 {
   public:
@@ -341,6 +418,7 @@ class DvClConvergenceTestSuite : public TestSuite
     {
         AddTestCase(new DvClConvergenceTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClConvergenceCostAwareTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new DvClEnergyPreferenceTestCase, TestCase::Duration::QUICK);
     }
 };
 

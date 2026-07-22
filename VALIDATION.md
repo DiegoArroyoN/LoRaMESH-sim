@@ -1402,6 +1402,66 @@ o la histéresis de conmutación absorbe la diferencia. Ninguna está verificada
 
 Datos: `tools/validation/energy_isolation_bimodal.csv`.
 
+## 2026-07-20 — POR QUÉ el término energético no cambia nada: diagnóstico
+
+Investigación del resultado nulo. Se descartaron tres hipótesis y se encontró la
+causa.
+
+**Hipótesis 1 — dilución del costo de camino: DESCARTADA (por código).** En
+`UpdateFromDvMsg` el costo acumula `pathRaw + ComputeThesisLinkCost(...)`, donde
+`pathRaw` es el costo anunciado por el vecino y ya contiene la penalización
+energética de *sus* saltos. La energía **se suma hop a hop** igual que el resto;
+no se diluye.
+
+**Hipótesis 2 — saturación del encoding: DESCARTADA (por código).** COST255 con
+paso 0.025 representa hasta 6.375 de costo de camino, muy por encima de lo que
+alcanza un camino típico (~0.3-0.5 por salto). Y `delta*Psi` máximo (0.25) son
+**10 pasos de cuantización**: resolución de sobra.
+
+**Hipótesis 3 — el término no llega a la decisión: DESCARTADA (por test).**
+Nueva suite `dv-cl energy: the fuller relay wins an otherwise equal tie`: dos
+relevos a igual distancia, igual ToA e igual número de saltos, uno vacío
+(3000 mV) y otro lleno (4200 mV). **El routing elige al cargado.** El test
+incluye el control inverso —intercambiar las cargas invierte la elección— de
+modo que no pasa por un desempate de id. **El mecanismo funciona.**
+
+**CAUSA REAL: el ruteo solo controla una fracción menor del gasto energético.**
+
+| topología | nEd | balizas TX | datos TX | control/datos | overhead bytes |
+|---|---|---|---|---|---|
+| todos-a-todos | 25 | 124 941 | 41 137 | **3.0** | 7.9 |
+| todos-a-todos | 49 | 244 766 | 137 138 | **1.8** | 8.7 |
+| sumidero único | 25 | 124 997 | 1 774 | **70.5** | 182.7 |
+| sumidero único | 49 | 244 976 | 3 216 | **76.2** | 375.1 |
+
+Con sumidero hay **70-76 balizas por cada transmisión de datos**. Las balizas son
+broadcast periódico: **cada nodo las emite pase lo que pase**, con independencia
+de las rutas que cualquiera elija. El encaminamiento solo decide quién releva
+datos, que es la porción pequeña del consumo.
+
+Por eso esquivar a un nodo descargado no le alarga la vida de forma apreciable:
+se le quita una fracción menor de su gasto mientras sigue pagando el plano de
+control completo. **El término energético hace exactamente lo que debe, sobre la
+variable equivocada.**
+
+### Consecuencia de diseño (para la tesis)
+
+Esto convierte el resultado nulo en un hallazgo con dirección. Un ruteo consciente
+de energía **solo puede rendir cuando el relevo de datos domina el gasto**. Con la
+cadencia de balizas actual eso no ocurre en ningún régimen probado.
+
+Vías coherentes con el diagnóstico, en orden de coste:
+
+1. **Reducir la cadencia de balizas** (o hacerla adaptativa) hasta que el relevo
+   sea una fracción apreciable del consumo, y repetir el aislamiento. Es la
+   prueba directa de este diagnóstico.
+2. Que el término energético gobierne también el **plano de control** —por
+   ejemplo, espaciar las balizas de los nodos con poca carga—, que es donde
+   está el gasto.
+3. Reportar el hallazgo tal cual: en redes LoRa con este régimen de control, la
+   vida útil la fija el overhead de balizas y no las decisiones de ruteo. Es un
+   resultado negativo **informativo** y publicable.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
