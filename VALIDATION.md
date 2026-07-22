@@ -1462,6 +1462,67 @@ Vías coherentes con el diagnóstico, en orden de coste:
    vida útil la fija el overhead de balizas y no las decisiones de ruteo. Es un
    resultado negativo **informativo** y publicable.
 
+## 2026-07-20 — Prueba del diagnóstico: REFUTADO (el overhead no era la causa)
+
+El diagnóstico anterior sostenía que `delta*Psi` no rinde porque el ruteo
+gobierna solo una fracción menor del gasto —70-76 balizas por dato— y que
+bajando la cadencia el término empezaría a actuar. **La predicción falla.**
+
+Barrido de cadencia con aislamiento de delta en cada nivel (96 corridas, 8
+semillas). Advertencia de Diego atendida: el vencimiento de rutas escala solo
+(`routeTimeout = intervalo * factor 5`), verificado además empíricamente.
+
+**El plano de control sigue sano al bajar la cadencia**, y el peso del relevo se
+invierte como se buscaba:
+
+| beacon | nEd | rutas | PDR | control/datos |
+|---|---|---|---|---|
+| 60 s | 25 | 1144 | 0.0282 | **3.04** |
+| 240 s | 25 | 1120 | 0.0301 | **0.76** |
+| 900 s | 25 | 1123 | 0.0417 | **0.24** |
+| 60 s | 49 | 4508 | 0.0087 | 1.78 |
+| 240 s | 49 | 4391 | 0.0092 | 0.44 |
+| 900 s | 49 | 4396 | 0.0127 | **0.13** |
+
+A 900 s el relevo de datos supera al control **8 a 1** (ratio 0.13), justo la
+condición que el diagnóstico exigía. Las rutas se mantienen (1123 frente a 1144)
+y el PDR **mejora** (0.0417 frente a 0.0282), de modo que el régimen es válido y
+no un colapso.
+
+**Y el término energético sigue sin actuar:**
+
+| beacon | nEd | dPDR | t | dFND | t | dT50 | t |
+|---|---|---|---|---|---|---|---|
+| 60 s | 25 | +3.2% | 2.28 | +1.6% | 0.88 | +1.7% | 2.25 |
+| 60 s | 49 | −0.0% | 0.00 | −1.3% | −0.98 | −1.2% | −1.40 |
+| 240 s | 25 | +3.5% | 3.57 | +0.6% | 0.22 | +2.9% | 1.61 |
+| 240 s | 49 | −1.5% | −1.67 | +4.1% | 1.76 | −2.1% | −2.06 |
+| 900 s | 25 | +4.8% | 1.35 | +3.1% | 0.99 | +1.2% | 0.52 |
+| 900 s | 49 | +0.6% | 0.33 | +2.9% | 0.75 | −1.4% | −1.09 |
+
+Sobre 18 contrastes, uno alcanza t=3.57 (PDR a 240 s, 25 nodos) y el resto queda
+bajo 2.3, con signos que se invierten entre tamaños. **No hay tendencia con la
+cadencia**: si el diagnóstico fuera correcto, el efecto debería crecer
+monótonamente de 60 s a 900 s en FND y T50, y no lo hace.
+
+**Estado: la causa del resultado nulo sigue sin identificarse.** Lo establecido
+con datos:
+
+- El mecanismo **funciona** a nivel de decisión (test de preferencia con control
+  inverso).
+- **No** es dilución de costo de camino ni saturación del encoding (por código).
+- **No** es la topología de tráfico (3 patrones), ni la falta de heterogeneidad
+  (reparto bimodal 20/90), ni el peso del overhead de control (esta entrada).
+
+Hipótesis vivas, ninguna probada: que la vida útil esté dominada por el consumo
+en recepción y escucha —que ningún esquema de ruteo redistribuye, porque todo
+nodo escucha igual—, o que evitar a un nodo como relevo no reduzca su consumo lo
+suficiente frente a lo que gasta transmitiendo lo suyo propio. La primera es
+comprobable con el desglose por estado del `DvClLoraEnergyModel`, que ya registra
+tiempo por estado.
+
+Datos: `tools/validation/beacon_cadence_sweep.csv`.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
