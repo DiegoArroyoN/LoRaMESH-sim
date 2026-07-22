@@ -1689,3 +1689,45 @@ de densidad sobre este perfil no varía nada.
 **Recomendación de método:** toda corrida debería verificar que los flags
 pedidos son los aplicados, comparando la línea de configuración que el binario
 imprime contra lo solicitado, en vez de confiar en que el flag se respetó.
+
+## 2026-07-22 (c) — Auditoría del patrón: 34 flags se descartaban en silencio
+
+El patrón apareció cuatro veces (`interferenceModel`, `collisionMatrix`,
+`txPowerDbm`, `pueyoPacketsPerPair`), así que en vez de parchear instancias se
+auditó entero. `applyPueyoComparableBase()` asigna 40 variables después de
+parsear la línea de comandos; 6 tienen override explícito y **34 no**:
+
+```
+beaconIntervalStableSec beaconLatestOnly controlBackoffFactor costEncoding
+dataBackoffFactor dataFixedPhaseCadence dataPeriodJitterMaxSec
+dataPeriodJitterSymmetric dataSlotJitterSec dataSlotPeriodSec
+dataStartPhaseMaxSec dataStartPhaseOnly dutyWindowSec dvPayloadMaxBytes
+enableDataSlots initTtl maxRoutesPerDestination maxTotalRoutes preambleSymbols
+prioritizeBeacons puelloPreambleSymbols pueyoStrictQueueScheduler
+routeAdvertPolicy routeSwitchMinDeltaX100 routeTimeoutFactor sfLinkMarginDb
+sfMax sfMin sfScanEdThresholdDbm sfScanResetOnNewSignal trafficMode
+txPowerDbm useProbabilisticSfForBeacons wireFormat
+```
+
+Que el perfil los fije es correcto —es lo que hace comparable la réplica—. Lo
+inaceptable es que el binario **acepte el flag y lo descarte sin avisar**: la
+corrida dice medir una cosa y mide otra. Ya costó cuatro experimentos, y en el
+barrido de topologías de hoy dos filas (`sparse300`, `tx8dbm`) salieron byte a
+byte idénticas a la base sin que nada lo señalara.
+
+**Corregido de forma general.** El binario ahora compara lo que se pidió por
+línea de comandos contra lo que quedó tras aplicar el perfil, y aborta
+nombrando cada flag descartado con el valor pedido y el aplicado:
+
+```
+El perfil 'proposal_pueyo_like_csmacad' descarta 2 flag(s) que pediste:
+  --initTtl (pedido 5, aplicado 63), --sfMax (pedido 10, aplicado 8).
+```
+
+Verificado en cinco casos: un flag pisado aborta; dos pisados se listan ambos;
+un flag pasado con el mismo valor que fija el perfil no aborta; un flag con
+override explícito disponible no aborta; una corrida normal no aborta.
+
+Nota lateral que el propio guard destapó: pidiendo `--sfMax=10` el valor
+aplicado es 8, no el 12 que fija `applyPueyoComparableBase()`. Hay un ajuste
+posterior específico del perfil. Sin revisar.

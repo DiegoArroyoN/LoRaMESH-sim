@@ -3,6 +3,11 @@
 #include "dv-cl-campaign-collector.h"
 
 #include <fstream>
+#include <type_traits>
+#include <sstream>
+#include <set>
+#include <map>
+#include <iomanip>
 
 #include "ns3/core-module.h"
 #include "ns3/dv-cl-app.h"
@@ -641,6 +646,86 @@ main(int argc, char* argv[])
                  disableExtraAfterWarmup);
     cmd.Parse(argc, argv);
 
+    // Un perfil fija sus parametros DESPUES de parsear la linea de comandos, y
+    // eso es deliberado: es lo que hace comparable la replica. Lo que no es
+    // aceptable es que el binario acepte un flag y lo descarte en silencio --
+    // ya invalido cuatro experimentos (interferenceModel, collisionMatrix,
+    // txPowerDbm, pueyoPacketsPerPair) que parecian medir una cosa y median
+    // otra. Aqui se compara lo que el usuario pidio contra lo que quedo, y si
+    // el perfil lo piso se aborta nombrando el flag (VALIDATION.md, 2026-07-22).
+    std::set<std::string> requestedFlags;
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string tok(argv[i]);
+        if (tok.rfind("--", 0) != 0)
+        {
+            continue;
+        }
+        tok = tok.substr(2);
+        const std::size_t eq = tok.find('=');
+        requestedFlags.insert(eq == std::string::npos ? tok : tok.substr(0, eq));
+    }
+
+    auto asText = [](const auto& v) {
+        std::ostringstream o;
+        using T = std::decay_t<decltype(v)>;
+        if constexpr (std::is_same_v<T, std::string>)
+        {
+            o << v;
+        }
+        else if constexpr (std::is_integral_v<T>)
+        {
+            o << static_cast<long long>(v);
+        }
+        else
+        {
+            o << std::setprecision(17) << v;
+        }
+        return o.str();
+    };
+#define DVCL_SNAP(v) snap[#v] = asText(v)
+    auto snapshotProfileForced = [&]() {
+        std::map<std::string, std::string> snap;
+        DVCL_SNAP(beaconIntervalStableSec);
+        DVCL_SNAP(beaconLatestOnly);
+        DVCL_SNAP(controlBackoffFactor);
+        DVCL_SNAP(costEncoding);
+        DVCL_SNAP(dataBackoffFactor);
+        DVCL_SNAP(dataFixedPhaseCadence);
+        DVCL_SNAP(dataPeriodJitterMaxSec);
+        DVCL_SNAP(dataPeriodJitterSymmetric);
+        DVCL_SNAP(dataSlotJitterSec);
+        DVCL_SNAP(dataSlotPeriodSec);
+        DVCL_SNAP(dataStartPhaseMaxSec);
+        DVCL_SNAP(dataStartPhaseOnly);
+        DVCL_SNAP(dutyWindowSec);
+        DVCL_SNAP(dvPayloadMaxBytes);
+        DVCL_SNAP(enableDataSlots);
+        DVCL_SNAP(initTtl);
+        DVCL_SNAP(maxRoutesPerDestination);
+        DVCL_SNAP(maxTotalRoutes);
+        DVCL_SNAP(preambleSymbols);
+        DVCL_SNAP(prioritizeBeacons);
+        DVCL_SNAP(puelloPreambleSymbols);
+        DVCL_SNAP(pueyoStrictQueueScheduler);
+        DVCL_SNAP(routeAdvertPolicy);
+        DVCL_SNAP(routeSwitchMinDeltaX100);
+        DVCL_SNAP(routeTimeoutFactor);
+        DVCL_SNAP(sfLinkMarginDb);
+        DVCL_SNAP(sfMax);
+        DVCL_SNAP(sfMin);
+        DVCL_SNAP(sfScanEdThresholdDbm);
+        DVCL_SNAP(sfScanResetOnNewSignal);
+        DVCL_SNAP(trafficMode);
+        DVCL_SNAP(txPowerDbm);
+        DVCL_SNAP(useProbabilisticSfForBeacons);
+        DVCL_SNAP(wireFormat);
+        return snap;
+    };
+#undef DVCL_SNAP
+    const std::map<std::string, std::string> requestedValues = snapshotProfileForced();
+
+
     const std::string profileLower = [&profile]() {
         std::string out = profile;
         for (char& ch : out)
@@ -1001,6 +1086,34 @@ main(int argc, char* argv[])
     {
         pueyoPacketsPerPair = cliPueyoPacketsPerPair;
     }
+
+    // Contraste: lo pedido frente a lo que quedo tras aplicar el perfil.
+{
+    const std::map<std::string, std::string> effective = snapshotProfileForced();
+    std::ostringstream discarded;
+    std::size_t n = 0;
+    for (const auto& [flag, requested] : requestedValues)
+    {
+        if (!requestedFlags.count(flag))
+        {
+            continue;
+        }
+        const auto it = effective.find(flag);
+        if (it != effective.end() && it->second != requested)
+        {
+            discarded << (n++ ? ", " : "") << "--" << flag << " (pedido " << requested
+                      << ", aplicado " << it->second << ")";
+        }
+    }
+    NS_ABORT_MSG_IF(n > 0,
+                    "El perfil '"
+                        << profileLower << "' descarta " << n
+                        << " flag(s) que pediste: " << discarded.str()
+                        << ". Usa otro perfil, o anade el override correspondiente, o "
+                           "quita el flag; lo que no puede pasar es que la corrida diga "
+                           "medir una cosa y mida otra.");
+}
+
 
     auto validatePueyoComparableBase = [&](const std::string& profileName) {
         NS_ABORT_MSG_IF(wireFormat != "pueyo7b",
