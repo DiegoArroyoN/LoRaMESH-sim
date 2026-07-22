@@ -1776,3 +1776,54 @@ una campaña larga acaba tocando:
 
 Estado actual: **PREFLIGHT OK**, con `fnd_s=5185` en la etapa 4, es decir el
 camino de agotamiento sí se recorre.
+
+## 2026-07-22 (d) — Con tráfico sostenido, el término de energía SÍ rinde
+
+Aislamiento de `delta` con tráfico durante toda la corrida (1400 paq/par, 300
+ks, 25 nodos, `proposal_pueyo_like_csmacad`), 8 semillas, pareado por semilla:
+
+| magnitud | delta=0.25 vs delta=0 | t | semillas |
+|---|---:|---:|---|
+| **FND** | **+9.69%** | **17.49** | 8/8 a favor |
+| PDR | −0.78% | −3.97 | 8/8 en contra |
+| relevo (% del TX) | −1.06 pp | −24.13 | 8/8 |
+| energía TX total | −0.44% | −14.24 | 8/8 |
+
+**El término compra ~9.7% de vida útil a cambio de ~0.8% de PDR.** Es una
+frontera de Pareto real, y es exactamente el encuadre de "división de labores".
+
+El resultado nulo de los cinco experimentos anteriores no era del término: era
+del escenario. Sin tráfico durante el 92% de la corrida no había nada que
+repartir.
+
+Datos: `tools/validation/sustained_traffic_delta_isolation.csv`.
+
+### Aviso de método: un binario reconstruido a mitad de lote
+
+El primer lote cruzó una recompilación (el arreglo del cierre del libro), y se
+ve en `idle_mah` entre la semilla 5 `d=0.25` (2638) y `d=0` (1952). Las
+columnas de energía de ese lote no son comparables entre sí: daban −2.35% de
+energía TX cuando el valor real, medido con un único binario, es **−0.44%**.
+FND, PDR y relevo no se vieron afectados porque no dependen de los contadores.
+
+De rebote salió una comprobación de determinismo que no habíamos hecho: el
+relanzado con el binario corregido dio FND y PDR **idénticos dígito a dígito**,
+confirmando que el arreglo de contabilidad no toca la dinámica.
+
+**Regla:** no recompilar mientras un lote corre; y todo conjunto que vaya al
+paper debe salir de un único binario.
+
+### El mecanismo, todavía sin demostrar
+
+Un recorte del 0.44% en energía TX —que sobre el presupuesto total es ~0.2%—
+no puede explicar por sí solo un +9.69% de vida útil: son 45x de amplificación.
+Tiene que ser redistribución, ya que el FND lo fija el nodo peor parado y no la
+media. Pero la dispersión del gasto TX entre nodos medida al final de la
+corrida apenas se mueve (CV t=−1.78, Gini t=−2.07) y el pico del nodo más
+cargado no es concluyente (t=−1.48).
+
+Esas medidas están tomadas al final, cuando la red ya se degradó. Experimento
+en curso: cortar a 110 ks —por debajo del FND más temprano observado (112.6
+ks), con lo que ningún nodo ha muerto— y comparar a igual duración el mínimo y
+el percentil 10 del SoC. Si el término protege al nodo peor parado, es ahí
+donde debe verse.
