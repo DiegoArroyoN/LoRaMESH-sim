@@ -1731,3 +1731,48 @@ override explícito disponible no aborta; una corrida normal no aborta.
 Nota lateral que el propio guard destapó: pidiendo `--sfMax=10` el valor
 aplicado es 8, no el 12 que fija `applyPueyoComparableBase()`. Hay un ajuste
 posterior específico del perfil. Sin revisar.
+
+### Corrección del recuento, y la rutina que faltaba
+
+El recuento anterior (34) estaba mal: la auditoría solo reconocía overrides de
+una asignación, y varios son bloques de dos. El número correcto es **9 con
+override y 31 sin**:
+
+| flag | override |
+|---|---|
+| `beaconIntervalWarmSec`, `beaconIntervalStableSec` | `--allowBeaconOverride` |
+| `sfMin`, `sfMax` | `--allowPaperLikeSfRangeVariant` |
+| `interferenceModel` | `--allowInterferenceModelOverride` |
+| `pueyoPacketsPerPair` | `--allowPacketsPerPairOverride` |
+| `dataPayloadSizeBytes` | `--allowPayloadOverride` |
+| `shadowingSigmaDb` | `--allowShadowOverride` |
+| `enableNs3EnergyFramework` | `--allowEnergyFwOverride` |
+
+El mensaje de error ahora nombra el override cuando existe y dice que no lo hay
+cuando no:
+
+```
+descarta 2 flag(s) que pediste:
+  --initTtl (pedido 5, aplicado 63) -> este parametro no admite override;
+  --sfMax  (pedido 10, aplicado 8)  -> usa --allowPaperLikeSfRangeVariant=true
+```
+
+Esto cierra también el cabo suelto de `--sfMax=10 -> 8`: no era un defecto, es
+el rango Pueyo (SF7-8) que el perfil fija a propósito, y tiene override.
+
+**`tools/validation/preflight.sh`.** El aserto de `BasicEnergySource` llevaba
+meses ahí y se encontró por accidente: las campañas corren en un árbol
+optimizado, donde `NS_ASSERT` no existe, y nadie pasaba nunca por un árbol con
+asertos. La rutina corre con asertos activos y toca en segundos los caminos que
+una campaña larga acaba tocando:
+
+1. build del módulo y del ejemplo de campaña;
+2. las 10 suites;
+3. arranque de los 9 perfiles;
+4. **agotamiento de batería** — arrancando con SoC al 2-3% los nodos mueren en
+   segundos en vez de en 300 ks, y la rutina falla si *nadie* muere (si no, da
+   falsa tranquilidad sin recorrer el camino);
+5. que un flag pisado por el perfil aborte en vez de colarse.
+
+Estado actual: **PREFLIGHT OK**, con `fnd_s=5185` en la etapa 4, es decir el
+camino de agotamiento sí se recorre.

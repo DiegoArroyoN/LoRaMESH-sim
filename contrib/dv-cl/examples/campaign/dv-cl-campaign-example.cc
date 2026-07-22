@@ -1087,33 +1087,50 @@ main(int argc, char* argv[])
         pueyoPacketsPerPair = cliPueyoPacketsPerPair;
     }
 
-    // Contraste: lo pedido frente a lo que quedo tras aplicar el perfil.
-{
-    const std::map<std::string, std::string> effective = snapshotProfileForced();
-    std::ostringstream discarded;
-    std::size_t n = 0;
-    for (const auto& [flag, requested] : requestedValues)
-    {
-        if (!requestedFlags.count(flag))
-        {
-            continue;
-        }
-        const auto it = effective.find(flag);
-        if (it != effective.end() && it->second != requested)
-        {
-            discarded << (n++ ? ", " : "") << "--" << flag << " (pedido " << requested
-                      << ", aplicado " << it->second << ")";
-        }
-    }
-    NS_ABORT_MSG_IF(n > 0,
-                    "El perfil '"
-                        << profileLower << "' descarta " << n
-                        << " flag(s) que pediste: " << discarded.str()
-                        << ". Usa otro perfil, o anade el override correspondiente, o "
-                           "quita el flag; lo que no puede pasar es que la corrida diga "
-                           "medir una cosa y mida otra.");
-}
+    // Nueve de los parametros que fija el perfil tienen una via legitima para
+    // variarlos; los otros 31 no. Nombrar el override en el propio error ahorra
+    // ir a leer el codigo para averiguar cual es.
+    static const std::map<std::string, std::string> kOverrideFor = {
+        {"beaconIntervalStableSec", "allowBeaconOverride"},
+        {"beaconIntervalWarmSec", "allowBeaconOverride"},
+        {"dataPayloadSizeBytes", "allowPayloadOverride"},
+        {"enableNs3EnergyFramework", "allowEnergyFwOverride"},
+        {"interferenceModel", "allowInterferenceModelOverride"},
+        {"pueyoPacketsPerPair", "allowPacketsPerPairOverride"},
+        {"sfMax", "allowPaperLikeSfRangeVariant"},
+        {"sfMin", "allowPaperLikeSfRangeVariant"},
+        {"shadowingSigmaDb", "allowShadowOverride"},
+    };
 
+    // Contraste: lo pedido por linea de comandos frente a lo que quedo tras
+    // aplicar el perfil. Un flag aceptado y descartado en silencio hace que la
+    // corrida diga medir una cosa y mida otra.
+    {
+        const std::map<std::string, std::string> effective = snapshotProfileForced();
+        std::ostringstream discarded;
+        std::size_t n = 0;
+        for (const auto& [flag, requested] : requestedValues)
+        {
+            if (!requestedFlags.count(flag))
+            {
+                continue;
+            }
+            const auto it = effective.find(flag);
+            if (it == effective.end() || it->second == requested)
+            {
+                continue;
+            }
+            discarded << (n++ ? "; " : "") << "--" << flag << " (pedido " << requested
+                      << ", aplicado " << it->second << ")";
+            const auto ov = kOverrideFor.find(flag);
+            discarded << (ov != kOverrideFor.end()
+                              ? " -> usa --" + ov->second + "=true"
+                              : std::string(" -> este parametro no admite override"));
+        }
+        NS_ABORT_MSG_IF(n > 0,
+                        "El perfil '" << profileLower << "' descarta " << n
+                                      << " flag(s) que pediste: " << discarded.str() << ".");
+    }
 
     auto validatePueyoComparableBase = [&](const std::string& profileName) {
         NS_ABORT_MSG_IF(wireFormat != "pueyo7b",
