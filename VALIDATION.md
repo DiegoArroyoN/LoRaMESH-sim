@@ -1288,6 +1288,65 @@ hace falta comparar `composite` contra `composite con δ=0` —misma formulació
 solo cambia Ψ— vía `--ns3::dvcl::DvClCompositeMetric::WEnergy=0`. Es el
 experimento que respalda la afirmación central de la tesis.
 
+## 2026-07-20 — AISLAMIENTO DEL TÉRMINO ENERGÉTICO: sin efecto medible
+
+Experimento estricto: **misma formulación, misma configuración, misma semilla;
+lo único que cambia es delta** (`--compositeWEnergy=0.25` frente a `0`). Es la
+única comparación que atribuye un efecto a `delta*Psi` — la de
+`composite_score` contra `toa_only` conmuta la función de costo entera y por
+tanto **no** aísla nada.
+
+**Todos-contra-todos** (100 corridas, 10 semillas por punto):
+
+| nEd | dPDR | t | dFND | t | dT50 | t |
+|---|---|---|---|---|---|---|
+| 9 | −0.1% | −0.08 | −2.5% | −0.41 | +4.6% | 1.23 |
+| 25 | +2.0% | 1.44 | +2.3% | 1.41 | +1.7% | 2.17 |
+| 49 | +0.2% | 0.23 | −1.6% | −1.16 | −0.7% | −0.85 |
+
+**Por patrón de tráfico** (120 corridas; hipótesis de Diego: la carga uniforme de
+todos-contra-todos no genera la heterogeneidad de batería que Psi necesita, y un
+sumidero debería generarla):
+
+| topología | nEd | dPDR | t | dFND | t | dT50 | t |
+|---|---|---|---|---|---|---|---|
+| todos-a-todos | 25 | +2.0% | 1.44 | +2.3% | 1.41 | +1.7% | 2.17 |
+| todos-a-todos | 49 | +0.2% | 0.23 | −1.6% | −1.16 | −0.7% | −0.85 |
+| multi-sink (4) | 25 | +1.6% | 0.32 | +0.5% | 1.00 | −0.1% | −0.40 |
+| multi-sink (4) | 49 | +4.9% | 1.29 | +0.0% | 0.03 | −0.5% | −1.25 |
+| sumidero único | 25 | +3.5% | 1.01 | +0.6% | 0.75 | +0.4% | 1.16 |
+| sumidero único | 49 | −3.7% | −0.63 | +0.2% | 0.42 | +0.0% | 0.10 |
+
+**Resultado: el término energético no tiene efecto medible en ninguna topología.**
+Los 18 contrastes tienen |t| < 2.2, la mayoría bajo 1.3, y los signos se invierten
+entre tamaños y patrones. No es que el efecto sea pequeño: es indistinguible de
+cero.
+
+Los flags de topología sí actuaron (a2a genera 60 000 paquetes contra 2 400 del
+sumidero único, y la red vive 6x más), de modo que el resultado no es un
+artefacto de configuración.
+
+**La hipótesis de la heterogeneidad no se sostiene con estos datos.** El proxy
+disponible —el cociente T50/FND, que mide cuán dispersas están las muertes— vale
+1.75-1.82 en todos-contra-todos y **1.61-1.71 con sumidero**, es decir el
+sumidero produce un desgaste *ligeramente más uniforme*, no más dispar. La
+convergencia de tráfico agota a los nodos cercanos al sink, pero también los mata
+antes, y el resto se descarga de forma pareja.
+
+**Consecuencia para la tesis.** Las ganancias medidas de `composite_score` sobre
+`toa_only` (+7% a +17% de PDR, +5% a +10% de FND) son reales y significativas,
+pero provienen de la **formulación del costo basada en ToA**, no del término
+energético. La afirmación defendible es sobre la métrica compuesta como
+formulación; **atribuirla a `delta*Psi` no está respaldado**.
+
+**Limitación medida, no descartada:** solo se probó con SoC inicial U[15,35%].
+Un régimen con heterogeneidad inicial mucho más marcada (p. ej. mitad de los
+nodos al 90% y mitad al 20%) podría activar Psi de forma útil. Queda como
+pregunta abierta, no como resultado.
+
+Datos: `tools/validation/energy_isolation_index.csv` y
+`energy_isolation_topologies.csv`.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
