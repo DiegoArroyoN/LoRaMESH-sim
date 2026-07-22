@@ -72,6 +72,7 @@ DvClEnergyRegistry::UpdateEnergy(NodeId id, double txCurrentMa, double durationS
     double current = (txCurrentMa > 0.0) ? txCurrentMa : m_txCurrentMa;
     double consumedMah = current * durationSeconds / 3600.0;
     state.remainingMah = std::max(0.0, state.remainingMah - consumedMah);
+    state.txMah += consumedMah;
     state.lastUpdate = Simulator::Now();
     NS_LOG_DEBUG("DvClEnergyRegistry: Node " << id << " TX consumed=" << consumedMah
                                              << "mAh remaining=" << state.remainingMah);
@@ -84,6 +85,7 @@ DvClEnergyRegistry::UpdateRxEnergy(NodeId id, double durationSeconds)
     ApplyIdleConsumption(state);
     double consumedMah = m_rxCurrentMa * durationSeconds / 3600.0;
     state.remainingMah = std::max(0.0, state.remainingMah - consumedMah);
+    state.rxMah += consumedMah;
     state.lastUpdate = Simulator::Now();
     NS_LOG_DEBUG("DvClEnergyRegistry: Node " << id << " RX consumed=" << consumedMah
                                              << "mAh remaining=" << state.remainingMah);
@@ -96,6 +98,7 @@ DvClEnergyRegistry::UpdateCadEnergy(NodeId id, double durationSeconds)
     ApplyIdleConsumption(state);
     double consumedMah = m_cadCurrentMa * durationSeconds / 3600.0;
     state.remainingMah = std::max(0.0, state.remainingMah - consumedMah);
+    state.cadMah += consumedMah;
     state.lastUpdate = Simulator::Now();
     NS_LOG_DEBUG("DvClEnergyRegistry: Node " << id << " CAD consumed=" << consumedMah
                                              << "mAh remaining=" << state.remainingMah);
@@ -118,6 +121,38 @@ DvClEnergyRegistry::GetEnergyFraction(NodeId id)
     NodeEnergyState& state = EnsureNode(id);
     ApplyIdleConsumption(state);
     return std::clamp(state.remainingMah / m_capacityMah, 0.0, 1.0);
+}
+
+double
+DvClEnergyRegistry::GetTxMah(NodeId id)
+{
+    NodeEnergyState& state = EnsureNode(id);
+    ApplyIdleConsumption(state);
+    return state.txMah;
+}
+
+double
+DvClEnergyRegistry::GetRxMah(NodeId id)
+{
+    NodeEnergyState& state = EnsureNode(id);
+    ApplyIdleConsumption(state);
+    return state.rxMah;
+}
+
+double
+DvClEnergyRegistry::GetCadMah(NodeId id)
+{
+    NodeEnergyState& state = EnsureNode(id);
+    ApplyIdleConsumption(state);
+    return state.cadMah;
+}
+
+double
+DvClEnergyRegistry::GetIdleMah(NodeId id)
+{
+    NodeEnergyState& state = EnsureNode(id);
+    ApplyIdleConsumption(state);
+    return state.idleMah;
 }
 
 double
@@ -190,6 +225,7 @@ DvClEnergyRegistry::ApplyIdleConsumption(NodeEnergyState& state)
     double dt = (now - state.lastUpdate).GetSeconds();
     double consumedMah = m_idleCurrentMa * dt / 3600.0;
     state.remainingMah = std::max(0.0, state.remainingMah - consumedMah);
+    state.idleMah += consumedMah;
     state.lastUpdate = now;
 }
 

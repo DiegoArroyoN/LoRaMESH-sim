@@ -1571,3 +1571,79 @@ Datos: `tools/validation/beacon_cadence_sweep.csv`.
 - F2.1 equivalencia single-hop vs módulo lorawan estándar.
 - F2.3 ancla ALOHA S=G·e^(−2G) y bound n·δ·(payload/ToA).
 - F2.4 conservación de paquetes (generados = entregados + desglose).
+
+## 2026-07-22 — Por qué el término de energía no rinde: el techo es 1.4%
+
+Desglose del gasto por actividad, leído del registro `DvClEnergyRegistry` —el
+libro que gobierna el SoC anunciado en la baliza, el argumento de Psi y la
+muerte del nodo. Perfil `proposal_pueyo_like_csmacad`, 25 nodos, 300 ks,
+`composite_score`.
+
+| actividad | mAh | % |
+|---|---:|---:|
+| idle (radio encendida, sin actividad) | 3333.3 | **69.23** |
+| RX (recepción) | 375.4 | 7.80 |
+| CAD (escucha de portadora) | 5.8 | 0.12 |
+| TX balizas | 753.0 | 15.64 |
+| TX datos propios | 278.5 | 5.78 |
+| **TX datos relevados** | **68.9** | **1.43** |
+
+El reparto del TX por clase de trama sale del airtime real de
+`mesh_dv_metrics_tx.csv` (124 997 balizas, 59 766 datos propios, 14 783 datos
+relevados; 33 009 s de aire en total).
+
+**La decisión de encaminamiento solo redistribuye el relevo: 1.43% del
+presupuesto.** Todo lo demás lo paga cada nodo igual, elija la ruta que elija:
+la radio encendida es un piso fijo de 69%, las balizas salen a cadencia fija y
+tamaño fijo, y el tráfico propio se emite exista la ruta que exista. Un
+reparto *perfecto* de la carga de relevo movería la vida útil ~1.4%, muy por
+debajo de la dispersión de FND entre semillas.
+
+Esto cierra la investigación abierta desde el 2026-07-19. `delta*Psi` no está
+roto ni mal codificado: se le pide gobernar el 1.4% del gasto. Las cinco
+hipótesis previas (dilución del coste, saturación de la codificación, el
+término no llega a la decisión, topología, homogeneidad de carga) quedaron
+descartadas una a una por medición; ésta es la que las explica a todas.
+
+**Consecuencia para la tesis.** El resultado que sobrevive —`composite_score`
+gana a `toa_only` en PDR y en FND— es mérito de la formulación del coste por
+tiempo en aire, no del término de energía. Y el hallazgo de fondo es
+publicable por sí mismo: *en una malla LoRa de receptores siempre encendidos,
+ninguna métrica de ruteo puede alargar la vida de la red de forma apreciable,
+porque el ruteo no toca el 98.6% del consumo.* Lo que sí lo alargaría, en
+orden de palanca: dormir la radio entre balizas (69%), bajar la cadencia de
+balizas (15.6%), y sólo después repartir el relevo (1.4%).
+
+Régimen donde `delta*Psi` tendría margen: aquel en que el relevo domine el TX.
+Aquí es el 6.3% del aire porque la rejilla de 25 nodos en todos-contra-todos
+resuelve casi todo en un salto. Pendiente: medir la fracción de relevo en las
+topologías ya barridas y buscar una donde suba un orden de magnitud, antes de
+dar el término por muerto.
+
+### Cuatro defectos encontrados por el camino
+
+1. **La campaña abortaba en build de debug.** `BasicEnergySource` afirma
+   `m_remainingEnergyJ >= energyToDecreaseJ`; ns-3 nunca acota su propia carga
+   a cero, delega en que el modelo de dispositivo deje de consumir al agotarse
+   (así lo hace `WifiRadioEnergyModel`). `DvClLoraEnergyModel` pasaba a SLEEP
+   pero seguía tirando 0.2 uA, hundiendo la fuente sin límite. En build
+   optimizado el aserto no está y pasaba silencioso. Corregido con un flag
+   `m_depleted` que anula el consumo. **Una batería agotada no consume.**
+2. **El CAD nunca se cobraba.** El MAC hace sondeo de portadora y jamás avisaba
+   al registro: la columna CAD leía cero en todas las corridas. Cableado en
+   `PerformChannelAssessment`. Aporta 0.12% —pequeño, pero al piso fijo, no al
+   1.4% gobernable.
+3. **El estado RX se entraba y no se salía.** `Receive()` ponía RX sin agendar
+   el regreso a IDLE (a diferencia de TX, que sí lo hacía). El nodo quedaba en
+   RX desde su primera recepción hasta su siguiente transmisión: esa vía
+   reportaba 88% de la energía como recepción mientras el libro autoritativo
+   decía 7.8%. Corregido cobrando la duración real de la trama.
+4. **Dos libros de energía para una misma magnitud** —el patrón de siempre. El
+   registro (completo: TX/RX/CAD/idle) gobierna todo lo que se publica; el
+   framework ns-3 (`DvClLoraEnergyModel` + `BasicEnergySource`) corre en
+   paralelo, con los defectos 1 y 3, y **su traza de agotamiento no la escucha
+   nadie**. Los defectos 1 y 3 quedan corregidos, pero la duplicación sigue en
+   pie y es una decisión de arquitectura pendiente: o el registro pasa a ser un
+   `DeviceEnergyModel` de ns-3, o la vía framework se elimina.
+
+Datos: `tools/validation/energy_budget_breakdown.csv`. Suites: 10/10 PASS.

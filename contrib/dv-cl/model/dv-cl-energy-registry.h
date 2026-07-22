@@ -51,6 +51,15 @@ class DvClEnergyRegistry : public Object
     double GetEnergyFraction(NodeId id);
     double GetVoltageMv(NodeId id);
 
+    /// What a node spent, split by what it was doing. Only the transmit share
+    /// is redistributable by a routing decision; the rest is paid by every node
+    /// alike whatever it chooses, which bounds what any metric can achieve.
+    /// Reported in mAh, the unit the ledger keeps.
+    double GetTxMah(NodeId id);
+    double GetRxMah(NodeId id);
+    double GetCadMah(NodeId id);
+    double GetIdleMah(NodeId id);
+
     void SetCapacityMah(double capacity);
     void SetTxCurrentMa(double current);
     void SetRxCurrentMa(double current);
@@ -76,6 +85,10 @@ class DvClEnergyRegistry : public Object
     {
         double remainingMah{kDefaultCapacityMah};
         Time lastUpdate{Seconds(0)};
+        double txMah{0.0};   //!< charged by UpdateEnergy
+        double rxMah{0.0};   //!< charged by UpdateRxEnergy
+        double cadMah{0.0};  //!< charged by UpdateCadEnergy
+        double idleMah{0.0}; //!< charged lazily by ApplyIdleConsumption
     };
 
     NodeEnergyState& EnsureNode(NodeId id);

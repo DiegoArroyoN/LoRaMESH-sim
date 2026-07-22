@@ -494,6 +494,18 @@ DvClLoraNetDevice::Receive(Ptr<const Packet> packet)
         {
             m_energyModel->UpdateRxEnergy(m_node->GetId(), duration);
         }
+        // The ns-3 energy-framework view is driven by a state machine, and this
+        // callback fires when the frame has already been demodulated. Entering
+        // RX here without arranging the exit left the radio in RX for the rest
+        // of the run, which is how that view came to report 88% of the energy
+        // as reception while the ledger that actually governs the protocol said
+        // 8%. Holding RX for the frame's own duration charges the right amount;
+        // it is shifted one frame late, which is the honest approximation
+        // available at a reception-complete hook (VALIDATION.md, 2026-07-22).
+        Simulator::Schedule(Seconds(duration),
+                            &DvClLoraNetDevice::NotifyRadioStateChange,
+                            this,
+                            3); // 3 = IDLE
     }
 
     if (!m_rxCallback.IsNull())

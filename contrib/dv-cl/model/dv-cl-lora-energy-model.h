@@ -122,6 +122,13 @@ class DvClLoraEnergyModel : public energy::DeviceEnergyModel
     double m_lastTxPowerDbm;       ///< Last TX power used to update current.
 
     DvClRadioState m_currentState;
+    /// A flat battery draws nothing. ns-3's EnergySource never clamps its own
+    /// remaining charge to zero; it relies on the device model stopping its
+    /// draw when notified, exactly as WifiRadioEnergyModel does. Keeping even
+    /// the 0.2 uA sleep draw alive after depletion drives the source
+    /// arbitrarily negative -- caught by BasicEnergySource's assertion in a
+    /// debug build, silent in an optimised one (VALIDATION.md, 2026-07-22).
+    bool m_depleted;
     Time m_lastUpdateTime;
     double m_totalEnergyConsumption; ///< Total energy consumed in Joules
 

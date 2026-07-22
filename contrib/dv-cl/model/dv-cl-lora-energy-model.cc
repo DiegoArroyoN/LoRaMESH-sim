@@ -109,6 +109,7 @@ DvClLoraEnergyModel::DvClLoraEnergyModel()
       m_txCurrentAt20dBmA(0.120),      // 120 mA @ +20 dBm PA_BOOST [SX1276/77/78/79 DS]
       m_lastTxPowerDbm(14.0),
       m_currentState(DvClRadioState::IDLE),
+      m_depleted(false),
       m_lastUpdateTime(Seconds(0)),
       m_totalEnergyConsumption(0.0)
 {
@@ -163,8 +164,10 @@ DvClLoraEnergyModel::HandleEnergyDepletion()
         m_energyDepletedTrace(m_node->GetId(), frac);
     }
 
-    // Disable the radio
+    // Disable the radio, and stop drawing: the state change must come first so
+    // the time up to this instant is still charged at the live current.
     ChangeState(static_cast<int>(DvClRadioState::SLEEP));
+    m_depleted = true;
 }
 
 void
@@ -172,6 +175,7 @@ DvClLoraEnergyModel::HandleEnergyRecharged()
 {
     NS_LOG_FUNCTION(this);
     NS_LOG_INFO("DvClLoraEnergyModel: Energy recharged on node " << (m_node ? m_node->GetId() : 0));
+    m_depleted = false;
 }
 
 void
@@ -195,6 +199,10 @@ DvClLoraEnergyModel::GetTimeInState(DvClRadioState s) const
 double
 DvClLoraEnergyModel::DoGetCurrentA() const
 {
+    if (m_depleted)
+    {
+        return 0.0;
+    }
     switch (m_currentState)
     {
     case DvClRadioState::TX:

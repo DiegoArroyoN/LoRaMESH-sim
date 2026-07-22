@@ -2,6 +2,8 @@
 
 #include "dv-cl-campaign-collector.h"
 
+#include <fstream>
+
 #include "ns3/core-module.h"
 #include "ns3/dv-cl-app.h"
 #include "ns3/dv-cl-helper.h"
@@ -2287,6 +2289,33 @@ main(int argc, char* argv[])
 
     Simulator::Run();
     NS_LOG_INFO("=== Simulación completada ===");
+
+    // Desglose del gasto por actividad, leído del registro -- el libro que
+    // gobierna el SoC anunciado, la métrica y la muerte del nodo. Sin este
+    // desglose no se puede saber qué fracción del consumo es transmisión
+    // propia frente a escucha, y por tanto qué fracción puede siquiera
+    // redistribuir una decisión de encaminamiento.
+    {
+        std::ofstream st("mesh_dv_metrics_energy_breakdown.csv");
+        st << "nodeId,txMah,rxMah,cadMah,idleMah\n";
+        for (uint32_t i = 0; i < nodes.GetN(); ++i)
+        {
+            Ptr<Node> n = nodes.Get(i);
+            const uint32_t id = n->GetId();
+            for (uint32_t d = 0; d < n->GetNDevices(); ++d)
+            {
+                auto dev = DynamicCast<DvClLoraNetDevice>(n->GetDevice(d));
+                if (!dev || !dev->GetEnergyModel())
+                {
+                    continue;
+                }
+                auto reg = dev->GetEnergyModel();
+                st << id << "," << reg->GetTxMah(id) << "," << reg->GetRxMah(id) << ","
+                   << reg->GetCadMah(id) << "," << reg->GetIdleMah(id) << "\n";
+                break;
+            }
+        }
+    }
     // §LossFine: flush final per-app stats even if the sim stopped via the death hook
     for (uint32_t li = 0; li < nodes.GetN(); ++li)
     {

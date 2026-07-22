@@ -2,6 +2,8 @@
 
 #include "dv-cl-mac-csma-cad.h"
 
+#include "dv-cl-lora-net-device.h"
+
 #include "ns3/boolean.h"
 #include "ns3/double.h"
 #include "ns3/enum.h"
@@ -598,9 +600,25 @@ DvClCsmaCadMac::PerformChannelAssessment()
                                 : 0xFFFFFFFFu;
     bool busy = false;
     const Time cadDuration = GetCadDuration();
+    uint8_t samples = 0;
+    // Carrier sensing is not free: each CAD probe holds the receive chain up
+    // for cadDuration at the RX current. The ledger was never told, so the
+    // CAD column read zero for every run (VALIDATION.md, 2026-07-22).
+    auto chargeCad = [&]() {
+        if (samples == 0 || !m_phy || !m_phy->GetDevice())
+        {
+            return;
+        }
+        auto dev = DynamicCast<DvClLoraNetDevice>(m_phy->GetDevice());
+        if (dev && dev->GetEnergyModel())
+        {
+            dev->GetEnergyModel()->UpdateCadEnergy(nodeId, (cadDuration * samples).GetSeconds());
+        }
+    };
     for (uint8_t i = 0; i < m_difsCadCount; ++i)
     {
         const Time sampleTime = Simulator::Now() + (cadDuration * i);
+        ++samples;
         if (PerformCadOnce(sampleTime))
         {
             NS_LOG_INFO("DvClCsmaCadMac: CAD busy node=" << nodeId << " attempt=" << unsigned(i)
@@ -610,6 +628,7 @@ DvClCsmaCadMac::PerformChannelAssessment()
             break;
         }
     }
+    chargeCad();
     if (busy)
     {
         m_failures++;
