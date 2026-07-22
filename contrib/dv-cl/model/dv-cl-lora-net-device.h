@@ -3,7 +3,6 @@
 #ifndef DV_CL_LORA_NET_DEVICE_H
 #define DV_CL_LORA_NET_DEVICE_H
 
-#include "dv-cl-energy-registry.h"
 #include "dv-cl-lora-energy-model.h"
 #include "dv-cl-mac-csma-cad.h"
 
@@ -52,12 +51,12 @@ class DvClLoraNetDevice : public NetDevice
         return m_mac;
     }
 
-    void SetEnergyModel(Ptr<DvClEnergyRegistry> energy)
+    void SetEnergyModel(Ptr<DvClLoraEnergyModel> energy)
     {
         m_energyModel = energy;
     }
 
-    Ptr<DvClEnergyRegistry> GetEnergyModel() const
+    Ptr<DvClLoraEnergyModel> GetEnergyModel() const
     {
         return m_energyModel;
     }
@@ -134,22 +133,10 @@ class DvClLoraNetDevice : public NetDevice
     // Callback desde PHY cuando llega un paquete
     void Receive(Ptr<const Packet> packet);
 
-    // ========================================================================
-    // NEW: ns-3 Energy Framework integration
-    // ========================================================================
-    void SetLoRaEnergyModel(Ptr<DvClLoraEnergyModel> model)
-    {
-        m_loraEnergyModel = model;
-    }
-
-    Ptr<DvClLoraEnergyModel> GetLoRaEnergyModel() const
-    {
-        return m_loraEnergyModel;
-    }
-
     /**
-     * Notify the energy model of a radio state change.
-     * Called internally by PHY/MAC operations.
+     * Record the instantaneous radio state on the energy model, so a source
+     * attached to it integrates the right current. Charge itself is booked
+     * event-by-event through the model's ChargeTx/Rx/Cad.
      * States: 0=TX, 1=RX, 2=CAD, 3=IDLE, 4=SLEEP
      */
     void NotifyRadioStateChange(int newState);
@@ -160,9 +147,8 @@ class DvClLoraNetDevice : public NetDevice
 
     Ptr<DvClRegionalProfile> m_region; //!< regional PHY parameters; null = EU868 defaults
     Ptr<DvClCsmaCadMac> m_mac;
-    Ptr<DvClEnergyRegistry> m_energyModel;      //!< campaign energy engine (registry)
-    Ptr<DvClLoraEnergyModel> m_loraEnergyModel; ///< ns-3 energy framework model
-    double m_txPowerDbm{14.0};                  // Unified TX power for data/control.
+    Ptr<DvClLoraEnergyModel> m_energyModel; //!< the module's single energy model
+    double m_txPowerDbm{14.0};              // Unified TX power for data/control.
     uint8_t m_preambleSymbols{8};               // LoRa preamble symbols used on-air.
     Ptr<PcapFileWrapper> m_pcapTx{nullptr};
     Ptr<PcapFileWrapper> m_pcapRx{nullptr};

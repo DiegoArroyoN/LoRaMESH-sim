@@ -612,7 +612,7 @@ DvClCsmaCadMac::PerformChannelAssessment()
         auto dev = DynamicCast<DvClLoraNetDevice>(m_phy->GetDevice());
         if (dev && dev->GetEnergyModel())
         {
-            dev->GetEnergyModel()->UpdateCadEnergy(nodeId, (cadDuration * samples).GetSeconds());
+            dev->GetEnergyModel()->ChargeCad((cadDuration * samples).GetSeconds());
         }
     };
     for (uint8_t i = 0; i < m_difsCadCount; ++i)

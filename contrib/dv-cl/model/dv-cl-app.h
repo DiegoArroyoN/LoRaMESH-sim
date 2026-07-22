@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 #pragma once
-#include "dv-cl-energy-registry.h"
+#include "dv-cl-lora-energy-model.h"
 #include "dv-cl-mac-csma-cad.h"
 #include "dv-cl-metric-tag.h"
 #include "dv-cl-routing.h"
@@ -332,12 +332,12 @@ class DvClApp : public Application
     {
         if (statsFraction < 0.0 && m_energyModel)
         {
-            return m_energyModel->GetEnergyFraction(nodeId);
+            return m_energyModel->GetEnergyFraction();
         }
         return statsFraction;
     }
 
-    Ptr<DvClEnergyRegistry> m_energyModel;
+    Ptr<DvClLoraEnergyModel> m_energyModel;
     double m_lastAppliedRxScanTimeS{0.0};
     Ptr<DvClRouting> m_routing;
     Ptr<DvClStatsSink> m_stats; //!< measurement seam (null legal)

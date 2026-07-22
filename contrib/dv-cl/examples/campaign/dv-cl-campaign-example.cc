@@ -12,7 +12,6 @@
 #include "ns3/core-module.h"
 #include "ns3/dv-cl-app.h"
 #include "ns3/dv-cl-helper.h"
-#include "ns3/dv-cl-lora-energy-model-helper.h"
 #include "ns3/dv-cl-lora-energy-model.h"
 #include "ns3/dv-cl-lora-net-device.h"
 #include "ns3/energy-module.h"
@@ -2101,43 +2100,30 @@ main(int argc, char* argv[])
     }
 
     // ========================================================================
-    // ENERGY FRAMEWORK SETUP
+    // ENERGY: seed the heterogeneous initial state of charge.
+    //
+    // The module ships a single energy model (DvClLoraEnergyModel), created and
+    // owned per node by the application, which charges itself event by event
+    // and answers the SoC the composite metric reads. There is nothing to
+    // install here -- only the initial charge to seed. `enableNs3EnergyFramework`
+    // is kept as the gate the profiles already set for the lifetime KPIs, but it
+    // no longer installs a second, parallel energy model: that model's depletion
+    // notification was wired to nothing and it double-booked the battery
+    // (VALIDATION.md, 2026-07-22).
     if (enableNs3EnergyFramework)
     {
-        // ========================================================================
-        NS_LOG_INFO("Setting up ns-3 Energy Framework with random SOC U[60%,100%]...");
-
-        // 1. Create BasicEnergySource for each node with random initial SOC
-        //    Using BasicEnergySource instead of GenericBatteryModel to allow SetInitialEnergy()
-        //    Li-Ion 18650: ~10.8 Wh = 38880 J at 3.6V nominal
-        const double fullCapacityJ = batteryFullCapacityJ;
-
         Ptr<UniformRandomVariable> socRng = CreateObject<UniformRandomVariable>();
         // [B4] Stream determinista singleton para SOC inicial reproducible al variar N.
         socRng->SetStream(10);
         socRng->SetAttribute("Min", DoubleValue(socInitMin)); // §SoCInit override (default 0.60)
         socRng->SetAttribute("Max", DoubleValue(socInitMax)); // §SoCInit override (default 1.00)
 
-        energy::EnergySourceContainer batteries;
         for (uint32_t i = 0; i < nodes.GetN(); ++i)
         {
             // Bimodal: nodos pares al minimo, impares al maximo. Determinista a
             // proposito, para que el contraste no dependa de la semilla.
-            double initialSoc = socInitBimodal ? ((i % 2 == 0) ? socInitMin : socInitMax)
-                                               : socRng->GetValue();
-            double initialEnergyJ = fullCapacityJ * initialSoc;
-
-            BasicEnergySourceHelper batteryHelper;
-            batteryHelper.Set("BasicEnergySourceInitialEnergyJ", DoubleValue(initialEnergyJ));
-            batteryHelper.Set("BasicEnergySupplyVoltageV", DoubleValue(3.6)); // Li-Ion nominal
-
-            energy::EnergySourceContainer nodeBattery = batteryHelper.Install(nodes.Get(i));
-            batteries.Add(nodeBattery);
-
-            // Seed the SAME initial charge into the application, which forwards it
-            // to the energy registry the composite metric reads. Without this the
-            // registry starts every node full and only ns-3's BasicEnergySource
-            // sees the heterogeneous SoC, so delta*Psi(SoC) never varies.
+            const double initialSoc = socInitBimodal ? ((i % 2 == 0) ? socInitMin : socInitMax)
+                                                      : socRng->GetValue();
             for (uint32_t a = 0; a < nodes.Get(i)->GetNApplications(); ++a)
             {
                 if (auto capp = DynamicCast<DvClApp>(nodes.Get(i)->GetApplication(a)))
@@ -2145,76 +2131,13 @@ main(int argc, char* argv[])
                     capp->SetAttribute("InitialSocFraction", DoubleValue(initialSoc));
                 }
             }
-
             NS_LOG_INFO("Node " << i << " initial SOC: " << std::fixed << std::setprecision(1)
-                                << (initialSoc * 100) << "% (" << initialEnergyJ << "J / "
-                                << fullCapacityJ << "J)");
+                                << (initialSoc * 100) << "%");
         }
-
-        // 2. Get NetDevices for energy model installation
-        NetDeviceContainer loraDevices;
-        for (uint32_t i = 0; i < nodes.GetN(); ++i)
-        {
-            Ptr<Node> n = nodes.Get(i);
-            for (uint32_t d = 0; d < n->GetNDevices(); ++d)
-            {
-                Ptr<NetDevice> dev = n->GetDevice(d);
-                if (dev->GetInstanceTypeId().GetName().find("DvClLora") != std::string::npos)
-                {
-                    loraDevices.Add(dev);
-                    break; // One LoRa device per node
-                }
-            }
-        }
-
-        // 3. Install DvClLoraEnergyModel on each device
-        // Current values: Semtech SX1276/77/78/79 Datasheet, Table DC Characteristics.
-        //   TX +20 dBm PA_BOOST : 120 mA  [IDD_TXLORA, RFOP=+20dBm]
-        //   RX LoRa BW=125 kHz  :  10.3 mA [IDD_RXLORA, Band 1]
-        //   Standby             :   1.6 mA  [IDD_STDB]
-        //   Sleep               :   0.2 uA  [IDD_SLEEP]
-        // Single TX power (20 dBm only) -- AutoTxCurrentFromPower disabled.
-        DvClLoraEnergyModelHelper loraEnergyHelper;
-        loraEnergyHelper.Set("AutoTxCurrentFromPower",
-                             BooleanValue(false)); // fixed 20 dBm, no interpolation
-        loraEnergyHelper.Set("TxCurrentA",
-                             DoubleValue(0.120)); // 120 mA, +20 dBm PA_BOOST [SX1276/77/78/79 DS]
-        loraEnergyHelper.Set("RxCurrentA",
-                             DoubleValue(0.0103)); //  10.3 mA, LoRa BW=125 kHz [SX1276/77/78/79 DS]
-        loraEnergyHelper.Set(
-            "CadCurrentA",
-            DoubleValue(0.0103)); //  10.3 mA, same RX circuitry [SX1276/77/78/79 DS]
-        loraEnergyHelper.Set("IdleCurrentA",
-                             DoubleValue(0.0016)); //   1.6 mA, standby [SX1276/77/78/79 DS]
-        loraEnergyHelper.Set("SleepCurrentA",
-                             DoubleValue(0.0000002)); //   0.2 uA, sleep [SX1276/77/78/79 DS]
-
-        energy::DeviceEnergyModelContainer deviceEnergyModels =
-            loraEnergyHelper.Install(loraDevices, batteries);
-
-        // 5. Connect DvClLoraEnergyModel to each DvClLoraNetDevice
-        for (uint32_t i = 0; i < loraDevices.GetN(); ++i)
-        {
-            Ptr<DvClLoraNetDevice> meshDev = DynamicCast<DvClLoraNetDevice>(loraDevices.Get(i));
-            Ptr<DvClLoraEnergyModel> energyModel =
-                DynamicCast<DvClLoraEnergyModel>(deviceEnergyModels.Get(i));
-
-            if (meshDev && energyModel)
-            {
-                meshDev->SetLoRaEnergyModel(energyModel);
-                NS_LOG_DEBUG("Node " << meshDev->GetNode()->GetId()
-                                     << " DvClLoraEnergyModel connected to DvClLoraNetDevice");
-            }
-        }
-
-        NS_LOG_INFO("Energy framework: " << batteries.GetN() << " batteries (SOC U[50%,100%]), "
-                                         << deviceEnergyModels.GetN()
-                                         << " device models installed");
     }
     else
     {
-        NS_LOG_WARN("ns-3 energy framework disabled for this run; no BasicEnergySource or "
-                    "DvClLoraEnergyModel will be installed");
+        NS_LOG_INFO("Heterogeneous SoC seeding disabled; every node starts full.");
     }
 
     // Ajustar inicio/fin de las apps de datos: DV sigue activo desde t=0
@@ -2453,9 +2376,9 @@ main(int argc, char* argv[])
                 {
                     continue;
                 }
-                auto reg = dev->GetEnergyModel();
-                st << id << "," << reg->GetTxMah(id) << "," << reg->GetRxMah(id) << ","
-                   << reg->GetCadMah(id) << "," << reg->GetIdleMah(id) << "\n";
+                auto em = dev->GetEnergyModel();
+                st << id << "," << em->GetTxMah() << "," << em->GetRxMah() << ","
+                   << em->GetCadMah() << "," << em->GetIdleMah() << "\n";
                 break;
             }
         }

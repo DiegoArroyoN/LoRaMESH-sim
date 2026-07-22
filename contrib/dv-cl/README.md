@@ -28,9 +28,9 @@ repository root carries the full validation log.
 - `model/dv-cl-regional-profile.{h,cc}` — the region: carrier, bandwidth,
   coding rate, SF range, and the access rule it imposes (EU868 duty
   cycle, US915 dwell time). `DvClEu868Profile` is the default.
-- `model/dv-cl-lora-net-device.{h,cc}`, `model/dv-cl-lora-energy-model.{h,cc}`,
-  `model/dv-cl-energy-registry.{h,cc}` — radio, per-state energy ledger
-  and reported charge.
+- `model/dv-cl-lora-net-device.{h,cc}`, `model/dv-cl-lora-energy-model.{h,cc}`
+  — the radio, and the module's single energy model: a per-device ns-3
+  `DeviceEnergyModel` backed by an event-driven charge ledger.
 - `helper/dv-cl-helper.{h,cc}` — installs the stack on a NodeContainer.
 
 Three things are meant to be replaced from outside: the metric

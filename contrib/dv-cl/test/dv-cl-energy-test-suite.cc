@@ -2,7 +2,6 @@
 
 #include "ns3/basic-energy-source.h"
 #include "ns3/double.h"
-#include "ns3/dv-cl-energy-registry.h"
 #include "ns3/dv-cl-lora-energy-model.h"
 #include "ns3/simulator.h"
 #include "ns3/test.h"
@@ -16,56 +15,65 @@ namespace test
 
 /**
  * \ingroup dv-cl
- * F1.3(b) closure at module level: the per-state time ledger commits
- * exactly at state transitions, and the accumulated consumption equals
- * E = sum(I_s * V * t_s) to the microjoule on a synthetic sequence
- * (TX 2 s, SLEEP 3 s at datasheet currents, V = 3.0).
+ * \brief F1.3: the ledger closes and E = sum(I*V*t).
+ *
+ * The energy model is the single authority on the state of charge: it feeds
+ * the beacon SoC byte, the argument of Psi in the metric, and node death. Two
+ * things must hold. What was spent per activity plus what remains must equal
+ * the initial capacity -- else the per-activity breakdown means nothing. And
+ * the total energy must equal sum over activities of current x voltage x time,
+ * charged at the datasheet currents.
  */
 class DvClEnergyLedgerTestCase : public TestCase
 {
   public:
     DvClEnergyLedgerTestCase()
-        : TestCase("dv-cl energy per-state ledger and E = sum(I*V*t) closure")
+        : TestCase("dv-cl energy ledger closes and E = sum(I*V*t)")
     {
     }
 
   private:
     Ptr<DvClLoraEnergyModel> m_model;
 
-    void ToSleep()
+    void Check()
     {
-        m_model->ChangeState(static_cast<int>(DvClRadioState::SLEEP));
-    }
+        // Charged: TX 2 s @120 mA, RX 1 s @10.3 mA, CAD 0.5 s @10.3 mA, plus
+        // idle for the whole 10 s window at 1.6 mA (folded in lazily).
+        const double v = m_model->GetSupplyVoltageV();
+        const double txMah = m_model->GetTxMah();
+        const double rxMah = m_model->GetRxMah();
+        const double cadMah = m_model->GetCadMah();
+        const double idleMah = m_model->GetIdleMah();
 
-    void ToIdleAndCheck()
-    {
-        m_model->ChangeState(static_cast<int>(DvClRadioState::IDLE));
-        const double sTx = m_model->GetTimeInState(DvClRadioState::TX).GetSeconds();
-        const double sSleep = m_model->GetTimeInState(DvClRadioState::SLEEP).GetSeconds();
-        const double sIdle = m_model->GetTimeInState(DvClRadioState::IDLE).GetSeconds();
-        NS_TEST_ASSERT_MSG_EQ_TOL(sTx, 2.0, 1e-9, "TX time committed at transition");
-        NS_TEST_ASSERT_MSG_EQ_TOL(sSleep, 3.0, 1e-9, "SLEEP time committed at transition");
-        NS_TEST_ASSERT_MSG_EQ_TOL(sIdle, 0.0, 1e-12, "IDLE accrues only at the next commit");
-        // E = V * (I_tx*2 + I_sleep*3) with datasheet defaults and V=3.0.
-        const double expected = 3.0 * (0.120 * 2.0 + 0.0000002 * 3.0);
-        NS_TEST_ASSERT_MSG_EQ_TOL(m_model->GetTotalEnergyConsumption(),
-                                  expected,
-                                  1e-6,
+        NS_TEST_ASSERT_MSG_EQ_TOL(m_model->GetTimeInState(DvClRadioState::TX).GetSeconds(),
+                                  2.0, 1e-9, "TX time recorded");
+        NS_TEST_ASSERT_MSG_EQ_TOL(m_model->GetTimeInState(DvClRadioState::RX).GetSeconds(),
+                                  1.0, 1e-9, "RX time recorded");
+
+        const double spentMah = txMah + rxMah + cadMah + idleMah;
+        const double remainingMah = m_model->GetEnergyFraction() * 300.0;
+        NS_TEST_ASSERT_MSG_EQ_TOL(spentMah + remainingMah, 300.0, 1e-9,
+                                  "spent-per-activity + remaining = capacity");
+
+        // E = V * sum(I_s * t_s). Idle spans the 10 s the events sit inside.
+        const double expectedJ =
+            v * (0.120 * 2.0 + 0.0103 * 1.0 + 0.0103 * 0.5 + 0.0016 * 10.0);
+        NS_TEST_ASSERT_MSG_EQ_TOL(m_model->GetTotalEnergyConsumption(), expectedJ, 1e-6,
                                   "energy closure E = sum(I_s*V*t_s)");
     }
 
     void DoRun() override
     {
-        auto src = CreateObject<energy::BasicEnergySource>();
-        src->SetAttribute("BasicEnergySourceInitialEnergyJ", DoubleValue(1000.0));
-        src->SetAttribute("BasicEnergySupplyVoltageV", DoubleValue(3.0));
         m_model = CreateObject<DvClLoraEnergyModel>();
-        m_model->SetEnergySource(src);
+        m_model->SetCapacityMah(300.0);
+        m_model->SetInitialSocFraction(1.0);
 
-        m_model->ChangeState(static_cast<int>(DvClRadioState::TX)); // t = 0
-        Simulator::Schedule(Seconds(2), &DvClEnergyLedgerTestCase::ToSleep, this);
-        Simulator::Schedule(Seconds(5), &DvClEnergyLedgerTestCase::ToIdleAndCheck, this);
-        Simulator::Stop(Seconds(6)); // BasicEnergySource reschedules forever
+        Simulator::Schedule(Seconds(1), [this]() { m_model->ChargeTx(2.0); });
+        Simulator::Schedule(Seconds(4), [this]() { m_model->ChargeRx(1.0); });
+        Simulator::Schedule(Seconds(6), [this]() { m_model->ChargeCad(0.5); });
+        Simulator::Schedule(Seconds(10), &DvClEnergyLedgerTestCase::Check, this);
+
+        Simulator::Stop(Seconds(11));
         Simulator::Run();
         Simulator::Destroy();
         m_model = nullptr;
@@ -74,102 +82,102 @@ class DvClEnergyLedgerTestCase : public TestCase
 
 /**
  * \ingroup dv-cl
- * The EnergyDepleted TraceSource (the module replacement for the
- * campaign-tree global collector hook) is registered on the TypeId.
- */
-/**
- * \ingroup dv-cl
- * \brief F1.3: el libro del registro cierra, y una bateria vacia no entrega
- *        carga.
+ * \brief A flat battery draws nothing, and death fires the trace exactly once.
  *
- * El registro es la fuente de verdad del estado de carga: alimenta el byte SoC
- * de la baliza, el argumento de Psi en la metrica y la deteccion de muerte del
- * nodo. Debe cumplir dos cosas. Que lo gastado por categoria mas lo que queda
- * sume la capacidad inicial -- si no, el desglose por actividad no significa
- * nada. Y que deje de cobrar al llegar a cero: cobrar el nominal aunque no
- * quede carga hacia crecer los contadores de por vida despues de la muerte del
- * nodo, inflando la parte de idle en toda corrida donde alguien muere pronto.
+ * Booking the nominal draw past zero grew the lifetime counters after a node
+ * died and stopped the ledger from closing (VALIDATION.md, 2026-07-22). The
+ * EnergyDepleted trace must fire the moment the ledger empties, and only then.
  */
-class DvClEnergyRegistryClosureTestCase : public TestCase
+class DvClEnergyDepletionTestCase : public TestCase
 {
   public:
-    DvClEnergyRegistryClosureTestCase()
-        : TestCase("dv-cl registry ledger closes and a flat battery draws nothing")
+    DvClEnergyDepletionTestCase()
+        : TestCase("dv-cl energy: a flat battery draws nothing and depletion fires once")
     {
     }
 
   private:
+    uint32_t m_depletions{0};
+    double m_spentAtDeath{0.0};
+    Ptr<DvClLoraEnergyModel> m_model;
+
+    void OnDepleted(uint32_t, double)
+    {
+        ++m_depletions;
+    }
+
+    void DrainHard()
+    {
+        m_model->ChargeTx(3600.0); // 120 mA for 1 h = 120 mAh, far past a 1 mAh cell
+    }
+
+    void CheckDead()
+    {
+        NS_TEST_ASSERT_MSG_EQ_TOL(m_model->GetEnergyFraction(), 0.0, 1e-12, "battery flat");
+        m_spentAtDeath = m_model->GetTxMah() + m_model->GetRxMah() + m_model->GetCadMah() +
+                         m_model->GetIdleMah();
+        NS_TEST_ASSERT_MSG_EQ_TOL(m_spentAtDeath, 1.0, 1e-9, "charged no more than the 1 mAh there was");
+    }
+
+    void CheckStaysDead()
+    {
+        m_model->ChargeRx(10.0);
+        const double later = m_model->GetTxMah() + m_model->GetRxMah() + m_model->GetCadMah() +
+                             m_model->GetIdleMah();
+        NS_TEST_ASSERT_MSG_EQ_TOL(later, m_spentAtDeath, 1e-9, "a dead node keeps drawing nothing");
+        NS_TEST_ASSERT_MSG_EQ(m_depletions, 1u, "depletion trace fired exactly once");
+    }
+
     void DoRun() override
     {
-        auto reg = CreateObject<DvClEnergyRegistry>();
-        const double capacityMah = 1.0; // pequena a proposito: se agota dentro del test
-        reg->SetCapacityMah(capacityMah);
-        reg->RegisterNode(0);
-        reg->SetRemainingFraction(0, 1.0);
+        m_model = CreateObject<DvClLoraEnergyModel>();
+        m_model->SetCapacityMah(1.0); // tiny on purpose: drains inside the test
+        m_model->SetInitialSocFraction(1.0);
+        m_model->TraceConnectWithoutContext(
+            "EnergyDepleted", MakeCallback(&DvClEnergyDepletionTestCase::OnDepleted, this));
 
-        // Un poco de cada actividad, separadas en el tiempo para que el idle
-        // diferido tambien entre en juego.
-        Simulator::Schedule(Seconds(10), [reg]() { reg->UpdateEnergy(0, 120.0, 1.0); });
-        Simulator::Schedule(Seconds(20), [reg]() { reg->UpdateRxEnergy(0, 2.0); });
-        Simulator::Schedule(Seconds(30), [reg]() { reg->UpdateCadEnergy(0, 0.5); });
-
-        Simulator::Schedule(Seconds(40), [this, reg, capacityMah]() {
-            const double spent = reg->GetTxMah(0) + reg->GetRxMah(0) + reg->GetCadMah(0) +
-                                 reg->GetIdleMah(0);
-            const double remaining = reg->GetEnergyFraction(0) * capacityMah;
-            NS_TEST_ASSERT_MSG_EQ_TOL(spent + remaining,
-                                      capacityMah,
-                                      1e-9,
-                                      "gastado por categoria + remanente = capacidad inicial");
-        });
-
-        // Agotar la bateria y seguir pidiendo consumo: nada mas debe cobrarse.
-        Simulator::Schedule(Seconds(50), [reg]() { reg->UpdateEnergy(0, 120.0, 3600.0); });
-        Simulator::Schedule(Seconds(60), [this, reg, capacityMah]() {
-            NS_TEST_ASSERT_MSG_EQ_TOL(reg->GetEnergyFraction(0), 0.0, 1e-12, "bateria agotada");
-            const double spentAtDeath = reg->GetTxMah(0) + reg->GetRxMah(0) + reg->GetCadMah(0) +
-                                        reg->GetIdleMah(0);
-            NS_TEST_ASSERT_MSG_EQ_TOL(spentAtDeath,
-                                      capacityMah,
-                                      1e-9,
-                                      "no se cobra mas que la capacidad que habia");
-            m_spentAtDeath = spentAtDeath;
-        });
-
-        // Mucho despues de la muerte los contadores no pueden haber crecido.
-        Simulator::Schedule(Seconds(100000), [this, reg]() {
-            reg->UpdateRxEnergy(0, 10.0);
-            const double spentLater = reg->GetTxMah(0) + reg->GetRxMah(0) + reg->GetCadMah(0) +
-                                      reg->GetIdleMah(0);
-            NS_TEST_ASSERT_MSG_EQ_TOL(spentLater,
-                                      m_spentAtDeath,
-                                      1e-9,
-                                      "un nodo muerto no sigue consumiendo");
-        });
+        Simulator::Schedule(Seconds(10), &DvClEnergyDepletionTestCase::DrainHard, this);
+        Simulator::Schedule(Seconds(20), &DvClEnergyDepletionTestCase::CheckDead, this);
+        Simulator::Schedule(Seconds(100000), &DvClEnergyDepletionTestCase::CheckStaysDead, this);
 
         Simulator::Stop(Seconds(100001));
         Simulator::Run();
         Simulator::Destroy();
+        m_model = nullptr;
     }
-
-    double m_spentAtDeath{0.0};
 };
 
-class DvClEnergyTraceSourceTestCase : public TestCase
+/**
+ * \ingroup dv-cl
+ * \brief It is a real ns-3 DeviceEnergyModel: attaches to a source and takes
+ *        the supply voltage from it.
+ */
+class DvClEnergyFrameworkTestCase : public TestCase
 {
   public:
-    DvClEnergyTraceSourceTestCase()
-        : TestCase("dv-cl energy EnergyDepleted TraceSource is registered")
+    DvClEnergyFrameworkTestCase()
+        : TestCase("dv-cl energy: attaches to an EnergySource and uses its supply voltage")
     {
     }
 
   private:
     void DoRun() override
     {
+        auto src = CreateObject<energy::BasicEnergySource>();
+        src->SetAttribute("BasicEnergySourceInitialEnergyJ", DoubleValue(1000.0));
+        src->SetAttribute("BasicEnergySupplyVoltageV", DoubleValue(3.0));
+        auto model = CreateObject<DvClLoraEnergyModel>();
+        model->SetEnergySource(src);
+
+        NS_TEST_ASSERT_MSG_EQ_TOL(model->GetSupplyVoltageV(), 3.0, 1e-9,
+                                  "supply voltage taken from the attached source");
+        // Without a source it falls back to the SoC-window midpoint (3.6 V).
+        auto standalone = CreateObject<DvClLoraEnergyModel>();
+        NS_TEST_ASSERT_MSG_EQ_TOL(standalone->GetSupplyVoltageV(), 3.6, 1e-9,
+                                  "standalone falls back to the window midpoint");
+
         TypeId tid = DvClLoraEnergyModel::GetTypeId();
-        auto accessor = tid.LookupTraceSourceByName("EnergyDepleted");
-        NS_TEST_ASSERT_MSG_EQ((accessor != nullptr),
-                              true,
+        NS_TEST_ASSERT_MSG_EQ((tid.LookupTraceSourceByName("EnergyDepleted") != nullptr), true,
                               "EnergyDepleted trace source registered");
     }
 };
@@ -185,8 +193,8 @@ class DvClEnergyTestSuite : public TestSuite
         : TestSuite("dv-cl-energy", Type::UNIT)
     {
         AddTestCase(new DvClEnergyLedgerTestCase, TestCase::Duration::QUICK);
-        AddTestCase(new DvClEnergyRegistryClosureTestCase, TestCase::Duration::QUICK);
-        AddTestCase(new DvClEnergyTraceSourceTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new DvClEnergyDepletionTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new DvClEnergyFrameworkTestCase, TestCase::Duration::QUICK);
     }
 };
 

@@ -1,15 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-/*
- * LoRa Device Energy Model Implementation
- */
-
 #include "dv-cl-lora-energy-model.h"
 
 #include "ns3/double.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
-#include "ns3/trace-source-accessor.h"
 
 #include <algorithm>
 
@@ -29,152 +24,79 @@ DvClLoraEnergyModel::GetTypeId()
             .SetParent<energy::DeviceEnergyModel>()
             .SetGroupName("DvCl")
             .AddConstructor<DvClLoraEnergyModel>()
-            .AddAttribute(
-                "TxCurrentA",
-                "TX current [A]. SX1276/77/78/79 DS: 120 mA at +20 dBm PA_BOOST.",
-                DoubleValue(0.120), // 120 mA @ +20 dBm PA_BOOST [SX1276/77/78/79 DS, IDD_TXLORA]
-                MakeDoubleAccessor(&DvClLoraEnergyModel::SetTxCurrentA,
-                                   &DvClLoraEnergyModel::GetTxCurrentA),
-                MakeDoubleChecker<double>())
-            .AddAttribute(
-                "AutoTxCurrentFromPower",
-                "If true, TX current is auto-adjusted from txPowerDbm using anchor values.",
-                BooleanValue(false), // 20 dBm only; no interpolation needed
-                MakeBooleanAccessor(&DvClLoraEnergyModel::SetAutoTxCurrentFromPower,
-                                    &DvClLoraEnergyModel::GetAutoTxCurrentFromPower),
-                MakeBooleanChecker())
-            .AddAttribute("TxCurrentAt14dBmA",
-                          "Anchor TX current [A] at 14 dBm (unused: sim operates at 20 dBm only).",
-                          DoubleValue(0.120), // set equal to 20 dBm anchor; unused in practice
-                          MakeDoubleAccessor(&DvClLoraEnergyModel::SetTxCurrentAt14dBmA,
-                                             &DvClLoraEnergyModel::GetTxCurrentAt14dBmA),
-                          MakeDoubleChecker<double>(0.0))
-            .AddAttribute("TxCurrentAt20dBmA",
-                          "Anchor TX current [A] at 20 dBm.",
-                          DoubleValue(0.120),
-                          MakeDoubleAccessor(&DvClLoraEnergyModel::SetTxCurrentAt20dBmA,
-                                             &DvClLoraEnergyModel::GetTxCurrentAt20dBmA),
-                          MakeDoubleChecker<double>(0.0))
-            .AddAttribute(
-                "RxCurrentA",
-                "The current draw in Amperes during RX mode",
-                DoubleValue(0.0103), // 10.3 mA, LoRa BW=125 kHz [SX1276/77/78/79 DS, IDD_RXLORA]
-                MakeDoubleAccessor(&DvClLoraEnergyModel::SetRxCurrentA,
-                                   &DvClLoraEnergyModel::GetRxCurrentA),
-                MakeDoubleChecker<double>())
-            .AddAttribute("CadCurrentA",
-                          "The current draw in Amperes during CAD mode",
-                          DoubleValue(0.0103), // 10.3 mA, same RX circuitry [SX1276/77/78/79 DS]
-                          MakeDoubleAccessor(&DvClLoraEnergyModel::SetCadCurrentA,
-                                             &DvClLoraEnergyModel::GetCadCurrentA),
-                          MakeDoubleChecker<double>())
-            .AddAttribute("IdleCurrentA",
-                          "The current draw in Amperes during IDLE mode",
-                          DoubleValue(0.0016), // 1.6 mA standby [SX1276/77/78/79 DS, IDD_STDB]
-                          MakeDoubleAccessor(&DvClLoraEnergyModel::SetIdleCurrentA,
-                                             &DvClLoraEnergyModel::GetIdleCurrentA),
-                          MakeDoubleChecker<double>())
-            .AddAttribute("SleepCurrentA",
-                          "The current draw in Amperes during SLEEP mode",
-                          DoubleValue(0.0000002), // 0.2 uA [SX1276/77/78/79 DS, IDD_SLEEP]
-                          MakeDoubleAccessor(&DvClLoraEnergyModel::SetSleepCurrentA,
-                                             &DvClLoraEnergyModel::GetSleepCurrentA),
-                          MakeDoubleChecker<double>())
-            .AddTraceSource(
-                "TotalEnergyConsumption",
-                "Total energy consumption in Joules",
-                MakeTraceSourceAccessor(&DvClLoraEnergyModel::m_totalEnergyConsumptionTrace),
-                "ns3::TracedValueCallback::Double");
-    ;
-    static bool traceRegistered =
-        (tid.AddTraceSource("EnergyDepleted",
-                            "Node ran out of energy: (nodeId, remaining fraction).",
+            .AddTraceSource("EnergyDepleted",
+                            "Fired once when the ledger empties: (nodeId, remainingFraction).",
                             MakeTraceSourceAccessor(&DvClLoraEnergyModel::m_energyDepletedTrace),
-                            "ns3::dvcl::DvClLoraEnergyModel::EnergyDepletedCallback"),
-         true);
-    (void)traceRegistered;
+                            "ns3::dvcl::DvClLoraEnergyModel::EnergyDepletedCallback");
     return tid;
 }
 
 DvClLoraEnergyModel::DvClLoraEnergyModel()
     : m_source(nullptr),
-      m_node(nullptr),
-      m_txCurrentA(0.120),             // 120 mA @ +20 dBm PA_BOOST [SX1276/77/78/79 DS]
-      m_rxCurrentA(0.0103),            //  10.3 mA LoRa BW=125 kHz   [SX1276/77/78/79 DS]
-      m_cadCurrentA(0.0103),           //  10.3 mA (same RX circuits) [SX1276/77/78/79 DS]
-      m_idleCurrentA(0.0016),          //   1.6 mA standby            [SX1276/77/78/79 DS]
-      m_sleepCurrentA(0.0000002),      //   0.2 uA sleep              [SX1276/77/78/79 DS]
-      m_autoTxCurrentFromPower(false), // 20 dBm only, no interpolation
-      m_txCurrentAt14dBmA(0.120),      // unused (sim uses 20 dBm only)
-      m_txCurrentAt20dBmA(0.120),      // 120 mA @ +20 dBm PA_BOOST [SX1276/77/78/79 DS]
-      m_lastTxPowerDbm(14.0),
-      m_currentState(DvClRadioState::IDLE),
+      m_capacityMah(kDefaultCapacityMah),
+      m_remainingMah(kDefaultCapacityMah),
+      m_lastUpdate(Seconds(0)),
+      m_txMah(0.0),
+      m_rxMah(0.0),
+      m_cadMah(0.0),
+      m_idleMah(0.0),
+      m_txSec(0.0),
+      m_rxSec(0.0),
+      m_cadSec(0.0),
+      m_idleSec(0.0),
       m_depleted(false),
-      m_lastUpdateTime(Seconds(0)),
-      m_totalEnergyConsumption(0.0)
+      m_txCurrentMa(kDefaultTxCurrentMa),
+      m_rxCurrentMa(kDefaultRxCurrentMa),
+      m_cadCurrentMa(kDefaultCadCurrentMa),
+      m_idleCurrentMa(kDefaultIdleCurrentMa),
+      m_voltageMinMv(kDefaultVoltageMinMv),
+      m_voltageMaxMv(kDefaultVoltageMaxMv),
+      m_instantState(DvClRadioState::IDLE)
 {
     NS_LOG_FUNCTION(this);
 }
 
-DvClLoraEnergyModel::~DvClLoraEnergyModel()
-{
-    NS_LOG_FUNCTION(this);
-}
+// --- ns-3 DeviceEnergyModel interface -------------------------------------
 
 void
 DvClLoraEnergyModel::SetEnergySource(Ptr<energy::EnergySource> source)
 {
     NS_LOG_FUNCTION(this << source);
     m_source = source;
-    m_lastUpdateTime = Simulator::Now();
 }
 
 double
 DvClLoraEnergyModel::GetTotalEnergyConsumption() const
 {
-    NS_LOG_FUNCTION(this);
-    return m_totalEnergyConsumption;
+    // Joules spent = charge drawn (mAh) x terminal voltage x 3.6.
+    const double spentMah = m_txMah + m_rxMah + m_cadMah + m_idleMah;
+    return spentMah * GetSupplyVoltageV() * 3.6;
 }
 
 void
 DvClLoraEnergyModel::ChangeState(int newState)
 {
-    NS_LOG_FUNCTION(this << newState);
-
-    // Update energy consumption for time spent in previous state
-    UpdateEnergyConsumption();
-
-    // Change to new state
-    m_currentState = static_cast<DvClRadioState>(newState);
-
-    NS_LOG_DEBUG("DvClLoraEnergyModel: State changed to "
-                 << newState << " current=" << DoGetCurrentA() * 1000.0 << " mA");
+    // The instantaneous state is what a source would integrate through
+    // DoGetCurrentA. Charge itself is event-driven (ChargeTx/Rx/Cad), so this
+    // does not debit -- it only records what the radio is doing right now.
+    if (newState >= 0 && newState <= static_cast<int>(DvClRadioState::SLEEP))
+    {
+        m_instantState = static_cast<DvClRadioState>(newState);
+    }
 }
 
 void
 DvClLoraEnergyModel::HandleEnergyDepletion()
 {
     NS_LOG_FUNCTION(this);
-    NS_LOG_WARN("DvClLoraEnergyModel: Energy depleted on node " << (m_node ? m_node->GetId() : 0));
-
-    // Module-clean: report through a TraceSource instead of a global collector.
-    if (m_node && m_source)
-    {
-        const double frac = m_source->GetRemainingEnergy() / m_source->GetInitialEnergy();
-        m_energyDepletedTrace(m_node->GetId(), frac);
-    }
-
-    // Disable the radio, and stop drawing: the state change must come first so
-    // the time up to this instant is still charged at the live current.
-    ChangeState(static_cast<int>(DvClRadioState::SLEEP));
     m_depleted = true;
+    m_instantState = DvClRadioState::SLEEP;
 }
 
 void
 DvClLoraEnergyModel::HandleEnergyRecharged()
 {
     NS_LOG_FUNCTION(this);
-    NS_LOG_INFO("DvClLoraEnergyModel: Energy recharged on node " << (m_node ? m_node->GetId() : 0));
     m_depleted = false;
 }
 
@@ -182,18 +104,6 @@ void
 DvClLoraEnergyModel::HandleEnergyChanged()
 {
     NS_LOG_FUNCTION(this);
-    // No action needed for now
-}
-
-Time
-DvClLoraEnergyModel::GetTimeInState(DvClRadioState s) const
-{
-    const int idx = static_cast<int>(s);
-    if (idx < 0 || idx >= 8)
-    {
-        return Time(0);
-    }
-    return m_stateTimes[idx];
 }
 
 double
@@ -203,253 +113,233 @@ DvClLoraEnergyModel::DoGetCurrentA() const
     {
         return 0.0;
     }
-    switch (m_currentState)
+    switch (m_instantState)
     {
     case DvClRadioState::TX:
-        return m_txCurrentA;
+        return m_txCurrentMa / 1000.0;
     case DvClRadioState::RX:
-        return m_rxCurrentA;
+        return m_rxCurrentMa / 1000.0;
     case DvClRadioState::CAD:
-        return m_cadCurrentA;
-    case DvClRadioState::IDLE:
-        return m_idleCurrentA;
+        return m_cadCurrentMa / 1000.0;
     case DvClRadioState::SLEEP:
-        return m_sleepCurrentA;
+        return 0.0;
+    case DvClRadioState::IDLE:
     default:
-        return m_idleCurrentA;
+        return m_idleCurrentMa / 1000.0;
     }
 }
 
-void
-DvClLoraEnergyModel::UpdateEnergyConsumption()
-{
-    NS_LOG_FUNCTION(this);
+// --- charge accounting ----------------------------------------------------
 
-    Time now = Simulator::Now();
-    Time duration = now - m_lastUpdateTime;
+void
+DvClLoraEnergyModel::Charge(double durationSeconds,
+                            double currentMa,
+                            double& categoryMah,
+                            double& categorySec)
+{
+    if (durationSeconds <= 0.0)
     {
-        const int idx = static_cast<int>(m_currentState);
-        if (idx >= 0 && idx < 8)
-        {
-            m_stateTimes[idx] += duration; // F1.3b per-state ledger
-        }
+        return;
     }
+    ApplyIdleConsumption();
+    const double wantMah = currentMa * durationSeconds / 3600.0;
+    // A flat battery draws nothing: charge only what was left. Booking the
+    // nominal draw past zero grew the lifetime counters after a node died and
+    // stopped the ledger from closing (VALIDATION.md, 2026-07-22).
+    const double drawnMah = std::min(wantMah, m_remainingMah);
+    m_remainingMah -= drawnMah;
+    categoryMah += drawnMah;
+    categorySec += durationSeconds;
+    m_lastUpdate = Simulator::Now();
+    MaybeNotifyDepleted();
+}
 
-    if (duration.IsPositive() && m_source)
+void
+DvClLoraEnergyModel::ChargeTx(double durationSeconds)
+{
+    Charge(durationSeconds, m_txCurrentMa, m_txMah, m_txSec);
+}
+
+void
+DvClLoraEnergyModel::ChargeRx(double durationSeconds)
+{
+    Charge(durationSeconds, m_rxCurrentMa, m_rxMah, m_rxSec);
+}
+
+void
+DvClLoraEnergyModel::ChargeCad(double durationSeconds)
+{
+    Charge(durationSeconds, m_cadCurrentMa, m_cadMah, m_cadSec);
+}
+
+void
+DvClLoraEnergyModel::ApplyIdleConsumption()
+{
+    const Time now = Simulator::Now();
+    if (m_lastUpdate >= now)
     {
-        double current = DoGetCurrentA();
-        double voltage = m_source->GetSupplyVoltage();
-        double energyJoules = current * voltage * duration.GetSeconds();
-
-        m_totalEnergyConsumption += energyJoules;
-        m_totalEnergyConsumptionTrace = m_totalEnergyConsumption;
-
-        // Decrease energy from source
-        m_source->UpdateEnergySource();
-
-        NS_LOG_DEBUG("DvClLoraEnergyModel: duration="
-                     << duration.GetSeconds() << "s current=" << current * 1000.0 << "mA"
-                     << " energy=" << energyJoules * 1000.0 << "mJ"
-                     << " total=" << m_totalEnergyConsumption << "J");
+        return;
     }
-
-    m_lastUpdateTime = now;
-}
-
-// Setters
-void
-DvClLoraEnergyModel::SetTxCurrentA(double currentA)
-{
-    m_txCurrentA = currentA;
-}
-
-void
-DvClLoraEnergyModel::SetRxCurrentA(double currentA)
-{
-    m_rxCurrentA = currentA;
+    const double dt = (now - m_lastUpdate).GetSeconds();
+    const double wantMah = m_idleCurrentMa * dt / 3600.0;
+    const double drawnMah = std::min(wantMah, m_remainingMah);
+    m_remainingMah -= drawnMah;
+    m_idleMah += drawnMah;
+    m_idleSec += dt;
+    m_lastUpdate = now;
+    MaybeNotifyDepleted();
 }
 
 void
-DvClLoraEnergyModel::SetCadCurrentA(double currentA)
+DvClLoraEnergyModel::MaybeNotifyDepleted()
 {
-    m_cadCurrentA = currentA;
-}
-
-void
-DvClLoraEnergyModel::SetIdleCurrentA(double currentA)
-{
-    m_idleCurrentA = currentA;
-}
-
-void
-DvClLoraEnergyModel::SetSleepCurrentA(double currentA)
-{
-    m_sleepCurrentA = currentA;
-}
-
-void
-DvClLoraEnergyModel::SetAutoTxCurrentFromPower(bool enable)
-{
-    m_autoTxCurrentFromPower = enable;
-    if (m_autoTxCurrentFromPower)
+    if (!m_depleted && m_remainingMah <= 0.0)
     {
-        m_txCurrentA =
-            EstimateTxCurrentA(m_lastTxPowerDbm, m_txCurrentAt14dBmA, m_txCurrentAt20dBmA);
+        m_depleted = true;
+        m_instantState = DvClRadioState::SLEEP;
+        const uint32_t nodeId =
+            (m_source && m_source->GetNode()) ? m_source->GetNode()->GetId() : 0;
+        m_energyDepletedTrace(nodeId, 0.0);
     }
 }
 
-bool
-DvClLoraEnergyModel::GetAutoTxCurrentFromPower() const
-{
-    return m_autoTxCurrentFromPower;
-}
+// --- seeding --------------------------------------------------------------
 
 void
-DvClLoraEnergyModel::SetTxCurrentAt14dBmA(double currentA)
+DvClLoraEnergyModel::SetInitialSocFraction(double fraction)
 {
-    m_txCurrentAt14dBmA = currentA;
-    if (m_autoTxCurrentFromPower)
+    const double clamped = std::clamp(fraction, 0.0, 1.0);
+    m_remainingMah = clamped * m_capacityMah;
+    m_lastUpdate = Simulator::Now();
+    m_depleted = (m_remainingMah <= 0.0);
+}
+
+// --- authoritative queries ------------------------------------------------
+
+double
+DvClLoraEnergyModel::GetEnergyFraction() const
+{
+    // Const query, but idle draw must be current: fold in the gap since the
+    // last event without mutating observable category totals beyond idle.
+    const Time now = Simulator::Now();
+    double remaining = m_remainingMah;
+    if (now > m_lastUpdate)
     {
-        m_txCurrentA =
-            EstimateTxCurrentA(m_lastTxPowerDbm, m_txCurrentAt14dBmA, m_txCurrentAt20dBmA);
+        const double dt = (now - m_lastUpdate).GetSeconds();
+        const double wantMah = m_idleCurrentMa * dt / 3600.0;
+        remaining -= std::min(wantMah, remaining);
     }
-}
-
-double
-DvClLoraEnergyModel::GetTxCurrentAt14dBmA() const
-{
-    return m_txCurrentAt14dBmA;
-}
-
-void
-DvClLoraEnergyModel::SetTxCurrentAt20dBmA(double currentA)
-{
-    m_txCurrentAt20dBmA = currentA;
-    if (m_autoTxCurrentFromPower)
-    {
-        m_txCurrentA =
-            EstimateTxCurrentA(m_lastTxPowerDbm, m_txCurrentAt14dBmA, m_txCurrentAt20dBmA);
-    }
-}
-
-double
-DvClLoraEnergyModel::GetTxCurrentAt20dBmA() const
-{
-    return m_txCurrentAt20dBmA;
-}
-
-void
-DvClLoraEnergyModel::SetTxPowerDbm(double txPowerDbm)
-{
-    m_lastTxPowerDbm = txPowerDbm;
-    if (m_autoTxCurrentFromPower)
-    {
-        m_txCurrentA = EstimateTxCurrentA(txPowerDbm, m_txCurrentAt14dBmA, m_txCurrentAt20dBmA);
-    }
-}
-
-double
-DvClLoraEnergyModel::GetLastTxPowerDbm() const
-{
-    return m_lastTxPowerDbm;
-}
-
-double
-DvClLoraEnergyModel::EstimateTxCurrentA(double txPowerDbm,
-                                        double txCurrentAt14dBmA,
-                                        double txCurrentAt20dBmA)
-{
-    // Piecewise-linear estimate anchored at SX1276 typical values:
-    // 14 dBm -> txCurrentAt14dBmA, 20 dBm -> txCurrentAt20dBmA.
-    // Extrapolates down to 2 dBm and clamps the final result to positive range.
-    const double clampedDbm = std::max(2.0, std::min(20.0, txPowerDbm));
-    const double slope = (txCurrentAt20dBmA - txCurrentAt14dBmA) / 6.0;
-    const double estimated = txCurrentAt14dBmA + slope * (clampedDbm - 14.0);
-    return std::max(0.0, estimated);
-}
-
-// Getters
-double
-DvClLoraEnergyModel::GetTxCurrentA() const
-{
-    return m_txCurrentA;
-}
-
-double
-DvClLoraEnergyModel::GetRxCurrentA() const
-{
-    return m_rxCurrentA;
-}
-
-double
-DvClLoraEnergyModel::GetCadCurrentA() const
-{
-    return m_cadCurrentA;
-}
-
-double
-DvClLoraEnergyModel::GetIdleCurrentA() const
-{
-    return m_idleCurrentA;
-}
-
-double
-DvClLoraEnergyModel::GetSleepCurrentA() const
-{
-    return m_sleepCurrentA;
-}
-
-DvClRadioState
-DvClLoraEnergyModel::GetCurrentState() const
-{
-    return m_currentState;
-}
-
-void
-DvClLoraEnergyModel::SetNode(Ptr<Node> node)
-{
-    m_node = node;
-}
-
-Ptr<Node>
-DvClLoraEnergyModel::GetNode() const
-{
-    return m_node;
+    return std::clamp(remaining / m_capacityMah, 0.0, 1.0);
 }
 
 double
 DvClLoraEnergyModel::GetRemainingEnergyJ() const
 {
-    if (!m_source)
-    {
-        return -1.0;
-    }
-    return m_source->GetRemainingEnergy();
+    return std::max(0.0, GetEnergyFraction() * m_capacityMah / 1000.0 * GetSupplyVoltageV() * 3600.0);
 }
 
 double
-DvClLoraEnergyModel::GetEnergyFraction() const
+DvClLoraEnergyModel::GetVoltageMv() const
 {
-    if (!m_source)
-    {
-        return -1.0;
-    }
-    const double initial = m_source->GetInitialEnergy();
-    if (initial <= 0.0)
-    {
-        return 0.0;
-    }
-    return m_source->GetRemainingEnergy() / initial;
+    const double span = m_voltageMaxMv - m_voltageMinMv;
+    return m_voltageMinMv + span * GetEnergyFraction();
 }
 
 double
 DvClLoraEnergyModel::GetSupplyVoltageV() const
 {
-    if (!m_source)
+    if (m_source)
     {
-        return -1.0;
+        return m_source->GetSupplyVoltage();
     }
-    return m_source->GetSupplyVoltage();
+    return (m_voltageMinMv + m_voltageMaxMv) / 2000.0; // mV midpoint -> V
+}
+
+double
+DvClLoraEnergyModel::GetTxMah() const
+{
+    const_cast<DvClLoraEnergyModel*>(this)->ApplyIdleConsumption();
+    return m_txMah;
+}
+
+double
+DvClLoraEnergyModel::GetRxMah() const
+{
+    const_cast<DvClLoraEnergyModel*>(this)->ApplyIdleConsumption();
+    return m_rxMah;
+}
+
+double
+DvClLoraEnergyModel::GetCadMah() const
+{
+    const_cast<DvClLoraEnergyModel*>(this)->ApplyIdleConsumption();
+    return m_cadMah;
+}
+
+double
+DvClLoraEnergyModel::GetIdleMah() const
+{
+    const_cast<DvClLoraEnergyModel*>(this)->ApplyIdleConsumption();
+    return m_idleMah;
+}
+
+Time
+DvClLoraEnergyModel::GetTimeInState(DvClRadioState s) const
+{
+    switch (s)
+    {
+    case DvClRadioState::TX:
+        return Seconds(m_txSec);
+    case DvClRadioState::RX:
+        return Seconds(m_rxSec);
+    case DvClRadioState::CAD:
+        return Seconds(m_cadSec);
+    case DvClRadioState::IDLE:
+        return Seconds(m_idleSec);
+    case DvClRadioState::SLEEP:
+    default:
+        return Seconds(0.0);
+    }
+}
+
+// --- configuration --------------------------------------------------------
+
+void
+DvClLoraEnergyModel::SetCapacityMah(double capacity)
+{
+    m_capacityMah = std::max(capacity, 1.0);
+    m_remainingMah = std::min(m_remainingMah, m_capacityMah);
+}
+
+void
+DvClLoraEnergyModel::SetTxCurrentMa(double current)
+{
+    m_txCurrentMa = std::max(current, 0.0);
+}
+
+void
+DvClLoraEnergyModel::SetRxCurrentMa(double current)
+{
+    m_rxCurrentMa = std::max(current, 0.0);
+}
+
+void
+DvClLoraEnergyModel::SetCadCurrentMa(double current)
+{
+    m_cadCurrentMa = std::max(current, 0.0);
+}
+
+void
+DvClLoraEnergyModel::SetIdleCurrentMa(double current)
+{
+    m_idleCurrentMa = std::max(current, 0.0);
+}
+
+void
+DvClLoraEnergyModel::SetVoltageWindow(double minMv, double maxMv)
+{
+    m_voltageMinMv = std::min(minMv, maxMv);
+    m_voltageMaxMv = std::max(minMv, maxMv);
 }
 
 } // namespace dvcl

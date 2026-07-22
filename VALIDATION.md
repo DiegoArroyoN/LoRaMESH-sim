@@ -1865,3 +1865,45 @@ signos p=0.008) y su versión robusta, el percentil 10, es inequívoca (t=11.57)
 La afirmación defendible es sobre la cola, no sobre el mínimo puntual.
 
 Datos: `tools/validation/mechanism_soc_tail.csv`.
+
+## 2026-07-22 (f) — Un solo modelo de energía, idiomático ns-3
+
+Había dos libros para una batería: un registro a medida (`DvClEnergyRegistry`)
+que gobernaba el SoC, la métrica y la muerte del nodo, y un `DeviceEnergyModel`
+de ns-3 (`DvClLoraEnergyModel`) cuya notificación de agotamiento no la escuchaba
+nadie y que, además, doble-contabilizaba la batería. Los dos se fusionan en una
+sola clase.
+
+**`DvClLoraEnergyModel`**, ahora:
+- es un `energy::DeviceEnergyModel` de ns-3 de verdad, uno por dispositivo;
+- lleva el libro de débito event-driven que ya estaba validado (cobra TX, RX y
+  CAD por su duración exacta, e idle de forma diferida) como **única** autoridad
+  de carga;
+- puede acoplarse a un `EnergySource` (del que toma la tensión de alimentación)
+  y dispara `HandleEnergyDepletion` en cuanto el libro llega a cero;
+- expone `GetEnergyFraction()`, el desglose por actividad (`GetTxMah` …) y
+  `GetTimeInState`, sin el parámetro `NodeId` vestigial del registro.
+
+Se eliminan `dv-cl-energy-registry.{h,cc}` y el helper del modelo paralelo. El
+flag `enableNs3EnergyFramework` deja de instalar un segundo modelo; se conserva
+como la compuerta que los perfiles ya activan para sembrar el SoC inicial
+heterogéneo de los KPI de vida útil.
+
+La contabilidad event-driven es deliberada: una máquina de estados alimentada
+desde un hook de "recepción completada" no puede representar el intervalo de
+recepción, que es exactamente el defecto que hacía que el modelo viejo
+reportara el 88% de la energía como RX.
+
+**Determinismo:** el libro de débito es el mismo, así que el resultado debe
+salir idéntico. Comprobado contra los valores congelados del experimento de
+aislamiento de delta (proposal_pueyo_like_csmacad, 25 nodos, 300 ks):
+
+| corrida | FND congelado | FND nuevo |
+|---|---|---|
+| s1 δ=0.25 | 134608 | 134608 |
+| s1 δ=0.0 | 125008 | 125008 |
+| s3 δ=0.25 | 145745 | 145745 |
+
+Bit-idéntico en FND y PDR. Suites 10/10 (el suite de energía se reescribió a la
+API única: cierre del libro E=ΣI·V·t, batería vacía no consume, y el modelo se
+acopla a un `EnergySource` real tomando su tensión).

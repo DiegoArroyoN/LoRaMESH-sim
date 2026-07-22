@@ -256,7 +256,7 @@ DvClApp::DvClApp()
 {
     NS_LOG_FUNCTION(this);
     m_mac = CreateObject<DvClCsmaCadMac>();
-    m_energyModel = CreateObject<DvClEnergyRegistry>();
+    m_energyModel = CreateObject<DvClLoraEnergyModel>();
     m_routing = CreateObject<DvClRouting>();
     m_routing->SetLocalEnergyFractionCallback(MakeCallback(&DvClApp::GetEnergyFraction, this));
     UpdateRouteTimeout();
@@ -1387,13 +1387,12 @@ DvClApp::StartApplication()
 
     if (m_energyModel)
     {
-        m_energyModel->RegisterNode(nodeId);
         if (m_initialSocFraction >= 0.0)
         {
             // The heterogeneous starting charge must reach the model the metric
             // reads, not only ns-3's BasicEnergySource; without this every node
             // begins full and delta*Psi(SoC) is dead from t=0.
-            m_energyModel->SetRemainingFraction(nodeId, m_initialSocFraction);
+            m_energyModel->SetInitialSocFraction(m_initialSocFraction);
         }
     }
 
@@ -1824,7 +1823,7 @@ DvClApp::AccountRxScanEnergyDelta()
 
     const double deltaSec = totalScanSec - m_lastAppliedRxScanTimeS;
     m_lastAppliedRxScanTimeS = totalScanSec;
-    m_energyModel->UpdateCadEnergy(GetNode()->GetId(), deltaSec);
+    m_energyModel->ChargeCad(deltaSec);
 }
 
 // Procesa cada recepción L2 y decide si actualizar rutas o reenviar.
@@ -2193,9 +2192,9 @@ DvClApp::PrintRoutingTable()
 {
     double remainingEnergy = GetRemainingEnergyJ();
     double voltageAvg =
-        (DvClEnergyRegistry::kDefaultVoltageMaxMv + DvClEnergyRegistry::kDefaultVoltageMinMv) /
+        (DvClLoraEnergyModel::kDefaultVoltageMaxMv + DvClLoraEnergyModel::kDefaultVoltageMinMv) /
         2000.0;
-    double totalEnergy = (DvClEnergyRegistry::kDefaultCapacityMah / 1000.0) * voltageAvg * 3600.0;
+    double totalEnergy = (DvClLoraEnergyModel::kDefaultCapacityMah / 1000.0) * voltageAvg * 3600.0;
     double energyConsumed = std::max(0.0, totalEnergy - remainingEnergy);
     uint16_t batteryMv = GetBatteryVoltageMv();
     uint32_t entries = m_routing ? static_cast<uint32_t>(m_routing->GetRouteCount()) : 0;
@@ -3456,7 +3455,7 @@ DvClApp::GetRemainingEnergyJ() const
 {
     if (m_energyModel)
     {
-        return m_energyModel->GetRemainingEnergy(GetNode()->GetId());
+        return m_energyModel->GetRemainingEnergyJ();
     }
     return -1.0;
 }
@@ -3470,7 +3469,7 @@ DvClApp::GetEnergyFraction() const
     // two batteries and can push the fraction past 1.
     if (m_energyModel)
     {
-        return m_energyModel->GetEnergyFraction(GetNode()->GetId());
+        return m_energyModel->GetEnergyFraction();
     }
     return -1.0;
 }

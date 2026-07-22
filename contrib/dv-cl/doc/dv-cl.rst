@@ -27,8 +27,9 @@ The stack is five objects, each replaceable:
   backoff, and duty-cycle enforcement.
 * ``DvClLoraNetDevice`` — the radio: builds the PHY transmit parameters
   and is the single authority on how long a packet occupies the channel.
-* ``DvClLoraEnergyModel`` / ``DvClEnergyRegistry`` — per-state energy
-  ledger and the charge each node reports.
+* ``DvClLoraEnergyModel`` — the module's single energy model: a per-device
+  ns-3 ``DeviceEnergyModel`` backed by an event-driven charge ledger, which
+  reports the charge each node advertises.
 
 Two seams are meant to be used from outside the module:
 

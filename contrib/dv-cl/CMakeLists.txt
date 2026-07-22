@@ -12,10 +12,8 @@ build_lib(
     model/dv-cl-mac-header.cc
     model/dv-cl-lora-net-device.cc
     model/dv-cl-stats-sink.cc
-    model/dv-cl-energy-registry.cc
     model/dv-cl-app.cc
     helper/dv-cl-helper.cc
-    helper/dv-cl-lora-energy-model-helper.cc
   HEADER_FILES
     model/dv-cl-toa.h
     model/dv-cl-metric.h
@@ -28,10 +26,8 @@ build_lib(
     model/dv-cl-mac-header.h
     model/dv-cl-lora-net-device.h
     model/dv-cl-stats-sink.h
-    model/dv-cl-energy-registry.h
     model/dv-cl-app.h
     helper/dv-cl-helper.h
-    helper/dv-cl-lora-energy-model-helper.h
   LIBRARIES_TO_LINK
     ${libcore}
     ${libnetwork}

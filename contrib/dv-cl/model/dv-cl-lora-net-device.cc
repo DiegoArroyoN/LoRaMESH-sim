@@ -335,12 +335,8 @@ DvClLoraNetDevice::Send(Ptr<Packet> packet, const Address& dest, uint16_t protoc
                         << unsigned(txParams.sf));
 
     // ========================================================================
-    // ENERGY: adjust TX current from configured TX power and switch state to TX
+    // ENERGY: switch instantaneous state to TX
     // ========================================================================
-    if (m_loraEnergyModel)
-    {
-        m_loraEnergyModel->SetTxPowerDbm(txPowerDbm);
-    }
     NotifyRadioStateChange(0); // 0 = TX
 
     // Enviar paquete por PHY (EU868 = 868 MHz)
@@ -359,12 +355,7 @@ DvClLoraNetDevice::Send(Ptr<Packet> packet, const Address& dest, uint16_t protoc
     }
     if (m_energyModel && m_node)
     {
-        double txCurrentMa = DvClLoraEnergyModel::EstimateTxCurrentA(txPowerDbm) * 1000.0;
-        if (m_loraEnergyModel)
-        {
-            txCurrentMa = m_loraEnergyModel->GetTxCurrentA() * 1000.0;
-        }
-        m_energyModel->UpdateEnergy(m_node->GetId(), txCurrentMa, txDuration.GetSeconds());
+        m_energyModel->ChargeTx(txDuration.GetSeconds());
     }
     NS_LOG_INFO("Node " << GetNode()->GetId() << " duración TX: " << txDuration.GetMilliSeconds()
                         << "ms"
@@ -492,16 +483,14 @@ DvClLoraNetDevice::Receive(Ptr<const Packet> packet)
         }
         if (m_energyModel && m_node)
         {
-            m_energyModel->UpdateRxEnergy(m_node->GetId(), duration);
+            // Charge the reception for the frame's own duration. This callback
+            // fires when the frame is already demodulated, so the debit is
+            // shifted one frame late -- the honest approximation available at a
+            // reception-complete hook, and the reason charge is event-driven
+            // rather than a state machine that would leave the radio stuck in
+            // RX (VALIDATION.md, 2026-07-22).
+            m_energyModel->ChargeRx(duration);
         }
-        // The ns-3 energy-framework view is driven by a state machine, and this
-        // callback fires when the frame has already been demodulated. Entering
-        // RX here without arranging the exit left the radio in RX for the rest
-        // of the run, which is how that view came to report 88% of the energy
-        // as reception while the ledger that actually governs the protocol said
-        // 8%. Holding RX for the frame's own duration charges the right amount;
-        // it is shifted one frame late, which is the honest approximation
-        // available at a reception-complete hook (VALIDATION.md, 2026-07-22).
         Simulator::Schedule(Seconds(duration),
                             &DvClLoraNetDevice::NotifyRadioStateChange,
                             this,
@@ -750,11 +739,9 @@ DvClLoraNetDevice::GetOnAirTimeFor(Ptr<const Packet> packet, uint8_t sf) const
 void
 DvClLoraNetDevice::NotifyRadioStateChange(int newState)
 {
-    if (m_loraEnergyModel)
+    if (m_energyModel)
     {
-        m_loraEnergyModel->ChangeState(newState);
-        NS_LOG_DEBUG("Node " << (m_node ? m_node->GetId() : 0) << " radio state changed to "
-                             << newState);
+        m_energyModel->ChangeState(newState);
     }
 }
 
