@@ -1232,6 +1232,62 @@ la posibilidad de divergencia**. Conviene tenerlo como criterio de revisión: si
 una magnitud física se calcula en dos sitios, es cuestión de tiempo que
 discrepen, y el síntoma es silencioso.
 
+## 2026-07-20 — RE-CORRIDA sobre la base nueva (Goursaud + LDRO): 280 corridas
+
+Las tres campañas rehechas con el simulador corregido. **280/280 sin fallo.**
+Índice en `tools/validation/rerun_20260720_index.csv`.
+
+**PDR medio ± desv (10 semillas), campaña principal:**
+
+| perfil | n=9 | n=25 | n=49 |
+|---|---|---|---|
+| `proposal_pueyo_like_csmacad` | **0.1825±0.006** | **0.0286±0.001** | **0.0090±0.001** |
+| `pueyo2024_paper_like_csmacad` | 0.1768±0.007 | 0.0268±0.001 | 0.0079±0.000 |
+| `csmacad_free_backoff` | 0.1690±0.009 | 0.0262±0.001 | 0.0079±0.001 |
+| `proposal_pueyo_like_aloha` | 0.0780±0.035 | 0.0107±0.001 | 0.0028±0.001 |
+| `pueyo2024_paper_like` | 0.0758±0.034 | 0.0095±0.002 | 0.0023±0.001 |
+| `proposal_pueyo_like` (duty 1%) | 0.0238±0.001 | 0.0095±0.001 | 0.0033±0.000 |
+
+**Los perfiles ahora SE SEPARAN.** Bajo el modelo anterior los cinco comparables
+eran indistinguibles; al modelar la interferencia cross-SF aparece un orden
+estable y la propuesta queda primera en las tres escalas.
+
+**Comparación composite_score vs toa_only** (pareada por semilla, ambos con
+CSMA/CAD):
+
+| campaña | nEd | dPDR | t | dFND | t | dT50 | t |
+|---|---|---|---|---|---|---|---|
+| principal | 9 | +3.3% | 1.90 | — | | — | |
+| principal | 25 | +7.0% | **6.55** | — | | — | |
+| principal | 49 | +14.2% | **5.20** | — | | — | |
+| vida útil | 25 | +7.1% | **4.72** | +7.1% | **3.67** | +4.3% | **4.93** |
+| vida útil | 49 | +11.8% | **16.61** | +4.5% | **3.06** | +2.4% | **2.39** |
+| vida útil | 81 | +16.1% | **11.64** | +8.2% | **3.54** | +5.2% | **9.93** |
+| vida útil | 100 | +17.3% | **14.70** | +9.8% | **5.15** | +5.6% | **11.99** |
+
+**REVERSIÓN del resultado anterior.** Con el modelo de SF ortogonales la métrica
+compuesta **costaba** PDR (−0.3% a −5.7%). Con interferencia cross-SF real
+**lo mejora** (+2% a +17.3%), y a la vez alarga la vida de la red. Ya no es un
+compromiso: mejora ambos ejes, y la ventaja **crece con la densidad**.
+
+**Precisión necesaria sobre qué aísla cada comparación:**
+
+- `routeMetricMode` conmuta **toda la función de costo**, no solo el término
+  energético: `TOA_ONLY` usa `ToaHopCostUnits`, una formulación distinta de
+  `α·ToA + β + δ·Ψ`. La comparación mide **la métrica compuesta como un todo**
+  frente a la de solo-ToA.
+- En la campaña principal la carga mínima es **0.47-0.49**, apenas bajo `b_hi`:
+  Ψ ≈ 0.007, que por δ=0.25 aporta ~0.002 al costo, **despreciable** frente a
+  α·ToA (hasta 0.60). Ese +14.2% **no es atribuible al término energético**.
+- En la campaña de vida útil la carga llega a 0 y FND está definido, de modo que
+  ahí Ψ **sí** actúa plenamente — pero la comparación sigue mezclando
+  formulación y energía.
+
+**Aislamiento pendiente (barato):** para atribuir el efecto al término energético
+hace falta comparar `composite` contra `composite con δ=0` —misma formulación,
+solo cambia Ψ— vía `--ns3::dvcl::DvClCompositeMetric::WEnergy=0`. Es el
+experimento que respalda la afirmación central de la tesis.
+
 ## Hallazgos de auditoría (F0.2)
 
 1. **[RESUELTO 2026-07-18 — benigno] Dualidad de métricas.** El frozen
