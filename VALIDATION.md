@@ -1907,3 +1907,50 @@ aislamiento de delta (proposal_pueyo_like_csmacad, 25 nodos, 300 ks):
 Bit-idéntico en FND y PDR. Suites 10/10 (el suite de energía se reescribió a la
 API única: cierre del libro E=ΣI·V·t, batería vacía no consume, y el modelo se
 acopla a un `EnergySource` real tomando su tensión).
+
+## 2026-07-22 (g) — Sensibilidad de pesos: δ es un interruptor, α y β son inertes
+
+Barrido de α/β/δ por CLI (sin tocar los defaults que los tests pinean), tres
+líneas por el punto de tesis (0.60, 0.15, 0.25), tráfico sostenido 300 ks, 25
+nodos, 4 semillas, pareado por semilla.
+
+**Línea δ, cada punto frente a δ=0:**
+
+| δ | ΔFND | t | ΔPDR | t |
+|---|---:|---:|---:|---:|
+| 0.10 | +8.99% | 16.95 | −0.90% | −9.30 |
+| 0.25 | +9.06% | 16.16 | −0.77% | −5.70 |
+| 0.40 | +9.07% | 16.70 | −0.92% | −7.88 |
+
+**Todo el beneficio se captura en δ=0.10 y satura.** Entre δ=0.10, 0.25 y 0.40
+no hay diferencia medible (comparados con el punto de tesis, |ΔFND|<0.1%, t<1).
+El término de energía es un interruptor, no una perilla: encenderlo compra el
+~9% de vida útil; subir su peso no compra más. El valor de tesis (0.25) está
+cómodamente en la meseta, no en un filo.
+
+**α y β, frente al punto de tesis (pareado):**
+
+| combo | ΔFND | t | ΔPDR | t |
+|---|---:|---:|---:|---:|
+| α=0.40 | +0.26% | 4.76 | −0.27% | −1.10 |
+| α=0.80 | +0.04% | 0.27 | −0.20% | −1.96 |
+| β=0.05 | −0.01% | −0.10 | −0.25% | −1.25 |
+| β=0.30 | −0.03% | −0.30 | −0.28% | −1.86 |
+
+**α y β son inertes en este régimen.** Ni el peso del tiempo en aire ni el
+coste por salto mueven FND o PDR de forma apreciable (|Δ|<0.3%). El único
+rastro es α=0.40 con +0.26% de FND (t=4.8), despreciable frente al 9% de δ.
+
+**Lectura para la tesis.** La frontera de Pareto PDR–FND se reduce a dos puntos
+de operación: δ=0 (PDR marginalmente mayor, +0.78%; vida útil −8.3%) y δ>0 (la
+meseta). No es una curva continua de compromiso sino un salto entre dos
+regímenes. Y responde la pregunta que quedaba abierta sobre qué peso da mayor
+PDR: casi ninguno — el PDR es plano frente a los pesos (máximo en δ=0 por un
++0.78%); los pesos gobiernan la vida útil, no el PDR, y la vida útil satura.
+El diseño es robusto: no exige sintonizar δ con precisión ni tocar α/β.
+
+Alcance: una topología (rejilla 25 nodos), un patrón de tráfico (todos-contra-
+todos sostenido), un punto de operación. La saturación y la inercia son
+propiedades de este régimen; otra densidad o carga podría revelar un gradiente.
+
+Datos: `tools/validation/weight_sensitivity.csv`.
