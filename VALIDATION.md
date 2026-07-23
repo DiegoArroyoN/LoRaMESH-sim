@@ -1954,3 +1954,45 @@ todos sostenido), un punto de operación. La saturación y la inercia son
 propiedades de este régimen; otra densidad o carga podría revelar un gradiente.
 
 Datos: `tools/validation/weight_sensitivity.csv`.
+
+## 2026-07-23 — C5 asentado: bajo duty 1% el término de energía no compra vida útil
+
+Aislamiento de δ bajo duty-on 1% (`time_off_air`), mismo diseño que el
+experimento de tráfico sostenido: 25 nodos, 300 ks, 1400 paq/par, 8 semillas
+pareadas. Contraste con el mismo experimento sin duty:
+
+| magnitud (δ=0.25 vs δ=0) | sin duty | con duty 1% |
+|---|---:|---:|
+| FND | **+9.69%** (t=17.5) | **+0.04%** (t=2.9) |
+| PDR | −0.78% (t=−4.0) | **+0.52%** (t=4.4, 7/8) |
+| relevo (% del TX) | −1.06 pp (t=−24) | −0.48 pp (t=−19.5) |
+| energía TX | −0.44% (t=−14) | +0.01% (t=1.4) |
+
+Tres lecturas, en orden:
+
+1. **El efecto sobre la vida útil colapsa 240×** (de +9.69% a +0.04%). No es
+   que el término deje de actuar: sigue redistribuyendo el ruteo (relevo
+   −0.48 pp, t=−19.5). Es que **el duty cycle ya hizo el trabajo**: con el
+   airtime capado al 1% por nodo, ningún relay puede sobre-gastarse, y la
+   desigualdad de gasto que δ·Ψ explota queda acotada por regulación. El duty
+   cycle actúa como ecualizador implícito de energía.
+2. **El canal del beneficio cambia de signo.** Sin duty, δ compra vida útil
+   pagando PDR (−0.78%). Con duty, no compra vida útil pero **mejora el PDR**
+   (+0.52%, 7/8 semillas): desviar tráfico del relay caliente ahora evita
+   relays con presupuesto de duty agotado, y eso entrega más paquetes. El mismo
+   mecanismo (evitar al nodo sobrecargado) paga en la moneda que el régimen
+   deja libre.
+3. **El FND absoluto sube ~45%** con duty (187–210 ks vs 125–146 ks): capar el
+   TX alarga la vida de todos. El presupuesto energético duty-on queda: idle
+   ~48%, TX ~35%, RX ~13%, CAD ~4%. El relevo es ~1.5% del total, mismo orden
+   que el techo medido sin duty.
+
+Consecuencia para el paper (C5 del DoE): el valor del ruteo energy-aware es
+**dependiente del régimen regulatorio**. Nulo para vida útil bajo EU868 1%
+(donde deja un dividendo pequeño de PDR), y +9.7% de FND donde no hay duty
+(US915, ISM sin restricción, o despliegues indoor que lo ignoran, como
+Udugampola justifica). El barrido DC% (E4) traza la transición y US915 (E4c)
+la triangula. Hasta donde revisamos (NotebookLM `Papers_Magister`), nadie ha
+reportado el duty cycle en este rol.
+
+Datos: `tools/validation/dutyon_delta_isolation.csv`. Gate G1 del DoE: cerrado.

@@ -12,7 +12,7 @@ Las métricas se definen en `METRICS.md` (F3.2); la evidencia citada está en
 | C2 | El término de energía δ·Ψ redistribuye la **cola** del SoC (no la media) y compra vida útil; el efecto satura en δ≈0.10 (interruptor, no perilla) | E4, E5 | demostrado **sin** duty (VALIDATION 2026-07-22 d/e/g); ver C5 |
 | C3 | En receptores siempre encendidos el ruteo solo gobierna ~1.4% del presupuesto energético: techo de cualquier métrica energy-aware | contexto | medido sin duty; recalcular bajo duty-on |
 | C4 | Sinergia MAC×routing: el beneficio de la métrica compuesta depende del MAC (término de interacción del 2×2) | E2 | hipótesis; el 2×2 ya está declarado en el proyecto de tesis (DV-ToA/DV-CMP × ALOHA/CSMA) |
-| C5 | **El duty cycle 1% actúa como ecualizador implícito de energía**: acota justamente la desigualdad de airtime que el ruteo energy-aware explota. El valor de δ·Ψ es dependiente del régimen: nulo bajo DC 1%, +9.7% FND sin DC | E4 | preliminar 2026-07-23 (`dutyon8`, 6/8 pares): FND Δ = ±0.0–0.1% bajo DC 1% |
+| C5 | **El duty cycle 1% actúa como ecualizador implícito de energía**: acota la desigualdad de airtime que el ruteo energy-aware explota. δ·Ψ es dependiente del régimen: FND +0.04% bajo DC 1% vs +9.69% sin DC (colapso 240×), y el canal del beneficio cambia a PDR (+0.52%, t=4.4) | E4 | **medido** (`dutyon8`, 8/8 pares, VALIDATION 2026-07-23) |
 
 C5 es el hallazgo nuevo y el más citable: Cotrim & Margi (2024) estudian el DC
 como cuello de botella de throughput/latencia en multihop; nadie lo ha
@@ -105,8 +105,8 @@ Diego autorizó borrar campañas antiguas (2026-07-23).
 
 ## 8. Gates antes de lanzar campañas
 
-- **G1**: `dutyon8` completo y VALIDATION.md actualizado (6/8 pares al redactar;
-  patrón inequívoco).
+- **G1**: ~~`dutyon8` completo y VALIDATION.md actualizado~~ **CERRADO 2026-07-23**
+  (8/8 pares, `tools/validation/dutyon_delta_isolation.csv`).
 - **G2**: sonda de cada celda de escenario (convergecast, multisink, random) con
   el guard de flags activo, más `preflight.sh` verde.
 - **G3**: servidor ns3-remote arriba, árbol sincronizado vía GitHub (está stale
