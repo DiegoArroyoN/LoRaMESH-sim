@@ -2,9 +2,8 @@
 # run_e1e2.sh — bloques E1 (ranking de métricas) y E2 (interacción 2×2) del DoE.
 # Corridas perf (duty-on 1%, carga Pueyo 100 paq/par, 40 ks). Paralelo N cores.
 #
-#   E1 (CSMA/CAD): {composite, toa, hops} × 3 escenarios × 8 N × 20 seeds
-#   E2 (ALOHA):    {composite, toa}       × 3 escenarios × 8 N × 20 seeds
-#   (rssi pendiente de cablear -> tarea aparte)
+#   E1 (CSMA/CAD): {composite, toa, hops, rssi} × 3 escenarios × 8 N × 20 seeds
+#   E2 (ALOHA):    {composite, toa}              × 3 escenarios × 8 N × 20 seeds
 #
 # Cada celda escribe UNA fila-resumen; los CSV pesados se descartan
 # (--enableMetricsEssentialOnly + borrado por corrida) para acotar disco.
@@ -42,6 +41,7 @@ cell() {
     composite) metricflags="--routeMetricMode=composite_score" ;;
     toa)       metricflags="--allowMetricModeOverride=true --routeMetricMode=toa_only" ;;
     hops)      metricflags="--compositeWToa=0 --compositeWHop=1 --compositeWEnergy=0" ;;
+    rssi)      metricflags="--allowMetricModeOverride=true --routeMetricMode=rssi" ;;
   esac
 
   local d="$OUT/work/$id"; mkdir -p "$d"; cd "$d" || return 1
@@ -81,8 +81,8 @@ gen_cells() {
   local SC="grid_a2a rnd_conv1 rnd_msink4"
   local S=$(seq 1 20)
   for scen in $SC; do for n in $N; do for seed in $S; do
-    # E1: CSMA/CAD, 3 metricas
-    for m in composite toa hops; do echo "E1 csmacad $m $scen $n $seed"; done
+    # E1: CSMA/CAD, 4 metricas (rssi anadida 2026-07-25)
+    for m in composite toa hops rssi; do echo "E1 csmacad $m $scen $n $seed"; done
     # E2: ALOHA, 2 metricas
     for m in composite toa; do echo "E2 aloha $m $scen $n $seed"; done
   done; done; done
