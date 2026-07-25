@@ -2068,3 +2068,44 @@ está saturada y ninguna métrica rescata eso. Los escenarios convergecast y
 multisink degradan mucho más suave (0.067 y 0.130 a N=100).
 
 Datos: `tools/validation/e1e2_results.csv` (2400 filas).
+
+## 2026-07-25 (b) — Métrica RSSI cableada, y una regla de método sobre árboles
+
+`routeMetricMode=rssi` queda operativo de punta a punta: la clase
+`DvClRssiMetric` (25-jul) ahora recibe la medición real del enlace.
+
+**El RSSI no toca el formato de aire.** Es una medición *local*: el receptor la
+toma del tag del PHY al oír el beacon del vecino (`loraTag.GetReceivePower()`
+en el camino pueyo7b, que es el que corre en campañas). Como el coste de camino
+ya se propaga en el `score`, no hace falta añadir bytes al beacon — y el wire,
+que está pinado con tests de bytes-dorados, queda intacto.
+
+Confusor evitado: la histéresis de conmutación se aplicaba solo en modo
+`COMPOSITE_SCORE`, así que RSSI habría corrido sin amortiguación y la
+comparación habría mezclado *métrica* con *histéresis*. Se cambió a "toda
+métrica que no sea `toa_only`", que deja idéntico el comportamiento de los dos
+modos existentes.
+
+Sonda (25 nodos, grid all-to-all, 20 ks, duty-on): las tres métricas producen
+encaminamientos distintos, que es la condición para que el barrido mida algo.
+
+| métrica | PDR | entregados | relevos | saltos medios |
+|---|---:|---:|---:|---:|
+| composite | 0.1004 | 4987 | 1656 | 0.064 |
+| toa | 0.1019 | 5062 | 2175 | 0.102 |
+| rssi | 0.1025 | 5090 | 1637 | 0.082 |
+
+**Determinismo verificado como corresponde.** Primer intento mal planteado:
+comparé contra las filas congeladas de E1, que salieron del **servidor**, desde
+una corrida en **WSL** — comparación entre árboles, no determinismo. Rehecho en
+un solo árbol (WSL, con y sin el cableado, vía `git stash`): idéntico dígito a
+dígito en los cuatro casos de control (0.104/6242, 0.1057/6343, 0.0615/295,
+0.0673/323). El cableado es aditivo y no altera composite ni toa. Suites 10/10.
+
+**Regla de método que sale de ahí:** el árbol de WSL (gcc 13, ns-3.46.1-dev) y
+el del servidor (gcc 15, ns-3.46) **no producen resultados idénticos** — mismas
+entradas, PDR 0.104 vs 0.1218 en el mismo caso. Es esperable en un simulador
+caótico donde diferencias de coma flotante cambian una decisión de ruta y
+cascadean. Consecuencia: **todo dato del paper sale del servidor**; WSL es solo
+para desarrollo y tests. Ya se cumplía (E1/E2 y E3 son del servidor), pero
+conviene tenerlo escrito junto a la regla de no recompilar a mitad de lote.

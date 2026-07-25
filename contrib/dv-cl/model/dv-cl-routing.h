@@ -86,7 +86,10 @@ struct NeighborLinkInfo
     uint8_t hops{0};
     uint8_t sf{0};
     uint32_t toaUs{0};
-    // REMOVED: rssiDbm - receptor obtiene RSSI de PHY
+    // RSSI con el que ESTE receptor oye al vecino, dBm. Medicion local del
+    // enlace (no viaja en el beacon), poblada desde el PHY al recibir. 0 = sin
+    // medir. Solo la usa la metrica RSSI de referencia; la compuesta la ignora.
+    double rssiDbm{0.0};
     uint16_t batt_mV{0};
     uint16_t scoreX100{0};
     Mac48Address mac;
@@ -111,7 +114,8 @@ class DvClRouting : public Object
     enum class MetricMode
     {
         COMPOSITE_SCORE,
-        TOA_ONLY
+        TOA_ONLY,
+        RSSI //!< linea de referencia de una sola capa (DoE Q1)
     };
 
     enum class CostEncoding
@@ -208,7 +212,10 @@ class DvClRouting : public Object
     /// Convert received batt_mV to energy fraction [0,1] (0 mV = unknown -> 1.0 = no penalty).
     static double BattMvToEFrac(uint16_t battMv);
     /// Single-link incremental cost, delegated to the pluggable metric (F6.1).
-    double ComputeThesisLinkCost(double toaUs, uint8_t sf, double neighborEFrac) const;
+    double ComputeThesisLinkCost(double toaUs,
+                                 uint8_t sf,
+                                 double neighborEFrac,
+                                 double rssiDbm = 0.0) const;
     /// The built-in composite metric if that is what is plugged, else nullptr.
     DvClCompositeMetric* BuiltinMetricOrNull() const;
     void SetAttrWToa(double v);

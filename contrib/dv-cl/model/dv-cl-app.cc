@@ -3615,7 +3615,13 @@ DvClApp::BuildNeighborLinkInfo(const DvClMetricTag& tag,
     link.hops = std::min<uint8_t>(static_cast<uint8_t>(tag.GetHops() + 1), m_initTtl);
     link.sf = std::clamp<uint8_t>(linkSf, static_cast<uint8_t>(7), static_cast<uint8_t>(12));
     link.toaUs = toaUs;
-    // REMOVED: link.rssiDbm - receptor obtiene de PHY
+    // RSSI con el que oimos a este vecino: medicion LOCAL del enlace, tomada
+    // del PHY. No viaja en el beacon (el coste de camino ya se propaga en el
+    // score), asi que anadirla no toca el formato de aire.
+    {
+        Ptr<DvClLoraNetDevice> rxDev = DynamicCast<DvClLoraNetDevice>(m_meshDevice);
+        link.rssiDbm = rxDev ? rxDev->GetLastRxRssi() : 0.0;
+    }
     link.batt_mV = tag.GetBatt_mV();
     link.dc_remaining = tag.GetDcRemaining(); // §DC-aware: DC del vecino emisor
     LinkStats stats;
@@ -3627,6 +3633,7 @@ DvClApp::BuildNeighborLinkInfo(const DvClMetricTag& tag,
     stats.batteryMv = link.batt_mV;
     stats.energyFraction = BatteryMvToEnergyFraction(link.batt_mV);
     LinkInputs metricIn;
+    metricIn.rssiDbm = link.rssiDbm;
     metricIn.toaUs = stats.toaUs;
     metricIn.sf = stats.sf;
     metricIn.energyFraction = ResolveEnergyFraction(stats.energyFraction, GetNode()->GetId());
@@ -3970,6 +3977,9 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
         link.hops = 1;
         link.sf = linkSf;
         link.toaUs = toaUsNeighbor;
+        // RSSI por paquete del tag del PHY: la medicion local del enlace que
+        // usa la metrica de referencia RSSI (no viaja en el beacon).
+        link.rssiDbm = rxPowerDbm;
         const double rxEnergyFrac = SoC8ToFraction(beaconHdr.GetSoc()); // §SoC-wire fix
         link.batt_mV = static_cast<uint16_t>(EnergyFractionToBatteryMv(rxEnergyFrac));
         link.dc_remaining = 0xFF; // no DC byte on the 6B wire: always "not available"  // §DC-wire
@@ -3982,6 +3992,7 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
         stats.batteryMv = static_cast<double>(link.batt_mV);
         stats.energyFraction = rxEnergyFrac; // §SoC-wire fix: was hardcoded 1.0
         LinkInputs metricIn;
+        metricIn.rssiDbm = link.rssiDbm;
         metricIn.toaUs = stats.toaUs;
         metricIn.sf = stats.sf;
         metricIn.energyFraction = ResolveEnergyFraction(stats.energyFraction, myId);

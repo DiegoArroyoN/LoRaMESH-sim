@@ -307,6 +307,13 @@ DvClRouting::SetMetricMode(const std::string& mode)
     std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](char ch) {
         return static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     });
+    if (normalized == "rssi")
+    {
+        m_metricMode = MetricMode::RSSI;
+        // La metrica es lo que cambia; el resto del protocolo no se entera.
+        m_metric = CreateObject<DvClRssiMetric>();
+        return;
+    }
     if (normalized == "toa_only")
     {
         m_metricMode = MetricMode::TOA_ONLY;
@@ -318,7 +325,15 @@ DvClRouting::SetMetricMode(const std::string& mode)
 std::string
 DvClRouting::GetMetricMode() const
 {
-    return (m_metricMode == MetricMode::TOA_ONLY) ? "toa_only" : "composite_score";
+    switch (m_metricMode)
+    {
+    case MetricMode::TOA_ONLY:
+        return "toa_only";
+    case MetricMode::RSSI:
+        return "rssi";
+    default:
+        return "composite_score";
+    }
 }
 
 void
@@ -724,7 +739,10 @@ DvClRouting::BattMvToEFrac(uint16_t battMv)
 }
 
 double
-DvClRouting::ComputeThesisLinkCost(double toaUs, uint8_t sf, double neighborEFrac) const
+DvClRouting::ComputeThesisLinkCost(double toaUs,
+                                   uint8_t sf,
+                                   double neighborEFrac,
+                                   double rssiDbm) const
 {
     // F6.1: delegated to the pluggable metric (default DvClCompositeMetric
     // implements the thesis formula alpha*T_hat + beta + delta*Psi(b_j)).
@@ -732,6 +750,7 @@ DvClRouting::ComputeThesisLinkCost(double toaUs, uint8_t sf, double neighborEFra
     in.toaUs = toaUs;
     in.sf = sf;
     in.energyFraction = neighborEFrac;
+    in.rssiDbm = rssiDbm;
     return m_metric->ComputeLinkCost(in);
 }
 
@@ -1138,7 +1157,10 @@ DvClRouting::UpdateFromDvMsg(const DvMessage& msg, const NeighborLinkInfo& link)
         }
         direct.toaCostUnits = 0; // unused in COMPOSITE_SCORE mode
         direct.rawMetric =
-            ComputeThesisLinkCost(link.toaUs, static_cast<uint8_t>(linkSf), neighborEFrac);
+            ComputeThesisLinkCost(link.toaUs,
+                                  static_cast<uint8_t>(linkSf),
+                                  neighborEFrac,
+                                  link.rssiDbm);
         direct.costX1000 = static_cast<uint16_t>(
             std::clamp<uint32_t>(static_cast<uint32_t>(std::llround(direct.rawMetric * 1000.0)),
                                  0u,
@@ -1262,7 +1284,7 @@ DvClRouting::UpdateFromDvMsg(const DvMessage& msg, const NeighborLinkInfo& link)
                     // SoC-wire fix: b_j = next-hop energy from link.batt_mV (SoC wire byte).
                     const double neighborEFrac = BattMvToEFrac(link.batt_mV);
                     const double rawMetric =
-                        pathRaw + ComputeThesisLinkCost(link.toaUs, linkSf, neighborEFrac);
+                        pathRaw + ComputeThesisLinkCost(link.toaUs, linkSf, neighborEFrac, link.rssiDbm);
                     candidate.toaCostUnits = 0;
                     candidate.rawMetric = rawMetric;
                     candidate.costX1000 = static_cast<uint16_t>(std::clamp<uint32_t>(
@@ -1899,7 +1921,7 @@ DvClRouting::UpdateRoute(const RouteEntry& candidate)
 
     bool tie = false;
     const bool candidateBeatsPrimary = IsCandidateBetter(candidate, primary, &tie);
-    const bool applyHysteresis = (m_metricMode == MetricMode::COMPOSITE_SCORE);
+    const bool applyHysteresis = (m_metricMode != MetricMode::TOA_ONLY);
     const uint32_t candidateQuant = QuantizeCompositeMetric(candidate.rawMetric);
     const uint32_t primaryQuant = QuantizeCompositeMetric(primary.rawMetric);
     const int32_t quantizedImprovement =

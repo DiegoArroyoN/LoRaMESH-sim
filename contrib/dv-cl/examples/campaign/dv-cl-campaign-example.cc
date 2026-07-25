@@ -436,7 +436,7 @@ main(int argc, char* argv[])
                  "Legacy/no-op in pure composite DV mode (kept for CLI compatibility)",
                  dvPathHopWeight);
     cmd.AddValue("routeMetricMode",
-                 "Routing metric mode: composite_score | toa_only",
+                 "Routing metric mode: composite_score | toa_only | rssi",
                  routeMetricMode);
     cmd.AddValue("costEncoding",
                  "TOA on-air cost encoding: score100 | cost255 | score255",
@@ -1570,7 +1570,8 @@ main(int argc, char* argv[])
             routeAdvertPolicy != "cost_weighted",
         "Error: routeAdvertPolicy debe ser top_score|uniform|cost_weighted, valor actual: "
             << routeAdvertPolicy);
-    NS_ABORT_MSG_IF(routeMetricMode != "composite_score" && routeMetricMode != "toa_only",
+    NS_ABORT_MSG_IF(routeMetricMode != "composite_score" && routeMetricMode != "toa_only" &&
+                        routeMetricMode != "rssi",
                     "Error: routeMetricMode debe ser composite_score|toa_only, valor actual: "
                         << routeMetricMode);
     NS_ABORT_MSG_IF(
