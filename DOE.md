@@ -111,12 +111,17 @@ Diego autorizó borrar campañas antiguas (2026-07-23).
   2026-07-24** en local: las 3 celdas producen tráfico y entregas con la forma
   correcta (all-to-all→25 destinos, convergecast→1, multisink→4), guard sin
   abortar; preflight verde en WSL.
-- **G3**: servidor ns3-remote — **conexión resuelta 2026-07-24** (era un
-  multiplexor SSH zombi en el cliente Windows, no el servidor; ver `~/.ssh/config`).
-  Rama `dvcl-module-scaffold` empujada por SSH (HEAD cd7bb0b). **En curso**: el
-  árbol `ns346/ns-3-dev` carecía del módulo `lorawan`; copiado desde el frozen y
-  recompilando. Disco holgado (156 GB libres, 31%): no hace falta limpiar.
-  Pendiente tras build: preflight en el servidor, y decidir política de dos
+- **G3**: servidor ns3-remote — **conexión resuelta** (era un multiplexor SSH
+  zombi en el cliente Windows, no el servidor; ver `~/.ssh/config`). Rama
+  `dvcl-module-scaffold` en el servidor con el HEAD del día. **Árbol de build
+  reparado 2026-07-24**: `ns346/ns-3-dev` (ns-3.46) carecía del módulo `lorawan`;
+  instalado el `lorawan` de la 3.46 (no el del frozen, que es de un ns-3 más
+  viejo con includes incompatibles) y aplicado un parche de higiene de un
+  archivo (`network-scheduler.h` incluía el agregador `core-module.h`, que la
+  guarda `NS3_MODULE_COMPILATION` rechaza). Reproducible en
+  `tools/validation/server_setup_lorawan.sh`. **lorawan + dv-cl + binario de
+  campaña compilan y enlazan.** Disco holgado (156 GB libres): no hace falta
+  limpiar. **En curso**: preflight en el servidor. Pendiente: política de dos
   configs (asserts-on para preflight / release para campañas).
 - **G4**: este DoE aprobado por coautores y storyboard v1 acordado.
 
