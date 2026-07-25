@@ -205,6 +205,7 @@ main(int argc, char* argv[])
     bool allowPayloadOverride = false;
     bool allowInterferenceModelOverride = false;
     bool allowPacketsPerPairOverride = false;
+    bool allowMetricModeOverride = false;
     // §DC-sweep: porcentaje de duty cycle aplicado cuando allowDutyOverride=true
     // (default 1%). Permite barrer el DC (ej. 10%) para analisis de sensibilidad.
     double dutyOverridePct = 1.0;
@@ -475,6 +476,11 @@ main(int argc, char* argv[])
     cmd.AddValue("allowPayloadOverride",
                  "§Robustness: allow CLI dataPayloadSizeBytes to override the Pueyo-fixed 20 B.",
                  allowPayloadOverride);
+    cmd.AddValue("allowMetricModeOverride",
+                 "§DoE E1: permitir que routeMetricMode (y sus pesos) sobreescriba el que "
+                 "fija el perfil, para barrer composite/toa/hops bajo un mismo perfil sin cambiar "
+                 "la base de comparabilidad.",
+                 allowMetricModeOverride);
     cmd.AddValue("allowPacketsPerPairOverride",
                  "§Vida util: permitir que pueyoPacketsPerPair sobreescriba el valor fijado "
                  "por el perfil. Con el valor Pueyo (100) el trafico de datos se agota muy "
@@ -719,6 +725,7 @@ main(int argc, char* argv[])
         DVCL_SNAP(txPowerDbm);
         DVCL_SNAP(useProbabilisticSfForBeacons);
         DVCL_SNAP(wireFormat);
+        DVCL_SNAP(routeMetricMode);
         return snap;
     };
 #undef DVCL_SNAP
@@ -765,6 +772,7 @@ main(int argc, char* argv[])
     const uint32_t cliDataPayloadSizeBytes = dataPayloadSizeBytes;
     const std::string cliInterferenceModel = interferenceModel;
     const uint32_t cliPueyoPacketsPerPair = pueyoPacketsPerPair;
+    const std::string cliRouteMetricMode = routeMetricMode;
 
     constexpr double kPueyoDefaultDataStartPhaseMaxSec = 100.0;
 
@@ -1085,6 +1093,10 @@ main(int argc, char* argv[])
     {
         pueyoPacketsPerPair = cliPueyoPacketsPerPair;
     }
+    if (allowMetricModeOverride)
+    {
+        routeMetricMode = cliRouteMetricMode;
+    }
 
     // Nueve de los parametros que fija el perfil tienen una via legitima para
     // variarlos; los otros 31 no. Nombrar el override en el propio error ahorra
@@ -1096,6 +1108,7 @@ main(int argc, char* argv[])
         {"enableNs3EnergyFramework", "allowEnergyFwOverride"},
         {"interferenceModel", "allowInterferenceModelOverride"},
         {"pueyoPacketsPerPair", "allowPacketsPerPairOverride"},
+        {"routeMetricMode", "allowMetricModeOverride"},
         {"sfMax", "allowPaperLikeSfRangeVariant"},
         {"sfMin", "allowPaperLikeSfRangeVariant"},
         {"shadowingSigmaDb", "allowShadowOverride"},
@@ -1317,7 +1330,7 @@ main(int argc, char* argv[])
                         "Error: profile=" << profileLower << " requiere enableCsma=true");
         NS_ABORT_MSG_IF(!cfg.enableDutyCycle || cfg.dutyLimit != 0.01 || dutyWindowSec != 3600.0,
                         "Error: profile=" << profileLower << " requiere duty 1% con ventana 3600s");
-        NS_ABORT_MSG_IF(routeMetricMode != "composite_score",
+        NS_ABORT_MSG_IF(routeMetricMode != "composite_score" && !allowMetricModeOverride,
                         "Error: profile=" << profileLower
                                           << " requiere routeMetricMode=composite_score");
         NS_ABORT_MSG_IF(beaconLatestOnly,
@@ -1375,7 +1388,7 @@ main(int argc, char* argv[])
                             "duty=on y dutyLimit=0.01");
         }
         NS_ABORT_MSG_IF(
-            routeMetricMode != "composite_score",
+            routeMetricMode != "composite_score" && !allowMetricModeOverride,
             "Error: profile=proposal_pueyo_like_aloha requiere routeMetricMode=composite_score");
         NS_ABORT_MSG_IF(sfLinkMode != "deterministic_sensitivity",
                         "Error: profile=proposal_pueyo_like_aloha requiere "
@@ -1420,7 +1433,7 @@ main(int argc, char* argv[])
                             "duty=on y dutyLimit=0.01");
         }
         NS_ABORT_MSG_IF(
-            routeMetricMode != "composite_score",
+            routeMetricMode != "composite_score" && !allowMetricModeOverride,
             "Error: profile=proposal_pueyo_like_csmacad requiere routeMetricMode=composite_score");
         NS_ABORT_MSG_IF(sfLinkMode != "deterministic_sensitivity",
                         "Error: profile=proposal_pueyo_like_csmacad requiere "
