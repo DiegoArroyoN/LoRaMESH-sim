@@ -4,22 +4,28 @@
 Las métricas se definen en `METRICS.md` (F3.2); la evidencia citada está en
 `VALIDATION.md` con sus datasets versionados en `tools/validation/`.
 
-## 1. Claims que el paper debe sostener
+## 1. Preguntas de investigación e hipótesis
 
-| # | Claim | Bloque | Estado |
+**Los claims se derivan de los datos, no al revés (decisión de Diego,
+2026-07-24).** Las campañas completas y todos los escenarios se corren primero;
+las conclusiones del paper se escriben después, sobre esa evidencia. Lo que
+sigue son las preguntas que el DoE debe poder responder y las hipótesis con su
+evidencia **preliminar** (medida en régimen parcial, a re-confirmar en el
+régimen final antes de afirmarse).
+
+| # | Pregunta / hipótesis | Bloque | Evidencia preliminar |
 |---|---|---|---|
-| C1 | La métrica compuesta cross-layer mejora PDR/vida útil frente a métricas de una capa (ToA, hops, RSSI) bajo duty cycle EU868 1% | E1, E3 | por medir en régimen principal |
-| C2 | El término de energía δ·Ψ redistribuye la **cola** del SoC (no la media) y compra vida útil; el efecto satura en δ≈0.10 (interruptor, no perilla) | E4, E5 | demostrado **sin** duty (VALIDATION 2026-07-22 d/e/g); ver C5 |
-| C3 | En receptores siempre encendidos el ruteo solo gobierna ~1.4% del presupuesto energético: techo de cualquier métrica energy-aware | contexto | medido sin duty; recalcular bajo duty-on |
-| C4 | Sinergia MAC×routing: el beneficio de la métrica compuesta depende del MAC (término de interacción del 2×2) | E2 | hipótesis; el 2×2 ya está declarado en el proyecto de tesis (DV-ToA/DV-CMP × ALOHA/CSMA) |
-| C5 | **El duty cycle 1% actúa como ecualizador implícito de energía**: acota la desigualdad de airtime que el ruteo energy-aware explota. δ·Ψ es dependiente del régimen: FND +0.04% bajo DC 1% vs +9.69% sin DC (colapso 240×), y el canal del beneficio cambia a PDR (+0.52%, t=4.4) | E4 | **medido** (`dutyon8`, 8/8 pares, VALIDATION 2026-07-23) |
+| Q1 | ¿La métrica compuesta cross-layer mejora PDR/vida útil frente a métricas de una capa (ToA, hops, RSSI) bajo duty EU868 1%? | E1, E3 | sin medir en régimen principal |
+| Q2 | ¿Cómo actúa el término δ·Ψ sobre la energía? Hipótesis: redistribuye la **cola** del SoC (no la media) y satura en δ≈0.10 (interruptor, no perilla) | E4, E5 | sostenida **sin** duty (VALIDATION 2026-07-22 d/e/g); ver Q5 |
+| Q3 | ¿Qué fracción del presupuesto energético gobierna el ruteo? Hipótesis: ~1.4% con receptores siempre encendidos (techo de cualquier métrica energy-aware) | contexto | medido sin duty; recalcular duty-on |
+| Q4 | ¿Hay sinergia MAC×routing? ¿El beneficio de la métrica depende del MAC? (término de interacción del 2×2 ALOHA/CSMA × ToA/compuesta) | E2 | sin medir |
+| Q5 | ¿El duty cycle actúa como **ecualizador implícito de energía**, acotando la desigualdad de airtime que δ·Ψ explota? | E4, E4c | sostenida: FND +0.04% duty-on vs +9.69% sin duty (colapso 240×), canal cambia a PDR +0.52% (`dutyon8`, 8/8 pares, VALIDATION 2026-07-23) |
 
-C5 es el hallazgo nuevo y el más citable: Cotrim & Margi (2024) estudian el DC
-como cuello de botella de throughput/latencia en multihop; nadie lo ha
-caracterizado como ecualizador del gasto que anula el margen del ruteo
-energy-aware. El barrido DC% traza la transición entre regímenes, y US915
-(dwell time, sin duty) da la validación de generalidad: allí δ debe recuperar
-su efecto.
+Q5 es la hipótesis más citable si se confirma: Cotrim & Margi (2024) estudian el
+DC como cuello de botella de throughput/latencia; nadie lo ha caracterizado como
+ecualizador del gasto que anula el margen del ruteo energy-aware. El barrido DC%
+(E4) traza la transición entre regímenes y US915 (E4c, sin duty) triangula la
+generalidad: allí δ debería recuperar su efecto.
 
 ## 2. Régimen principal declarado
 
@@ -38,7 +44,7 @@ del régimen principal. E1–E3 los re-establecen bajo duty-on.
 
 | Factor | Niveles | Nota |
 |---|---|---|
-| Métrica | composite / toa_only / hops (α=0,β=1,δ=0) / rssi | hops y toa por atributos, costo cero; rssi = clase pequeña sobre `DvClRoutingMetric` |
+| Métrica | composite / toa_only / hops (α=0,β=1,δ=0) / rssi | hops y toa por atributos, costo cero; **rssi = clase nueva sobre `DvClRoutingMetric` (a implementar), línea completa en E1** |
 | MAC | CSMA/CAD / ALOHA | perfiles existentes, ALOHA validado contra S=G·e^(−2G) |
 | Duty | 1% (principal) / off / DC% ∈ {2,5,10} solo en E4 | `--allowDutyOverride`, `--dutyOverridePct` |
 | Escenario | grid×all-to-all / random×convergecast-1-sink / random×multisink-k (rec: k=4) | plumbing existente; sonda por celda antes de lanzar (gate G2) |
@@ -66,16 +72,16 @@ corrida de 300 ks y el FND mide balizado en red vacía (VALIDATION 2026-07-22 b)
 
 | Bloque | Diseño | Corridas | Tipo |
 |---|---|---|---|
-| E1 ranking de métricas | {composite, toa, hops} × 3 escenarios × 8 N × 20 seeds, duty-on, CSMA/CAD | 1440 | perf |
-| E1b rssi (alcance acotado) | rssi × 2 escenarios × N {9,25,49,100} × 20 | 160 | perf |
+| E1 ranking de métricas | {composite, toa, hops, **rssi**} × 3 escenarios × 8 N × 20 seeds, duty-on, CSMA/CAD (rssi absorbe la antigua E1b) | 1920 | perf |
 | E2 interacción 2×2 | ALOHA × {composite, toa} × 3 esc × 8 N × 20 (celdas CSMA reusadas de E1); sinergia = Δpareada de diferencias | 960 | perf |
 | E3 vida útil | {composite, toa} × {grid-a2a, random-conv1} × N {25,49,100} × 20, duty-on | 240 | lifetime |
-| E4 duty (C5) | DC ∈ {off, 1, 2, 5, 10}% × {δ=0.25, δ=0} × grid-a2a × N {25, 49} × 20 (N=49 con 10 seeds si aprieta) | ≤400 | lifetime |
+| E4 duty (Q5) | DC ∈ {off, 1, 2, 5, 10}% × {δ=0.25, δ=0} × grid-a2a × N {25, 49} × 20 | ≤400 | lifetime |
 | E4b disciplinas | {time_off_air, sliding_window, fixed_window} × 1 config × 4 seeds (apéndice metodológico) | 12 | perf |
-| E4c US915 | perfil US915 (sin duty, dwell 400 ms) × {δ=0.25, δ=0} × grid-a2a × N 25 × 20 — triangulación de C5 | 40 | lifetime |
-| E5 robustez | pesos α/β/δ en random-49 duty-on (8 combos × 8 seeds); interferencia goursaud/pueyo (hecho); bimodal (replicar duty-on solo si C5 lo pide) | ~64 | lifetime |
+| E4c US915 | perfil US915 (sin duty, dwell 400 ms) × {δ=0.25, δ=0} × grid-a2a × N 25 × 20 — triangulación de Q5 | 40 | lifetime |
+| E6 baseline flooding | flooding gestionado × {grid-a2a, random-conv1} × 8 N × 20, duty-on | 320 | perf |
+| E5 robustez | pesos α/β/δ en random-49 duty-on (8 combos × 8 seeds); interferencia goursaud/pueyo (hecho); bimodal (replicar duty-on solo si Q5 lo pide) | ~64 | lifetime |
 
-Totales: ~2 600 perf + ~750 lifetime. Estimación: 400–600 h-core perf,
+Totales: ~3 250 perf + ~750 lifetime. Estimación: 400–600 h-core perf,
 700–1000 h-core lifetime. En un servidor de 16–32 cores: 1–2 semanas de pared.
 Disco: con la disciplina vigente (sin pcap, sin logs verbosos, borrar CSVs
 pesados tras resumir) cada corrida queda en 1–2 MB, el programa completo <20 GB.
@@ -94,14 +100,15 @@ Diego autorizó borrar campañas antiguas (2026-07-23).
 
 ## 7. Baselines de protocolo
 
-- **Flooding gestionado: sí** (recomendado). Lo usan Pueyo, Udugampola y
+- **Flooding gestionado: SÍ** (decidido 2026-07-24). Lo usan Pueyo, Udugampola y
   Joy & Branch; es el estándar industrial de facto (Meshtastic). Implementación
-  sobre el seam existente.
-- **AODV: no**, con justificación citable: el descubrimiento de rutas bajo DC
-  1% es prohibitivo en airtime (Hong 2022 lo usa, pero a 1000 nodos y sin DC
-  explícito). Párrafo en related work.
-- **ETX: decisión abierta** (D2). Pueyo ya lo comparó contra ToA; se puede citar
-  en vez de reimplementar. Implementarlo exige estimador de PRR por enlace.
+  sobre el seam existente → bloque E6.
+- **AODV: NO** (decidido), con justificación citable: el descubrimiento de rutas
+  bajo DC 1% es prohibitivo en airtime (Hong 2022 lo usa, pero a 1000 nodos y sin
+  DC explícito). Párrafo en related work.
+- **ETX: NO implementar, citar a Pueyo** (decidido). Pueyo ya lo comparó contra
+  ToA; reimplementarlo exige un estimador de PRR por enlace (más código y ruido)
+  que no aporta al hilo cross-layer.
 
 ## 8. Gates antes de lanzar campañas
 
@@ -128,29 +135,29 @@ Diego autorizó borrar campañas antiguas (2026-07-23).
   asserts-on. Disco holgado (156 GB libres): no se limpió nada.
 - **G4**: este DoE aprobado por coautores y storyboard v1 acordado.
 
-## 9. Decisiones abiertas para coautores
+## 9. Decisiones (resueltas 2026-07-24)
 
-| # | Decisión | Recomendación |
+| # | Decisión | Resolución |
 |---|---|---|
-| D1 | flooding como baseline | sí |
-| D2 | ETX: medir o citar a Pueyo | citar; implementar solo si un revisor lo exigiera |
-| D3 | alcance de rssi | acotado (E1b); esperada equivalencia≈ToA bajo SF-por-sensibilidad, y eso es un resultado: ToA precia el recurso regulado, RSSI no |
-| D4 | niveles del barrido DC% | {off, 1, 2, 5, 10} |
-| D5 | k de multisink | 4, colocados por `numSinks` |
-| D6 | subsección US915 | sí: triangula C5 con 40 corridas |
+| D1 | flooding como baseline | **SÍ** → E6 |
+| D2 | ETX: medir o citar a Pueyo | **citar a Pueyo** (no implementar) |
+| D3 | rssi | **implementar clase, línea completa en E1** (equivalencia≈ToA esperada bajo SF-por-sensibilidad ES un resultado: ToA precia el recurso regulado, RSSI no) |
+| D4 | niveles del barrido DC% | **{off, 1, 2, 5, 10}** |
+| D5 | k de multisink | 4, colocados por `numSinks` (default salvo aviso) |
+| D6 | subsección US915 | **SÍ** → E4c (~40 corridas) |
 
 ## 10. Storyboard v0 (para discutir, no congelado)
 
-| Fig | Contenido | Claim | Fuente |
+| Fig | Contenido | Pregunta | Fuente |
 |---|---|---|---|
 | F1 | stack DV-CL (protocolo, métrica, MAC, seams) | — | hecho (doc módulo) |
-| F2 | presupuesto energético por actividad | C3 | rehacer duty-on |
-| F3 | mecanismo: cola del SoC (min, p10) con y sin δ | C2 | hecho duty-off; añadir duty-on |
-| F4 | PDR vs N por métrica × escenario | C1 | E1 |
-| F5 | FND/T50 vs N por métrica | C1 | E3 |
-| F6 | interacción 2×2 MAC×métrica (sinergia pareada) | C4 | E2 |
-| **F7** | **ganancia de FND por δ vs DC% (la transición del ecualizador) + punto US915** | **C5** | **E4, E4c** |
-| F8 | Δ-pareadas resumen (forest plot) | C1–C5 | todos |
-| F9 | sensibilidad de pesos (meseta de δ) | C2 | hecho duty-off; E5 |
-| T1 | comparación flooding | C1 | D1 |
+| F2 | presupuesto energético por actividad | Q3 | rehacer duty-on |
+| F3 | mecanismo: cola del SoC (min, p10) con y sin δ | Q2 | hecho duty-off; añadir duty-on |
+| F4 | PDR vs N por métrica × escenario (incl. flooding) | Q1 | E1, E6 |
+| F5 | FND/T50 vs N por métrica | Q1 | E3 |
+| F6 | interacción 2×2 MAC×métrica (sinergia pareada) | Q4 | E2 |
+| **F7** | **ganancia de FND por δ vs DC% (la transición del ecualizador) + punto US915** | **Q5** | **E4, E4c** |
+| F8 | Δ-pareadas resumen (forest plot) | Q1–Q5 | todos |
+| F9 | sensibilidad de pesos (meseta de δ) | Q2 | hecho duty-off; E5 |
+| T1 | comparación flooding | Q1 | E6 |
 | T2 | disciplinas de duty (apéndice metodológico) | — | E4b |
