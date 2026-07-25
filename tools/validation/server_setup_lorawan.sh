@@ -27,6 +27,14 @@ if grep -q 'ns3/core-module.h' "$f"; then
     echo "== parche aplicado a network-scheduler.h =="
 fi
 
+# lorawan es una dependencia, no objeto de estudio: sus ejemplos y tests traen
+# mas includes de agregador que la guarda de ns-3.46 rechaza y romperian el
+# build completo que test.py fuerza. Los quitamos -> lorawan library-only.
+L="$NS3/src/lorawan"
+sed -i '/^  TEST_SOURCES$/d; /^    test\/.*\.cc$/d' "$L/CMakeLists.txt"
+: > "$L/examples/CMakeLists.txt"
+echo "== lorawan dejado library-only (sin examples ni tests) =="
+
 cd "$NS3"
 ./ns3 configure --enable-tests --enable-examples -d default 2>&1 | tail -2
 ./ns3 build dv-cl dv-cl-campaign-example 2>&1 | grep -E 'error:|Linking CXX (shared|exec)|no work' | tail -6

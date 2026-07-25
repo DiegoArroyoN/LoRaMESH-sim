@@ -111,18 +111,21 @@ Diego autorizó borrar campañas antiguas (2026-07-23).
   2026-07-24** en local: las 3 celdas producen tráfico y entregas con la forma
   correcta (all-to-all→25 destinos, convergecast→1, multisink→4), guard sin
   abortar; preflight verde en WSL.
-- **G3**: servidor ns3-remote — **conexión resuelta** (era un multiplexor SSH
-  zombi en el cliente Windows, no el servidor; ver `~/.ssh/config`). Rama
-  `dvcl-module-scaffold` en el servidor con el HEAD del día. **Árbol de build
-  reparado 2026-07-24**: `ns346/ns-3-dev` (ns-3.46) carecía del módulo `lorawan`;
-  instalado el `lorawan` de la 3.46 (no el del frozen, que es de un ns-3 más
-  viejo con includes incompatibles) y aplicado un parche de higiene de un
-  archivo (`network-scheduler.h` incluía el agregador `core-module.h`, que la
-  guarda `NS3_MODULE_COMPILATION` rechaza). Reproducible en
-  `tools/validation/server_setup_lorawan.sh`. **lorawan + dv-cl + binario de
-  campaña compilan y enlazan.** Disco holgado (156 GB libres): no hace falta
-  limpiar. **En curso**: preflight en el servidor. Pendiente: política de dos
-  configs (asserts-on para preflight / release para campañas).
+- **G3**: ~~servidor ns3-remote arriba, sincronizado, preflight~~ **CERRADO
+  2026-07-24. PREFLIGHT OK en el servidor** (10/10 suites, 9 perfiles,
+  agotamiento fnd=5270, guard). Cadena de tres fallos, ninguno el servidor
+  "caído": (1) multiplexor SSH zombi en el cliente Windows (arreglado en
+  `~/.ssh/config`); (2) `ns346/ns-3-dev` (ns-3.46) sin el módulo `lorawan`,
+  instalado el de 3.46; (3) parche de higiene en `lorawan` + dejarlo
+  library-only (sus ejemplos/tests traen agregadores que la guarda de 3.46
+  rechaza). Todo reproducible en `tools/validation/server_setup_lorawan.sh`.
+  **Política de build decidida (2026-07-24): un solo árbol, asserts-on por
+  defecto** — el determinismo bit-idéntico ya se verificó en WSL, y en un
+  servidor de 16 cores el sobrecoste de los asserts es tolerable frente al valor
+  de que el preflight y las campañas corran sobre el mismo binario que aborta
+  ante un bug. Si una campaña grande resulta demasiado lenta, se reconfigura a
+  release para ESA campaña y se re-verifica determinismo contra un punto
+  asserts-on. Disco holgado (156 GB libres): no se limpió nada.
 - **G4**: este DoE aprobado por coautores y storyboard v1 acordado.
 
 ## 9. Decisiones abiertas para coautores
