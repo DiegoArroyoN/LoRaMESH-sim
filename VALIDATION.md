@@ -1996,3 +1996,75 @@ la triangula. Hasta donde revisamos (NotebookLM `Papers_Magister`), nadie ha
 reportado el duty cycle en este rol.
 
 Datos: `tools/validation/dutyon_delta_isolation.csv`. Gate G1 del DoE: cerrado.
+
+## 2026-07-25 — E1/E2 completos: el MAC domina, la métrica de ruteo no mueve el PDR
+
+Campaña E1+E2 del DoE en ns3-remote: **2400 celdas, 0 fallos, 0 huecos**
+(3 escenarios × 8 N {9..100} × 20 semillas × {composite, toa, hops} en CSMA/CAD
+y {composite, toa} en ALOHA). Régimen principal: duty-on 1%, carga Pueyo, 40 ks.
+Todo pareado por semilla.
+
+### Verificación previa: las métricas sí cambian las corridas
+
+Antes de interpretar un resultado nulo hay que descartar que las tres métricas
+sean la misma corrida. No lo son: `composite` vs `toa` coinciden exactamente en
+solo 7/480 celdas (1%), y la diferencia por celda tiene **mediana 2.17%, p90
+8.0% y máximo 20.8%**. La métrica altera el encaminamiento de forma sustancial
+en cada corrida; lo que ocurre es que el signo es aleatorio.
+
+### E1 — ranking de métricas (CSMA/CAD, PDR)
+
+| comparación | media | t | a favor |
+|---|---:|---:|---|
+| composite vs toa | −0.10% | −0.45 | 248/480 |
+| composite vs hops | +0.08% | +0.51 | 201/480 |
+| toa vs hops | +0.34% | +1.58 | 230/480 |
+
+**Las tres métricas son estadísticamente indistinguibles en PDR.** Con n=480 y
+efectos previos detectados a t=16, la potencia sobra: esto es un nulo medido, no
+falta de datos.
+
+Hay estructura por escenario, pequeña y de signo cambiante:
+
+| escenario | composite vs toa | t |
+|---|---:|---:|
+| grid × all-to-all | **+0.75%** | +4.89 |
+| random × convergecast | −0.39% | −0.72 |
+| random × multisink-4 | −0.65% | −2.07 |
+
+La compuesta ayuda donde hay malla real que explotar (all-to-all) y estorba
+levemente donde el destino es único o casi (multisink). Por N no hay tendencia
+monótona.
+
+### E2 — interacción MAC × ruteo
+
+| efecto | media | t | a favor |
+|---|---:|---:|---|
+| **MAC: CSMA/CAD vs ALOHA (composite)** | **+9.28%** | **13.48** | 395/480 |
+| **MAC: CSMA/CAD vs ALOHA (toa)** | **+9.40%** | **13.67** | 395/480 |
+| métrica bajo ALOHA (composite vs toa) | −0.00% | −0.00 | 239/480 |
+| **sinergia** (comp−toa\|CSMA) − (comp−toa\|ALOHA) | −0.10 pp | −0.35 | 228/480 |
+
+**El efecto del MAC es grande y robusto (+9.3% de PDR, 395/480 semillas); el de
+la métrica es nulo; y no hay interacción medible entre ambos.** La hipótesis Q4
+(sinergia cross-layer MAC×ruteo) **no se sostiene en PDR** con estos datos.
+
+### Lectura preliminar (sujeta a E3)
+
+Con lo medido hasta ahora, y solo en PDR: bajo el duty cycle de EU868 la
+elección de MAC gobierna la entrega y la métrica de ruteo casi no. Encaja con
+Q5 (2026-07-23): el 1% regulatorio acota tanto el margen de maniobra que el
+plano de ruteo tiene poco que optimizar.
+
+**Esto no cierra Q1.** El valor reivindicado de la métrica compuesta es la
+**vida útil**, no el PDR, y eso es el bloque E3, aún sin correr. La comparación
+de aquí (composite vs toa) cambia la función de coste entera, distinta del
+aislamiento de δ (2026-07-23), que sí dio +0.52% de PDR bajo duty. Ambos
+resultados conviven: δ dentro de la compuesta ayuda un poco; la compuesta
+entera frente a ToA no se distingue.
+
+Observación de régimen: en grid all-to-all el PDR cae a 0.008 en N=100 — la red
+está saturada y ninguna métrica rescata eso. Los escenarios convergecast y
+multisink degradan mucho más suave (0.067 y 0.130 a N=100).
+
+Datos: `tools/validation/e1e2_results.csv` (2400 filas).
