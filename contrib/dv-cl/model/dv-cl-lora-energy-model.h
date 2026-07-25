@@ -3,7 +3,12 @@
 #ifndef DV_CL_LORA_ENERGY_MODEL_H
 #define DV_CL_LORA_ENERGY_MODEL_H
 
-#include "ns3/energy-module.h"
+// Specific energy headers, never the ns3/energy-module.h aggregator: a module
+// header that includes an aggregator trips ns-3's own guard against it
+// (NS3_MODULE_COMPILATION), which some 3.46 point releases enforce and others
+// tolerate -- the old model included the aggregator and only built by luck.
+#include "ns3/device-energy-model.h"
+#include "ns3/energy-source.h"
 #include "ns3/nstime.h"
 #include "ns3/traced-callback.h"
 

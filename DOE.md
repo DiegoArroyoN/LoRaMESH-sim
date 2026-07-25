@@ -107,10 +107,17 @@ Diego autorizó borrar campañas antiguas (2026-07-23).
 
 - **G1**: ~~`dutyon8` completo y VALIDATION.md actualizado~~ **CERRADO 2026-07-23**
   (8/8 pares, `tools/validation/dutyon_delta_isolation.csv`).
-- **G2**: sonda de cada celda de escenario (convergecast, multisink, random) con
-  el guard de flags activo, más `preflight.sh` verde.
-- **G3**: servidor ns3-remote arriba, árbol sincronizado vía GitHub (está stale
-  desde 2026-07-17), preflight allí, y limpieza de disco de campañas viejas.
+- **G2**: ~~sonda de cada celda de escenario + `preflight.sh` verde~~ **CERRADO
+  2026-07-24** en local: las 3 celdas producen tráfico y entregas con la forma
+  correcta (all-to-all→25 destinos, convergecast→1, multisink→4), guard sin
+  abortar; preflight verde en WSL.
+- **G3**: servidor ns3-remote — **conexión resuelta 2026-07-24** (era un
+  multiplexor SSH zombi en el cliente Windows, no el servidor; ver `~/.ssh/config`).
+  Rama `dvcl-module-scaffold` empujada por SSH (HEAD cd7bb0b). **En curso**: el
+  árbol `ns346/ns-3-dev` carecía del módulo `lorawan`; copiado desde el frozen y
+  recompilando. Disco holgado (156 GB libres, 31%): no hace falta limpiar.
+  Pendiente tras build: preflight en el servidor, y decidir política de dos
+  configs (asserts-on para preflight / release para campañas).
 - **G4**: este DoE aprobado por coautores y storyboard v1 acordado.
 
 ## 9. Decisiones abiertas para coautores
