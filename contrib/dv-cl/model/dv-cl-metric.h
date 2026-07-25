@@ -27,6 +27,11 @@ struct LinkInputs
     double energyFraction{1.0}; //!< next-hop state of charge b in [0,1]; <0 = unknown
     double batteryMv{-1.0};     //!< next-hop terminal voltage, mV; used only when
                                 //!< energyFraction is unknown (<0)
+    double rssiDbm{0.0};        //!< RSSI at which the receiver hears this neighbour,
+                                //!< dBm; a *local* per-link measurement (not on the
+                                //!< wire). 0 means unmeasured. Used only by the RSSI
+                                //!< baseline metric; the composite metric ignores it
+                                //!< (link quality is already embedded in the SF).
 };
 
 /**
@@ -116,6 +121,43 @@ class DvClCompositeMetric : public DvClRoutingMetric
     double m_energyHi{0.50};        //!< bHi
     double m_energyPow{2.0};        //!< p
     double m_energyMaxPenalty{1.0}; //!< PsiMax
+};
+
+/**
+ * \ingroup dv-cl
+ * \brief RSSI-based routing metric — a single-layer baseline (DoE Q1).
+ *
+ * Prices each link by how weakly the receiver hears the neighbour: a strong
+ * link costs little, a weak one costs more, so the distance-vector protocol
+ * prefers strong-signal paths. The per-link cost is
+ *
+ *   c = wRssi * weakness(rssi) + hop,   weakness = clamp((ref - rssi)/(ref - floor), 0, 1)
+ *
+ * where `ref` is the RSSI of a perfect link and `floor` the receiver
+ * sensitivity. Summed along the path exactly like the composite metric, so the
+ * two are directly comparable. `hop` is a small strictly-positive per-hop term:
+ * distance vector needs monotonically increasing path costs, and it also lets
+ * RSSI break ties toward fewer hops.
+ *
+ * RSSI is a *local* measurement (the receiver reads it from the neighbour's
+ * beacon), so nothing new goes on the wire — the same way ToA is local to the
+ * link. Under SF-by-sensitivity, ToA is a step function of RSSI, so this metric
+ * is expected to track ToA closely; measuring that overlap is itself the point
+ * (ToA prices the regulated resource, airtime; RSSI does not).
+ */
+class DvClRssiMetric : public DvClRoutingMetric
+{
+  public:
+    static TypeId GetTypeId();
+
+    double ComputeLinkCost(const LinkInputs& in) const override;
+
+  private:
+    double m_wRssi{1.0};        //!< weight on the normalised weakness term
+    double m_hop{0.05};         //!< strictly-positive per-hop term (monotonicity)
+    double m_refDbm{-30.0};     //!< RSSI of a perfect link -> weakness 0
+    double m_floorDbm{-137.0};  //!< receiver sensitivity -> weakness 1
+    double m_unmeasuredWeakness{0.5}; //!< weakness charged when rssi is unmeasured (0 dBm)
 };
 
 } // namespace dvcl

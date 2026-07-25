@@ -275,6 +275,62 @@ class DvClThesisWeightsTestCase : public TestCase
     }
 };
 
+/**
+ * \ingroup dv-cl
+ * \brief The RSSI baseline metric prices links by signal weakness (DoE Q1).
+ *
+ * A stronger link must cost less than a weaker one, the cost must stay in a
+ * bounded band, an unmeasured link (rssi == 0) must charge a middling weakness
+ * rather than pretend to be perfect, and every link cost must be strictly
+ * positive so the distance-vector path cost stays monotone.
+ */
+class DvClRssiMetricTestCase : public TestCase
+{
+  public:
+    DvClRssiMetricTestCase()
+        : TestCase("dv-cl metric: RSSI baseline prices links by signal weakness")
+    {
+    }
+
+  private:
+    static LinkInputs Rx(double rssiDbm)
+    {
+        LinkInputs in;
+        in.rssiDbm = rssiDbm;
+        return in;
+    }
+
+    void DoRun() override
+    {
+        auto m = CreateObject<DvClRssiMetric>();
+        const double hop = 0.05; // default Hop
+        const double tol = 1e-12;
+
+        // A perfect link (ref = -30 dBm): weakness 0, cost = hop only.
+        NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(Rx(-30.0)), hop, tol, "perfect link");
+        // At the floor (-137 dBm): weakness 1, cost = wRssi*1 + hop = 1.05.
+        NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(Rx(-137.0)), 1.0 + hop, tol, "floor link");
+        // Halfway (-83.5 dBm): weakness 0.5.
+        NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(Rx(-83.5)), 0.5 + hop, tol, "mid link");
+
+        // Monotone: weaker (more negative) RSSI costs strictly more.
+        NS_TEST_ASSERT_MSG_GT(m->ComputeLinkCost(Rx(-100.0)),
+                              m->ComputeLinkCost(Rx(-60.0)),
+                              "weaker link costs more");
+
+        // Unmeasured (rssi == 0) charges the middling weakness, not 0.
+        NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(Rx(0.0)), 0.5 + hop, tol, "unmeasured");
+
+        // Beyond the band it clamps, never goes negative or above the ceiling.
+        NS_TEST_ASSERT_MSG_EQ_TOL(m->ComputeLinkCost(Rx(-10.0)), hop, tol, "stronger than ref clamps");
+        NS_TEST_ASSERT_MSG_GT(m->ComputeLinkCost(Rx(-200.0)), 0.0, "cost always positive");
+
+        // It IS a DvClRoutingMetric (usable behind the F6.1 seam).
+        Ptr<DvClRoutingMetric> asBase = m;
+        NS_TEST_ASSERT_MSG_NE(asBase, nullptr, "usable through the metric seam");
+    }
+};
+
 class DvClTestSuite : public TestSuite
 {
   public:
@@ -285,6 +341,7 @@ class DvClTestSuite : public TestSuite
         AddTestCase(new DvClMetricAnalyticTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClThesisPsiTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClThesisWeightsTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new DvClRssiMetricTestCase, TestCase::Duration::QUICK);
     }
 };
 

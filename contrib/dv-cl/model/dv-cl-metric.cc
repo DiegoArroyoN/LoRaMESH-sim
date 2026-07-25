@@ -18,6 +18,7 @@ namespace dvcl
 
 NS_OBJECT_ENSURE_REGISTERED(DvClRoutingMetric);
 NS_OBJECT_ENSURE_REGISTERED(DvClCompositeMetric);
+NS_OBJECT_ENSURE_REGISTERED(DvClRssiMetric);
 
 constexpr double DvClCompositeMetric::kMaxToaUs[6];
 
@@ -128,6 +129,61 @@ DvClCompositeMetric::ComputeLinkCost(const LinkInputs& in) const
     const double energyCost = EnergyPenalty(in.energyFraction, in.batteryMv);
     NS_LOG_DEBUG("link cost: toa=" << toaCost << " hop=" << hopCost << " energy=" << energyCost);
     return toaCost + hopCost + energyCost;
+}
+
+TypeId
+DvClRssiMetric::GetTypeId()
+{
+    static TypeId tid =
+        TypeId("ns3::dvcl::DvClRssiMetric")
+            .SetParent<DvClRoutingMetric>()
+            .SetGroupName("DvCl")
+            .AddConstructor<DvClRssiMetric>()
+            .AddAttribute("WRssi",
+                          "Weight on the normalised link weakness term.",
+                          DoubleValue(1.0),
+                          MakeDoubleAccessor(&DvClRssiMetric::m_wRssi),
+                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute("Hop",
+                          "Strictly-positive per-hop term (keeps path cost monotone).",
+                          DoubleValue(0.05),
+                          MakeDoubleAccessor(&DvClRssiMetric::m_hop),
+                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute("RefDbm",
+                          "RSSI of a perfect link; weakness is 0 here.",
+                          DoubleValue(-30.0),
+                          MakeDoubleAccessor(&DvClRssiMetric::m_refDbm),
+                          MakeDoubleChecker<double>())
+            .AddAttribute("FloorDbm",
+                          "Receiver sensitivity; weakness is 1 here.",
+                          DoubleValue(-137.0),
+                          MakeDoubleAccessor(&DvClRssiMetric::m_floorDbm),
+                          MakeDoubleChecker<double>())
+            .AddAttribute("UnmeasuredWeakness",
+                          "Weakness charged when RSSI is unmeasured (rssiDbm == 0).",
+                          DoubleValue(0.5),
+                          MakeDoubleAccessor(&DvClRssiMetric::m_unmeasuredWeakness),
+                          MakeDoubleChecker<double>(0.0, 1.0));
+    return tid;
+}
+
+double
+DvClRssiMetric::ComputeLinkCost(const LinkInputs& in) const
+{
+    // rssiDbm == 0 means the receiver never heard this neighbour directly, so
+    // there is no local measurement to price -- charge a fixed middling
+    // weakness rather than pretend the link is perfect.
+    double weakness;
+    if (in.rssiDbm == 0.0)
+    {
+        weakness = m_unmeasuredWeakness;
+    }
+    else
+    {
+        const double span = m_refDbm - m_floorDbm; // e.g. -30 - (-137) = 107
+        weakness = (span > 0.0) ? std::clamp((m_refDbm - in.rssiDbm) / span, 0.0, 1.0) : 0.0;
+    }
+    return m_wRssi * weakness + m_hop;
 }
 
 } // namespace dvcl
