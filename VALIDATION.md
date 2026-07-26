@@ -2160,3 +2160,43 @@ Error de método, no del simulador: código y binario del servidor deben
 sincronizarse **antes** de encolar campañas que usen una función nueva. El
 arreglo verifica con una sonda que el binario acepta `rssi` antes de relanzar
 las 480.
+
+## 2026-07-25 (d) — E1 completo con las cuatro métricas: RSSI gana en la rejilla
+
+2880 celdas, 0 fallos (480 por métrica × 4 en CSMA/CAD, + 960 de E2 en ALOHA).
+PDR pareado por semilla, duty-on 1%, 40 ks.
+
+**Globalmente las cuatro métricas siguen siendo indistinguibles** (todas dentro
+de ±0.5%, |t| máximo 2.65 sobre n=480). Pero por escenario aparece estructura, y
+no la que yo esperaba:
+
+| en grid all-to-all | media | t | a favor |
+|---|---:|---:|---|
+| **rssi vs toa** | **+1.96%** | **11.73** | 127/160 |
+| **rssi vs composite** | **+1.22%** | **9.16** | 125/160 |
+
+En convergecast y multisink todo es nulo. Es decir: **en el escenario de estrés
+de malla, la línea de referencia de una sola capa (RSSI) entrega mejor que la
+métrica compuesta cross-layer.** Consistente en los ocho tamaños de red: RSSI es
+la más alta en cada N de `grid_a2a`, de 0.3112 en N=9 a 0.0083 en N=100.
+
+### Una predicción mía que resultó falsa
+
+En el DoE escribí que se esperaba «equivalencia ≈ ToA bajo SF-por-sensibilidad»,
+razonando que si el SF se elige por sensibilidad entonces el ToA es función
+escalonada del RSSI y ambas métricas ordenarían igual. **Es falso, y los datos
+lo dicen sin ambigüedad**: rssi y toa coinciden exactamente en 4 de 480 celdas,
+con |Δ| mediana 2.43% y p90 8.0%. Encaminan distinto.
+
+La razón, en retrospectiva: el ToA acumulado a lo largo del camino no es una
+función monótona del RSSI del último salto — el ToA suma sobre saltos y el RSSI
+que mide esta métrica es por enlace. Dos caminos con el mismo RSSI de primer
+salto pueden tener ToA de camino muy distinto, y viceversa. La equivalencia solo
+valdría enlace a enlace, no camino a camino.
+
+Consecuencia para el paper: RSSI **no** se puede descartar como redundante con
+ToA. Es una línea de referencia legítima y, en la rejilla, mejor. Tampoco
+procede ya el argumento de que «ToA precia el recurso regulado y RSSI no» como
+si eso implicara ventaja de ToA en entrega: bajo duty 1% no la implica.
+
+Datos: `tools/validation/e1e2_results.csv` (2880 filas).
