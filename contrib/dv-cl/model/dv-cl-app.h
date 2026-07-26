@@ -522,6 +522,27 @@ class DvClApp : public Application
         bool hadRoute{false};
     };
 
+    /// Plano de datos alternativo: inundación gestionada estilo Meshtastic, la
+    /// línea de referencia externa del DoE (E6). Con m_floodingMode activo el
+    /// nodo no consulta la tabla de rutas: difunde y cada vecino redifunde una
+    /// sola vez (la dedup por {src,dst,seq} de m_seenOnce ya lo garantiza)
+    /// hasta agotar el TTL.
+    bool m_floodingMode{false};
+    /// Espera aleatoria antes de redifundir, en ms. Sin ella todos los vecinos
+    /// redifunden a la vez y colisionan entre sí; es el mecanismo de contención
+    /// que usa cualquier inundación gestionada real.
+    uint32_t m_floodJitterMs{500};
+    Ptr<UniformRandomVariable> m_floodJitterRng;
+    /// via = 0xFFFF marca "difundido": todo receptor lo procesa, en vez del
+    /// filtro por siguiente salto que usa el plano DV.
+    static constexpr uint16_t kFloodVia = 0xFFFF;
+    void FloodRebroadcast(Ptr<const Packet> payload,
+                          uint16_t src,
+                          uint16_t dst,
+                          uint16_t seq16,
+                          uint8_t nextTtl,
+                          uint8_t sf);
+
     // Deduplicación de datos por nodo (no afecta DV)
     std::map<std::tuple<uint32_t, uint32_t, uint32_t>, SeenDataInfo>
         m_seenData;                       // {src,dst,seq} -> info

@@ -206,6 +206,8 @@ main(int argc, char* argv[])
     bool allowInterferenceModelOverride = false;
     bool allowPacketsPerPairOverride = false;
     bool allowMetricModeOverride = false;
+    bool floodingMode = false;
+    uint32_t floodJitterMs = 500;
     // §DC-sweep: porcentaje de duty cycle aplicado cuando allowDutyOverride=true
     // (default 1%). Permite barrer el DC (ej. 10%) para analisis de sensibilidad.
     double dutyOverridePct = 1.0;
@@ -476,6 +478,15 @@ main(int argc, char* argv[])
     cmd.AddValue("allowPayloadOverride",
                  "§Robustness: allow CLI dataPayloadSizeBytes to override the Pueyo-fixed 20 B.",
                  allowPayloadOverride);
+    cmd.AddValue("floodingMode",
+                 "§DoE E6: plano de datos por inundacion gestionada (linea de referencia "
+                 "externa). No se consulta la tabla de rutas: se difunde y cada vecino "
+                 "redifunde una vez hasta agotar el TTL. El plano de control (balizas DV) "
+                 "sigue activo pero no se usa para encaminar datos.",
+                 floodingMode);
+    cmd.AddValue("floodJitterMs",
+                 "§DoE E6: espera aleatoria [0,x) ms antes de redifundir (contencion).",
+                 floodJitterMs);
     cmd.AddValue("allowMetricModeOverride",
                  "§DoE E1: permitir que routeMetricMode (y sus pesos) sobreescriba el que "
                  "fija el perfil, para barrer composite/toa/hops bajo un mismo perfil sin cambiar "
@@ -2111,6 +2122,26 @@ main(int argc, char* argv[])
                 wapp->SetStatsSink(s_collectorKeepAlive);
             }
         }
+    }
+
+    // §DoE E6: inundacion gestionada como plano de datos (linea de referencia).
+    if (floodingMode)
+    {
+        uint32_t configured = 0;
+        for (uint32_t i = 0; i < nodes.GetN(); ++i)
+        {
+            for (uint32_t a = 0; a < nodes.Get(i)->GetNApplications(); ++a)
+            {
+                if (auto capp = DynamicCast<DvClApp>(nodes.Get(i)->GetApplication(a)))
+                {
+                    capp->SetAttribute("FloodingMode", BooleanValue(true));
+                    capp->SetAttribute("FloodJitterMs", UintegerValue(floodJitterMs));
+                    ++configured;
+                }
+            }
+        }
+        NS_LOG_INFO("Flooding habilitado en " << configured << " nodos (jitter " << floodJitterMs
+                                              << " ms)");
     }
 
     // ========================================================================

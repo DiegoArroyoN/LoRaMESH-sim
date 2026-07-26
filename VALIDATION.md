@@ -2200,3 +2200,41 @@ procede ya el argumento de que «ToA precia el recurso regulado y RSSI no» como
 si eso implicara ventaja de ToA en entrega: bajo duty 1% no la implica.
 
 Datos: `tools/validation/e1e2_results.csv` (2880 filas).
+
+## 2026-07-25 (e) — Flooding gestionado implementado (E6): baja el aire, no lo sube
+
+Línea de referencia externa del DoE (decisión D1). Inundación estilo Meshtastic
+sobre el mismo stack: `FloodingMode=true` desactiva la consulta de la tabla de
+rutas; el origen difunde, cada vecino redifunde **una sola vez** —la dedup por
+`{src,dst,seq}` de `m_seenOnce` ya existía y lo garantiza— hasta agotar el TTL.
+Se marca `via=0xFFFF` para que todo receptor lo procese, en vez del filtro por
+siguiente salto del plano DV. `FloodJitterMs` (500 ms por defecto) desincroniza
+las redifusiones; sin él los vecinos redifunden a la vez y colisionan.
+
+Sonda (25 nodos, grid all-to-all, 20 ks, duty-on 1%, seed 3):
+
+| plano de datos | PDR | entregados | Tx origen | Tx relevo | **Tx datos total** | saltos |
+|---|---:|---:|---:|---:|---:|---:|
+| DV-CL (composite) | **0.1004** | **4987** | 22176 | 1656 | **23832** | 0.064 |
+| flooding (jitter 500 ms) | 0.0677 | 3360 | 9177 | 14767 | 23944 | 0.725 |
+| flooding (sin jitter) | 0.0662 | 3289 | 9035 | 15001 | 24036 | 0.721 |
+
+**El total de transmisiones es prácticamente el mismo en los tres casos
+(~24 000), porque el duty cycle lo acota.** Esa es la observación interesante:
+bajo restricción regulatoria el flooding no puede «gastar más aire para entregar
+más»; lo que hace es gastar el mismo presupuesto en redifusiones redundantes
+(14 767 relevos frente a 1 656) a costa de las transmisiones de origen, que caen
+de 22 176 a 9 177. Resultado: **entrega un 33% menos con el mismo coste**.
+
+El jitter aporta poco aquí (0.0677 vs 0.0662): bajo duty 1% el propio gate ya
+espacia las transmisiones, así que la contención extra apenas añade. Se mantiene
+por realismo y porque en regímenes sin duty sí importa.
+
+Determinismo: el modo DV no se altera (composite reproduce 0.1004 / 4987 / 1656
+exactamente igual que antes del cambio). Suites 10/10.
+
+Defecto propio corregido en el camino: la primera versión pasaba
+`logTxMetrics=false` al difundir, así que las transmisiones del flooding no se
+contaban y los contadores salían en cero — justo la magnitud que la comparación
+mide. Ahora se registran y el colector las clasifica por `nodeId != src` como en
+el plano DV.

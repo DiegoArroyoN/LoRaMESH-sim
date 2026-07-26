@@ -610,6 +610,19 @@ DvClApp::GetTypeId()
                           TimeValue(Seconds(300)),
                           MakeTimeAccessor(&DvClApp::m_linkAddrCacheWindow),
                           MakeTimeChecker())
+            .AddAttribute("FloodingMode",
+                          "Plano de datos por inundacion gestionada (linea de referencia "
+                          "externa del DoE, E6): no se consulta la tabla de rutas; se difunde "
+                          "y cada vecino redifunde una sola vez hasta agotar el TTL.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&DvClApp::m_floodingMode),
+                          MakeBooleanChecker())
+            .AddAttribute("FloodJitterMs",
+                          "Espera aleatoria [0,x) ms antes de redifundir. Sin ella todos los "
+                          "vecinos redifunden a la vez y colisionan.",
+                          UintegerValue(500),
+                          MakeUintegerAccessor(&DvClApp::m_floodJitterMs),
+                          MakeUintegerChecker<uint32_t>())
             .AddAttribute("DedupWindowSec",
                           "Dedup cache TTL for dataplane keys (src,dst,seq16).",
                           TimeValue(Seconds(600)),
@@ -4063,7 +4076,9 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
         }
     }
 
-    if (myId != via && myId != dst)
+    // En inundacion el paquete va marcado como difundido y lo procesa todo el
+    // que lo oiga; en DV solo el siguiente salto designado o el destino.
+    if (via != kFloodVia && myId != via && myId != dst)
     {
         return true;
     }
@@ -4123,6 +4138,63 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
 }
 
 void
+DvClApp::FloodRebroadcast(Ptr<const Packet> payload,
+                          uint16_t src,
+                          uint16_t dst,
+                          uint16_t seq16,
+                          uint8_t nextTtl,
+                          uint8_t sf)
+{
+    const uint32_t myId = GetNode()->GetId();
+    Ptr<Packet> out = payload ? payload->Copy() : Create<Packet>(0);
+
+    DvClDataHeader hdr;
+    hdr.SetSrc(src);
+    hdr.SetDst(dst);
+    hdr.SetVia(kFloodVia); // difundido: lo procesa todo receptor
+    hdr.SetFlagsTtl(PackFlagsTtl(DvClPacketType::DATA, nextTtl));
+    out->AddHeader(hdr);
+
+    DvClMetricTag traceTag;
+    traceTag.SetSrc(src);
+    traceTag.SetDst(dst);
+    traceTag.SetSeq(seq16);
+    traceTag.SetPrevHop(static_cast<uint16_t>(myId));
+    traceTag.SetExpectedNextHop(kFloodVia);
+    traceTag.SetTtl(nextTtl);
+    traceTag.SetHops((m_initTtl > nextTtl) ? static_cast<uint8_t>(m_initTtl - nextTtl) : 0);
+    traceTag.SetSf(sf);
+    traceTag.SetToaUs(ComputeLoRaToAUs(sf, m_bw, m_cr, out->GetSize()));
+    traceTag.SetBatt_mV(GetBatteryVoltageMv());
+    traceTag.SetScoreX100(ComputeScoreX100(traceTag));
+    DvClMetricTag previousTrace;
+    out->RemovePacketTag(previousTrace);
+    out->AddPacketTag(traceTag);
+
+    // Espera aleatoria para desincronizar a los vecinos, que de otro modo
+    // redifundirian a la vez y colisionarian entre si.
+    if (m_floodJitterMs > 0)
+    {
+        if (!m_floodJitterRng)
+        {
+            m_floodJitterRng = CreateObject<UniformRandomVariable>();
+        }
+        const double waitMs = m_floodJitterRng->GetValue(0.0, static_cast<double>(m_floodJitterMs));
+        Simulator::Schedule(MilliSeconds(static_cast<uint64_t>(waitMs)),
+                            &DvClApp::SendWithCSMA,
+                            this,
+                            out,
+                            traceTag,
+                            Address(),
+                            true); // registrar: el coste en Tx es el eje de la comparacion
+    }
+    else
+    {
+        SendWithCSMA(out, traceTag, Address(), true);
+    }
+}
+
+void
 DvClApp::ForwardWithTtlV2(Ptr<const Packet> pIn,
                           uint16_t src,
                           uint16_t dst,
@@ -4135,6 +4207,19 @@ DvClApp::ForwardWithTtlV2(Ptr<const Packet> pIn,
         m_dropTtlExpired++;
         return;
     }
+    if (m_floodingMode)
+    {
+        // Inundacion: sin tabla de rutas. La dedup de m_seenOnce garantiza que
+        // este nodo solo redifunde una vez este {src,dst,seq}.
+        FloodRebroadcast(pIn,
+                         src,
+                         dst,
+                         seq16,
+                         static_cast<uint8_t>(ttl - 1),
+                         std::clamp<uint8_t>(m_sf, m_sfMin, m_sfMax));
+        return;
+    }
+
     const RouteEntry* route = m_routing ? m_routing->GetRoute(dst) : nullptr;
     if (!route)
     {
@@ -4583,6 +4668,18 @@ DvClApp::SendDataPacketPueyo7b(uint32_t dst)
     if (m_stats)
     {
         m_stats->RecordDataGenerated(myId, dst, seq16);
+    }
+
+    if (m_floodingMode)
+    {
+        // Inundacion: el origen difunde sin ruta. TTL completo.
+        FloodRebroadcast(Create<Packet>(m_dataPayloadSize),
+                         static_cast<uint16_t>(myId),
+                         static_cast<uint16_t>(dst),
+                         seq16,
+                         std::min<uint8_t>(m_initTtl, 63),
+                         std::clamp<uint8_t>(m_sf, m_sfMin, m_sfMax));
+        return;
     }
 
     const RouteEntry* route = m_routing ? m_routing->GetRoute(dst) : nullptr;
