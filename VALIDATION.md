@@ -2109,3 +2109,54 @@ caótico donde diferencias de coma flotante cambian una decisión de ruta y
 cascadean. Consecuencia: **todo dato del paper sale del servidor**; WSL es solo
 para desarrollo y tests. Ya se cumplía (E1/E2 y E3 son del servidor), pero
 conviene tenerlo escrito junto a la regla de no recompilar a mitad de lote.
+
+## 2026-07-25 (c) — E3 completo: la métrica compuesta NO alarga la vida útil
+
+240 celdas, 0 fallos, tráfico sostenido verificado en las 240 (`last_data_s`
+≥ 250 ks en todas). {composite, toa} × {grid all-to-all, random convergecast} ×
+N {25, 49, 100} × 20 semillas, 300 ks, duty-on 1%. Pareado por semilla.
+
+| composite vs toa | media | t | a favor |
+|---|---:|---:|---|
+| **relevos** | **−28.02%** | **−51.40** | **120/120** |
+| PDR | +1.71% | +12.10 | 105/120 |
+| **FND (vida útil)** | **+0.03%** | +3.61 | 77/120 |
+| T50 | −0.01% | −1.29 | 53/120 |
+| energía TX | −0.02% | −4.68 | 49/120 |
+
+**Q1 queda respondida en su propio terreno, y la respuesta es que no.** La
+métrica compuesta reduce el relevo un 28% —en las 120 parejas, sin una sola
+excepción— y aun así la vida útil no se mueve: +0.03% de FND son ~60 segundos
+sobre 180 000. Es detectable estadísticamente y nulo en la práctica. T50 ni
+siquiera es detectable. Estable por escenario (+0.03% en ambos) y por tamaño
+(N=25/49/100).
+
+El mecanismo ya estaba medido y aquí se confirma a escala: la compuesta lleva
+coste explícito por salto (β=0.15) y `toa_only` no, así que prefiere caminos
+cortos. Pero el total de transmisiones apenas cambia — **mueve transmisiones de
+relevo a origen, no las elimina** — y por eso la energía TX no baja (−0.02%) y
+el FND no responde. Consistente con Q3/Q5: bajo duty 1% el relevo es una
+fracción pequeña del presupuesto, dominado por idle y balizado.
+
+### Lo que sí gana: entrega durante la degradación
+
+El PDR sube +1.71% (t=12.10, 105/120), y esto **contrasta con E1**, donde la
+misma comparación dio −0.10% (nulo). Las dos campañas difieren en duración
+(40 ks vs 300 ks) y en carga (100 vs 1400 paq/par), y solo en E3 los nodos
+mueren. La lectura natural es que la ventaja aparece cuando la red se degrada:
+la compuesta no retrasa la primera muerte, pero entrega mejor mientras la red
+se va muriendo. **Es una hipótesis con confusor** —duración y carga cambian a
+la vez— y separarlas exigiría una corrida larga sin agotamiento. No se afirma
+como resultado.
+
+Datos: `tools/validation/e3_results.csv`.
+
+### Fallo de despliegue: las 480 celdas de RSSI de E1
+
+Salieron todas con rc≠0. Causa: extendí el runner con `rssi` y lo encadené,
+pero **no desplegué el binario nuevo al servidor**; su copia era del 24-jul y
+aborta en la validación `routeMetricMode debe ser composite_score|toa_only`.
+Error de método, no del simulador: código y binario del servidor deben
+sincronizarse **antes** de encolar campañas que usen una función nueva. El
+arreglo verifica con una sonda que el binario acepta `rssi` antes de relanzar
+las 480.
