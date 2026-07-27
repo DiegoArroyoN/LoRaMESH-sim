@@ -2728,3 +2728,77 @@ primero por qué se concentra la carga, que puede revelar otro defecto o un
 resultado de fondo.
 
 Datos: `tools/validation/e5_joint.csv`.
+
+## 2026-07-27 (c) — El mecanismo de la paradoja, y un confusor que la explicaba en parte
+
+Diagnostico de dispersion: 48 celdas a 150 ks (N=25, 8 semillas, toa_only vs
+compuesta con delta 0 y 0.5, dos brazos de bateria). 150 ks y no 300 ks porque
+a 300 ks todos acaban en SoC 0 y no se mide dispersion sobre una constante; a
+150 ks nadie ha muerto y el consumo por nodo es medida limpia. Datos:
+`tools/validation/e5_dispersion.csv`.
+
+### Las tres hipotesis
+
+| | veredicto |
+|---|---|
+| H1 concentracion de carga | **falsa** |
+| H2 coste por transmision | **confirmada, dominante** |
+| H3 artefacto de supervivencia | **confirmada** |
+
+**H1 descartada.** El CV del consumo por nodo sube un 55% y el Gini un 50%,
+que suena mucho, pero en absoluto va de 0.00036 a 0.00055: ambos son cero a
+efectos practicos. En rejilla all-to-all la carga se reparte casi
+perfectamente. El nodo mas cargado sube +0.78% y la media +0.75%: sube todo el
+mundo por igual, no se redistribuye nada.
+
+**H2 es el mecanismo.** La compuesta hace **8.8% menos transmisiones** de datos
+y cada una cuesta **11.0% mas de airtime**, con lo que el airtime total sube
+**1.26%**. El reparto de SF lo dice todo: SF8 pasa del **1.7% al 14.6%** de las
+transmisiones, y los saltos por transmision caen un **34%**. Cambia cadenas de
+saltos cortos en SF7 por saltos largos en SF8. Menos saltos explica el PDR
+mejor; mas airtime explica la muerte antes.
+
+Control: el SF medio y el airtime de las **balizas** coinciden entre brazos
+(7.3326/7.3310 y 11502/11466 s). Su SF lo rota una PMF geometrica ajena al
+ruteo, asi que si difiriesen habria un problema de instrumentacion.
+
+**H3 confirmada, y anula un dato anterior.** A 150 ks, con nadie muerto, la
+compuesta gasta **+0.75% de TX y +1.70% de energia total**. El -0.4% que se
+midio a 300 ks era sesgo de supervivencia: sus nodos morian antes y dejaban de
+gastar, asi que acumulaban menos.
+
+### El confusor: la histeresis dependia del modo de metrica
+
+Buscando por que dFND no respondia a los pesos —entre -1.69% y -2.23% sobre un
+rango de 12.5x en beta y 5x en alfa— aparecio la causa. En
+`dv-cl-routing.cc` la amortiguacion de conmutacion era:
+
+```cpp
+const bool applyHysteresis = (m_metricMode != MetricMode::TOA_ONLY);
+```
+
+`toa_only` era el **unico** modo que cambiaba de ruta ante cualquier mejora
+bruta; los demas exigian que la mejora sobreviviese a la cuantizacion del
+score. Como toa_only es la referencia de toda comparacion de ruteo, cada
+comparacion mezclaba la formula de la metrica con la pegajosidad de la ruta. Y
+como el gate ignora los pesos, el sesgo era plano sobre toda la rejilla, que es
+justo lo que lo hacia parecer una propiedad de la metrica compuesta.
+
+Viene del commit c329f6da8 (cableado de RSSI): ahi se detecto el confusor entre
+RSSI y compuesta y se extendio la histeresis a "toda metrica que no sea
+toa_only", lo que arreglo esa comparacion y dejo fuera justamente a la
+referencia.
+
+Corregido: atributo `RouteSwitchHysteresis` (por defecto true) en `DvClRouting`
+y `DvClApp`, flag `--routeSwitchHysteresis`, aplicado por igual a todos los
+modos. Prueba `DvClRoutingHysteresisIsModeAgnosticTestCase`, verificada por
+control negativo: falla al reintroducir el gate. Suites 134/134.
+
+### Que queda en pie y que no
+
+El mecanismo H2/H3 es **independiente del confusor**: describe lo que hacen las
+rutas, no de que arm vienen. Lo que **no** se puede atribuir todavia es la
+causa: si el intercambio saltos-por-SF lo produce la formula de la metrica o la
+pegajosidad de la ruta. Lanzado el 2x2 metrica x histeresis (32 celdas, 300 ks)
+para separarlo; hasta que cierre, **las cifras del barrido conjunto de hoy no
+son atribuibles a la metrica**.
