@@ -738,6 +738,15 @@ DvClRouting::BattMvToEFrac(uint16_t battMv)
     return std::clamp((static_cast<double>(battMv) - vMin) / (vMax - vMin), 0.0, 1.0);
 }
 
+void
+DvClRouting::SetDataToaForSf(uint8_t sf, double toaUs)
+{
+    if (sf >= 7 && sf <= 12 && toaUs > 0.0)
+    {
+        m_dataToaBySf[sf - 7] = toaUs;
+    }
+}
+
 double
 DvClRouting::ComputeThesisLinkCost(double toaUs,
                                    uint8_t sf,
@@ -751,6 +760,15 @@ DvClRouting::ComputeThesisLinkCost(double toaUs,
     in.sf = sf;
     in.energyFraction = neighborEFrac;
     in.rssiDbm = rssiDbm;
+    // Precia el enlace por lo que costaria enviar DATOS por el, no por lo que
+    // costo la baliza que lo anuncio: esta ultima es mucho mayor y su tamano
+    // depende de cuantas rutas lleve, no del enlace.
+    const uint8_t sfClamped = std::clamp<uint8_t>(sf, 7, 12);
+    const double refToa = m_dataToaBySf[sfClamped - 7];
+    if (refToa > 0.0)
+    {
+        in.toaUs = refToa;
+    }
     return m_metric->ComputeLinkCost(in);
 }
 

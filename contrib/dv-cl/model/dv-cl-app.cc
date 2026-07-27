@@ -1425,6 +1425,20 @@ DvClApp::StartApplication()
     m_routing->SetAdvertRoutePolicy(m_routeAdvertPolicy);
     m_routing->SetSinkNodeId(m_collectorNodeId);
     m_routing->SetRouteSwitchMinDeltaX100(m_routeSwitchMinDeltaX100);
+    // Airtime de un paquete de DATOS en cada SF, para que el coste de enlace
+    // precie el transporte de datos y no la baliza que anuncio la ruta. La app
+    // es quien conoce la carga util y los parametros de radio.
+    {
+        const uint32_t dataBytes = m_dataPayloadSize + DvClDataHeader::kSerializedSize;
+        for (uint8_t sf = 7; sf <= 12; ++sf)
+        {
+            m_routing->SetDataToaForSf(sf,
+                                       static_cast<double>(ComputeLoRaToAUs(sf,
+                                                                            m_bw,
+                                                                            m_cr,
+                                                                            dataBytes)));
+        }
+    }
     m_routing->SetRouteChangeCallback(MakeCallback(&DvClApp::HandleRouteChange, this));
     m_routing->SetFloodCallback(MakeCallback(&DvClApp::HandleFloodRequest, this));
     m_routing->SetLocalEnergyFractionCallback(MakeCallback(&DvClApp::GetEnergyFraction, this));

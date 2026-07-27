@@ -88,7 +88,20 @@ class DvClCompositeMetric : public DvClRoutingMetric
     double ComputeLinkCost(const LinkInputs& in) const override;
 
     /**
-     * \brief ToA normalization: toaUs / kMaxToaUs[sf], capped at 1.
+     * \brief ToA normalization to [0,1]. Two modes, and the choice decides
+     *        whether the term does any work at all.
+     *
+     * - `global` (default): one ceiling for every link, the airtime of a
+     *   maximum-payload frame at SF12. An SF12 link then prices ~25x an SF7
+     *   link, which is the cross-layer signal the metric claims to carry:
+     *   airtime is the regulated resource.
+     * - `per_sf` (the thesis text, kept to reproduce it): divide by the
+     *   maximum for *that* spreading factor. Numerator and denominator scale
+     *   together, so with a fixed payload T_hat moves only ~9% between SF7 and
+     *   SF12 — the term cannot price airtime whatever the ceiling is, and with
+     *   the inherited ceilings it also saturated at 1 for 90% of links, which
+     *   collapsed the whole metric onto hop count (VALIDATION.md 2026-07-25).
+     *
      * \param toaUs time-on-air in microseconds
      * \param sf spreading factor (clamped to 7..12)
      * \return ToA_hat in [0,1]
@@ -113,6 +126,12 @@ class DvClCompositeMetric : public DvClRoutingMetric
     // does not affect ranking, only the scale of ToA_hat).
     static constexpr double kMaxToaUs[6] =
         {143360.0, 256512.0, 462848.0, 829440.0, 1810432.0, 3293184.0};
+
+    /// Normalisation mode: true = single global ceiling, false = per-SF (thesis).
+    bool m_toaNormGlobal{true};
+    /// Global ceiling, microseconds: airtime of a 222 B payload at SF12 with a
+    /// 16-symbol preamble, i.e. the worst frame this radio ever puts on air.
+    double m_toaCeilingUs{8462336.0};
 
     double m_wToa{0.60};            //!< alpha
     double m_wHop{0.15};            //!< beta (constant per hop)

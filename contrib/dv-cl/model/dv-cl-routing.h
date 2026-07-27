@@ -188,6 +188,20 @@ class DvClRouting : public Object
     std::vector<RouteAnnouncement> GetBestRoutes(uint32_t maxRoutes) const;
     std::vector<RouteAnnouncement> GetBestRoutesPueyo(uint32_t maxRoutes) const;
 
+    /**
+     * \brief Airtime a DATA frame would take over a link at this spreading
+     *        factor, microseconds. Zero (the default) means "not set".
+     *
+     * The link cost should price what it costs to carry data over the link,
+     * not what the beacon that advertised it happened to cost. Feeding the
+     * beacon's airtime was doubly wrong: beacons are far larger than data, so
+     * the normalisation saturated, and their size varies with how many routes
+     * they carry rather than with the link (VALIDATION.md 2026-07-25). The
+     * application knows the payload size and radio parameters, so it fills
+     * this table once at startup.
+     */
+    void SetDataToaForSf(uint8_t sf, double toaUs);
+
   private:
     static constexpr uint8_t kDefaultMaxHops = 10; // Thesis: H_max default
 
@@ -216,6 +230,7 @@ class DvClRouting : public Object
                                  uint8_t sf,
                                  double neighborEFrac,
                                  double rssiDbm = 0.0) const;
+
     /// The built-in composite metric if that is what is plugged, else nullptr.
     DvClCompositeMetric* BuiltinMetricOrNull() const;
     void SetAttrWToa(double v);
@@ -259,6 +274,10 @@ class DvClRouting : public Object
     uint16_t m_routeSwitchMinDeltaX100{5};
     bool m_advertiseAllRoutes{false};
     AdvertRoutePolicy m_advertRoutePolicy{AdvertRoutePolicy::TOP_SCORE};
+    /// ToA de un paquete de DATOS por SF (indice 0 = SF7). 0 = sin fijar, en
+    /// cuyo caso se usa el ToA que llegue (comportamiento heredado).
+    double m_dataToaBySf[6]{0, 0, 0, 0, 0, 0};
+
     MetricMode m_metricMode{MetricMode::COMPOSITE_SCORE};
     CostEncoding m_costEncoding{CostEncoding::COST255};
     double m_compositeCostStep{0.025}; // quantization step for COST255 byte

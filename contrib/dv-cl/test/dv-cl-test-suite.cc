@@ -3,6 +3,7 @@
 #include "ns3/double.h"
 #include "ns3/dv-cl-metric.h"
 #include "ns3/dv-cl-toa.h"
+#include "ns3/boolean.h"
 #include "ns3/test.h"
 
 namespace ns3
@@ -94,6 +95,9 @@ class DvClMetricAnalyticTestCase : public TestCase
     void DoRun() override
     {
         auto m = CreateObject<DvClCompositeMetric>();
+        // Formula de la tesis: normalizacion POR SF. Declarada de forma
+        // explicita porque el defecto del modulo es la global (2026-07-25).
+        m->SetAttribute("ToaNormGlobal", BooleanValue(false));
         const double tol = 1e-9;
 
         // Full battery, ToA at the SF7 ceiling: 0.60*1 + 0.15 + 0 = 0.75.
@@ -187,6 +191,7 @@ class DvClThesisPsiTestCase : public TestCase
     void DoRun() override
     {
         auto metric = CreateObject<DvClCompositeMetric>();
+        metric->SetAttribute("ToaNormGlobal", BooleanValue(false));
         const double delta = 0.25; // WEnergy default; EnergyPenalty folds it in
 
         // b >= b_hi: no penalty at all. This is what makes a fully charged
@@ -250,6 +255,7 @@ class DvClThesisWeightsTestCase : public TestCase
     void DoRun() override
     {
         auto m = CreateObject<DvClCompositeMetric>();
+        m->SetAttribute("ToaNormGlobal", BooleanValue(false));
         DoubleValue v;
 
         m->GetAttribute("WToa", v);
@@ -331,6 +337,71 @@ class DvClRssiMetricTestCase : public TestCase
     }
 };
 
+/**
+ * \ingroup dv-cl
+ * rief La normalizacion global de ToA SI distingue factores de dispersion.
+ *
+ * Es la razon de ser del modo global. Con normalizacion por SF, numerador y
+ * denominador escalan juntos y T_hat apenas cambia entre SF7 y SF12 (~9% con
+ * carga fija), asi que el termino no puede preciar el aire. Con un techo unico
+ * un enlace a SF12 cuesta mucho mas que uno a SF7, que es la senal cross-layer
+ * que la metrica dice llevar.
+ *
+ * Ademas fija que el techo por defecto NO se sature con trafico realista: el
+ * defecto que colapso la metrica sobre el conteo de saltos era exactamente eso
+ * (VALIDATION.md 2026-07-25).
+ */
+class DvClToaGlobalNormTestCase : public TestCase
+{
+  public:
+    DvClToaGlobalNormTestCase()
+        : TestCase("dv-cl metric: la normalizacion global de ToA distingue SF y no satura")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        auto m = CreateObject<DvClCompositeMetric>();
+        BooleanValue global;
+        m->GetAttribute("ToaNormGlobal", global);
+        NS_TEST_ASSERT_MSG_EQ(global.Get(), true, "el modo global es el defecto");
+
+        // Airtime de un dato de 27 B (20 de carga + 7 de cabecera), preambulo 16.
+        const double toaSf7 = 75008.0;
+        const double toaSf12 = 1908736.0;
+
+        const double n7 = m->NormalizeToa(toaSf7, 7);
+        const double n12 = m->NormalizeToa(toaSf12, 12);
+
+        // Ninguno satura con trafico realista: ese era el defecto.
+        NS_TEST_ASSERT_MSG_LT(n7, 1.0, "SF7 no satura");
+        NS_TEST_ASSERT_MSG_LT(n12, 1.0, "SF12 no satura");
+
+        // Y distingue: SF12 debe costar mucho mas aire que SF7.
+        NS_TEST_ASSERT_MSG_GT(n12 / n7, 10.0, "SF12 cuesta al menos 10x el aire de SF7");
+
+        // El coste compuesto hereda esa separacion (bateria sana, Psi=0).
+        LinkInputs a;
+        a.toaUs = toaSf7;
+        a.sf = 7;
+        a.energyFraction = 1.0;
+        LinkInputs b = a;
+        b.toaUs = toaSf12;
+        b.sf = 12;
+        NS_TEST_ASSERT_MSG_GT(m->ComputeLinkCost(b),
+                              m->ComputeLinkCost(a),
+                              "un enlace a SF12 cuesta mas que uno a SF7");
+
+        // Contraste con el modo por-SF: ahi la separacion se pierde.
+        m->SetAttribute("ToaNormGlobal", BooleanValue(false));
+        const double p7 = m->NormalizeToa(toaSf7, 7);
+        const double p12 = m->NormalizeToa(toaSf12, 12);
+        NS_TEST_ASSERT_MSG_LT(p12 / p7, 2.0,
+                              "por-SF los dos SF quedan a menos de 2x: no discrimina");
+    }
+};
+
 class DvClTestSuite : public TestSuite
 {
   public:
@@ -342,6 +413,7 @@ class DvClTestSuite : public TestSuite
         AddTestCase(new DvClThesisPsiTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClThesisWeightsTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClRssiMetricTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new DvClToaGlobalNormTestCase, TestCase::Duration::QUICK);
     }
 };
 

@@ -2360,3 +2360,73 @@ mejora frente a métricas de una capa». Lo medido es que **una métrica compues
 cuyo término de ToA está saturado** no mejora — que es un enunciado mucho más
 débil y, sobre todo, un defecto corregible. Q1 debe re-evaluarse tras corregir
 la normalización.
+
+## 2026-07-25 (h) — Corrección de la normalización de ToA, y lo que destapa
+
+Dos correcciones al término de ToA, más tres hallazgos que salieron al hacerlas.
+
+### Corrección 1: la métrica recibía el ToA de la baliza, no el del dato
+
+El coste de un enlace debe preciar lo que cuesta llevar **datos** por él. Se le
+pasaba el airtime de la baliza que anunció la ruta, que es mucho mayor (una
+baliza de ~257 B a SF7 son 408 ms; un dato de 27 B son 75 ms) y cuyo tamaño
+depende de cuántas rutas lleve, no del enlace. `DvClRouting::SetDataToaForSf`
+recibe de la aplicación el airtime de un dato por SF, calculado una vez al
+arrancar con la carga útil y los parámetros de radio reales.
+
+### Corrección 2: la normalización por SF no puede preciar el aire
+
+Medido antes de elegir cómo corregir (carga fija de 27 B):
+
+| normalización | T̂ de SF7 a SF12 | ¿discrimina? |
+|---|---|---|
+| techo heredado | 1.000 → 1.000 | no: **saturado** |
+| por-SF con techo correcto | 0.204 → 0.226 | no: **varía 9%** |
+| **techo global** | **0.0089 → 0.2256** | **sí: factor 25×** |
+
+**Arreglar el techo no bastaba.** Con normalización por SF, numerador y
+denominador escalan juntos, así que con carga fija T̂ es casi constante: el
+término no puede preciar el aire por mucho que se ajuste el techo. Solo un
+techo **global** hace que un enlace a SF12 cueste más que uno a SF7, que es la
+señal cross-layer que la métrica dice llevar.
+
+Implementado como atributo `ToaNormGlobal` (por defecto `true`) más
+`ToaCeilingUs` (por defecto 8 462 336 µs = 222 B a SF12). El modo por-SF queda
+disponible para reproducir la fórmula tal como está escrita en la tesis, y los
+tests que la fijan ahora lo declaran explícitamente.
+
+### Hallazgo A: con los pesos de la tesis, β domina al término de ToA
+
+El test de convergencia «un desvío barato de dos saltos gana a un enlace
+directo caro» **dejó de pasar**, y no porque el test estuviera mal:
+
+- desvío rápido, 2 saltos: 2·(0.6·0.00118 + 0.15) = **0.301**
+- directo lento a SF12: 0.6·0.2256 + 0.15 = **0.285**
+
+Gana el directo **pese a gastar 95× más aire** (1.9 s contra 20 ms). El umbral
+es β < 0.134; la tesis usa β = 0.15. Antes la propiedad se cumplía por
+accidente: la saturación clavaba el enlace lento en el máximo. El test ahora
+fija β = 0.05 y deja constancia de la tensión.
+
+### Hallazgo B: el barrido de pesos del 22-jul queda invalidado
+
+Aquel barrido concluyó que «α y β son inertes». Era un artefacto: con T̂ = 1
+saturado, α multiplicaba una constante y β era otra constante, así que ninguno
+podía hacer nada. Con la normalización corregida α y β sí tienen efecto — el
+Hallazgo A lo demuestra directamente. **El barrido debe re-correrse**, y ahora
+importa mucho más que antes.
+
+### Hallazgo C: el paso de cuantización quedó grueso
+
+Los costes son ahora ~10× menores, así que con `CompositeCostStep = 0.025` los
+márgenes entre rutas alternativas caen a 2-3 unidades cuantizadas. No afecta a
+las campañas —el perfil fija `routeSwitchMinDeltaX100 = 0`, sin histéresis— pero
+sí al banco de test, que usa el default 5. Conviene revisar el paso junto con
+los pesos.
+
+### Estado
+
+Suites 10/10. Las rutas siguen difiriendo entre métricas (83-88% de los pares
+(nodo, destino)), y ahora por razones correctas. **Todos los resultados de
+comparación de métricas (E1) quedan pendientes de re-correr**; los de MAC, duty
+(Q5), energía y flooding no dependen del término de ToA.

@@ -2,6 +2,7 @@
 
 #include "dv-cl-metric.h"
 
+#include "ns3/boolean.h"
 #include "ns3/double.h"
 #include "ns3/log.h"
 
@@ -72,13 +73,34 @@ DvClCompositeMetric::GetTypeId()
                           "PsiMax: penalty value at/below bLo (before delta).",
                           DoubleValue(1.0),
                           MakeDoubleAccessor(&DvClCompositeMetric::m_energyMaxPenalty),
-                          MakeDoubleChecker<double>(0.0));
+                          MakeDoubleChecker<double>(0.0))
+            .AddAttribute("ToaNormGlobal",
+                          "true: normalise time-on-air against ONE global ceiling, so the term "
+                          "grows with the spreading factor and actually prices airtime. false: "
+                          "normalise per spreading factor, as the thesis text states -- kept for "
+                          "reproduction, but numerator and denominator scale together so the term "
+                          "barely varies across SF (VALIDATION.md 2026-07-25).",
+                          BooleanValue(true),
+                          MakeBooleanAccessor(&DvClCompositeMetric::m_toaNormGlobal),
+                          MakeBooleanChecker())
+            .AddAttribute("ToaCeilingUs",
+                          "Global normalisation ceiling in microseconds (ToaNormGlobal=true). "
+                          "Default: airtime of a 222 B payload at SF12, 16-symbol preamble.",
+                          DoubleValue(8462336.0),
+                          MakeDoubleAccessor(&DvClCompositeMetric::m_toaCeilingUs),
+                          MakeDoubleChecker<double>(1.0));
     return tid;
 }
 
 double
 DvClCompositeMetric::NormalizeToa(double toaUs, uint8_t sf) const
 {
+    if (m_toaNormGlobal)
+    {
+        // One ceiling for every link: the term then grows with the spreading
+        // factor, which is what makes it price airtime across links.
+        return std::min(toaUs / std::max(m_toaCeilingUs, 1e-9), 1.0);
+    }
     const uint8_t sfClamped = std::clamp<uint8_t>(sf, 7, 12);
     const std::size_t idx = static_cast<std::size_t>(sfClamped - 7);
     return std::min(toaUs / kMaxToaUs[idx], 1.0);
