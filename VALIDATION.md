@@ -2802,3 +2802,45 @@ causa: si el intercambio saltos-por-SF lo produce la formula de la metrica o la
 pegajosidad de la ruta. Lanzado el 2x2 metrica x histeresis (32 celdas, 300 ks)
 para separarlo; hasta que cierre, **las cifras del barrido conjunto de hoy no
 son atribuibles a la metrica**.
+
+## 2026-07-27 (d) — 2x2 metrica x histeresis: cuanto era el confusor
+
+32 celdas, 300 ks, N=25, 8 semillas, alfa=1.0 beta=0.05 delta=0. Datos:
+`tools/validation/e5_hyst2x2.csv`.
+
+### Descomposicion
+
+| | reportado (confundido) | **de la metrica** | de la histeresis |
+|---|---:|---:|---:|
+| dPDR | +1.508% (t=12.2) | **+0.980%** (t=8.0) | +0.524% (t=5.3) |
+| dFND | -1.733% (t=-19.5) | **-1.733%** (t=-20.6) | +0.001% (t=0.0) |
+
+**La perdida de vida util es enteramente de la metrica.** La histeresis aporta
+un 0% y el efecto sale igual con las dos ramas amortiguadas (-1.733%) que con
+las dos libres (-1.755%). Lo que si estaba inflado es el PDR: el confusor
+aportaba un 35%, asi que la ganancia real es **+0.98%, no el +2.38%** del
+barrido conjunto.
+
+El mecanismo tambien es de la metrica: el reparto de SF es identico con y sin
+amortiguacion (SF7/SF8 = 85.4/14.6 en ambas), mientras que entre metricas va de
+98.3/1.7 a 85.4/14.6. La histeresis mueve los saltos por transmision un 1-2.6%;
+la metrica los mueve un -33%.
+
+### Lo que queda establecido
+
+La metrica compuesta **compra PDR con vida util**, y el precio esta medido:
++0.98% de PDR a cambio de -1.73% de FND, via un intercambio de saltos por
+spreading factor (-33% saltos, SF8 del 1.7% al 14.6%, +1.19% de airtime total).
+
+### Donde esta la palanca (en curso)
+
+El barrido original no vio efecto marginal de beta entre 0.02 y 0.15, y la
+aritmetica dice por que: el termino de ToA normalizado vale ~0.03 en SF7 y
+~0.055 en SF8, y el cuantizador COST255 usa paso 0.025. Con beta=0.02 un salto
+SF7 cuesta q=2 y uno SF8 q=3, asi que dos saltos SF7 (4) pierden contra un SF8
+(3); con beta=0.15 pierden 14 contra 8. **La rejilla entera estaba por encima
+del punto de cambio**, por eso beta parecia inerte.
+
+Lanzado `run_e5_beta_low.sh` (56 celdas): beta en {0, 0.005, 0.01, 0.02} con el
+paso por defecto, mas paso en {0.010, 0.005} a beta fijo. beta=0 con alfa=1 es
+ToA reescalado, o sea la costura contra toa_only.
