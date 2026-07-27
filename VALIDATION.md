@@ -2498,3 +2498,66 @@ No es un defecto del simulador ni de la métrica: es una propiedad del
 escenario. Pero conviene decirlo en el paper y, si se quiere ejercitar el
 término de ToA, hace falta un escenario con enlaces largos que fuercen SF10-12
 (por ejemplo `pueyoGridSpacingM` mayor, o menos potencia de transmisión).
+
+## 2026-07-27 — DEFECTO RAÍZ: el SF de datos no depende del enlace
+
+Diego señaló que esperaba diversidad de SF en topología aleatoria por las
+distancias. Al medirlo apareció algo peor que la falta de diversidad.
+
+### Lo medido
+
+SF de los paquetes de **datos**, por escenario (20 ks, duty 1%):
+
+| escenario | SF de datos |
+|---|---|
+| rejilla 178 m, N=25 y N=100 | **100% SF8** |
+| aleatoria 1 km, N=25 y N=100 | **100% SF8** |
+| aleatoria 3 km, N=25 | **100% SF8** |
+| aleatoria 5 km, N=49 | **100% SF8** |
+
+Ni la topología ni el área cambian nada. Y al abrir el rango a SF7-12 con
+`--allowPaperLikeSfRangeVariant`, pasa a ser **100% SF12** en los cinco
+escenarios: siempre el máximo permitido.
+
+### La causa
+
+`GetDataSfForNeighbor` devuelve **SF12 como valor de reserva** cuando no
+encuentra un SF reciente para el vecino, y después se recorta a `sfMax`. Eso da
+exactamente lo observado: sfMax=8 → SF8; sfMax=12 → SF12.
+
+Comprobado con el registro de depuración (9 nodos, 3 ks):
+
+| | |
+|---|---|
+| Llamadas que caen al valor de reserva | **2716 de 2716 (100%)** |
+| Motivo, para todos los vecinos | «no recent SF» |
+| `UpdateNeighborLinkSf` | «no robust SF yet (mode=robust_min minSamples=2)» |
+
+La condición para tener un SF vigente es haber oído al vecino dentro de una
+ventana igual al intervalo de baliza (60 s) y, en modo `robust_min`, con al
+menos 2 muestras del mismo SF dentro de ella. Cada vecino baliza una vez cada
+60 s, así que la condición es estructuralmente casi insatisfacible — y bajo
+duty 1%, con las balizas retrasadas, nunca se satisface.
+
+### Por qué importa
+
+**Si todos los enlaces de datos usan el mismo SF, el ToA de referencia es
+idéntico para todos y el término α·T̂ es una constante.** La métrica compuesta
+se reduce a `constante + β + δ·Ψ`, es decir conteo de saltos más energía, y no
+puede preciar el aire por muy bien normalizado que esté.
+
+Esto es más profundo que el defecto de saturación corregido el 25-jul. Aquella
+corrección era necesaria y sigue siendo correcta, pero **no puede surtir efecto
+mientras el SF de datos sea constante**. También explica que el piloto de pesos
+mostrara diferencias entre α que solo venían de la cuantización.
+
+### Consecuencias
+
+- El término de ToA **nunca ha estado operativo** en ninguna campaña.
+- Toda comparación `composite` vs `hops` mide dos métricas que son la misma
+  salvo el término de energía.
+- El barrido de pesos en curso mide α sobre una constante: **α no puede
+  optimizarse hasta arreglar esto**.
+- No afecta a: efecto del MAC, Q5 (duty), presupuesto de energía, mecanismo de
+  la cola del SoC, ni al término δ·Ψ, que sí varía con el SoC del vecino y sí
+  actúa (verificado 2026-07-27: cambia el 80.2% de las rutas).
