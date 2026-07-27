@@ -2288,3 +2288,75 @@ distribución está sesgada por unas pocas celdas con diferencia grande. No se
 afirma ventaja de latencia sin un análisis de la distribución.
 
 Datos: `tools/validation/e6_results.csv`.
+
+## 2026-07-25 (g) — DEFECTO: el término de ToA de la métrica compuesta satura
+
+A raíz de una pregunta de Diego («¿seguro que las métricas se aplicaron bien,
+que realmente se ruteaba por eso, que las balizas transmitían esa métrica?»)
+se hicieron dos comprobaciones que faltaban. La primera confirma; la segunda
+destapa un defecto que cambia la interpretación de E1.
+
+### Lo que sí funciona: el ruteo ocurre por la métrica
+
+Misma semilla, misma topología, mismo escenario, cambiando solo la métrica
+(25 nodos, grid all-to-all, 15 ks). Comparando el **siguiente salto elegido**
+para cada par (nodo, destino) sobre 600 entradas de ruta:
+
+| comparación | pares distintos |
+|---|---:|
+| composite vs toa | 87.2% |
+| composite vs hops | 84.0% |
+| composite vs rssi | 83.8% |
+| toa vs rssi | 83.5% |
+
+Las métricas eligen rutas distintas en la gran mayoría de los pares, el score
+viaja en la baliza y ninguna satura el techo del byte (0% en 255). El
+mecanismo de enchufado funciona.
+
+### El defecto: T̂ está clavado en 1
+
+`NormalizeToa = min(toaUs / kMaxToaUs[sf], 1)`. Medido sobre las 6220 balizas
+que alimentan la métrica en esa corrida:
+
+| | p10 | p50 | p90 | saturados |
+|---|---:|---:|---:|---:|
+| **T̂ de balizas** | **1.000** | **1.000** | **1.000** | **90.3%** |
+| T̂ de datos | 0.545 | 0.545 | 0.545 | 0.0% |
+
+**El 90% de los enlaces tiene T̂ = 1**, así que el coste compuesto por salto es
+constante: 0.6·1 + 0.15 = **0.75**, que cuantizado da q = 30. De ahí que los
+scores anunciados por `composite` sean múltiplos exactos de 30 y tomen solo 7
+valores distintos: son *saltos × 30*.
+
+**Consecuencia: la métrica compuesta degenera en conteo de saltos.** Y eso
+explica mecánicamente el resultado de E1 que quedó sin explicar: composite vs
+hops dio +0.08% (t=0.51, nulo) porque **son efectivamente la misma métrica** en
+este régimen.
+
+Dos causas, ambas de modelado:
+
+1. **El techo de normalización es demasiado bajo para el tamaño de baliza en
+   uso.** Una baliza de ~251 B a SF7 ocupa ~408 ms de aire; `kMaxToaUs[SF7]` es
+   143 360 µs. La razón es 2.85, luego se recorta a 1. Los `kMaxToaUs` venían
+   heredados del árbol de campaña y el propio comentario del módulo decía que
+   su origen absoluto «no afecta al ranking, solo a la escala de T̂». **Ese
+   comentario es falso**: la escala decide si la normalización satura, y aquí
+   satura.
+2. **A la métrica se le da el ToA de la baliza, no el del dato.** El coste de
+   un enlace debería reflejar lo que cuesta enviar *datos* por él, no lo que
+   costó la baliza que lo anunció. Los datos van a SF8 con T̂ = 0.545, sin
+   saturar: si la métrica se alimentara del ToA de datos, discriminaría.
+
+### Qué queda en pie y qué no
+
+**No afectado** (no dependen del término de ToA): el efecto del MAC
+(+9.3% de PDR, CSMA/CAD vs ALOHA), el hallazgo del duty como ecualizador (Q5),
+el aislamiento de δ·Ψ —que sí varía con el SoC y sí actúa—, la comparación con
+flooding (E6), y todo E3 (donde composite vs toa mide otra cosa: la vía
+`toaCostUnits` frente a la vía `rawMetric`).
+
+**Afectado**: la interpretación de que «la métrica compuesta cross-layer no
+mejora frente a métricas de una capa». Lo medido es que **una métrica compuesta
+cuyo término de ToA está saturado** no mejora — que es un enunciado mucho más
+débil y, sobre todo, un defecto corregible. Q1 debe re-evaluarse tras corregir
+la normalización.
