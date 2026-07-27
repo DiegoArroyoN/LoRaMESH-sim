@@ -744,6 +744,19 @@ DvClRouting::SetDataToaForSf(uint8_t sf, double toaUs)
     if (sf >= 7 && sf <= 12 && toaUs > 0.0)
     {
         m_dataToaBySf[sf - 7] = toaUs;
+        // El techo de normalizacion se deriva del peor caso REAL del trafico
+        // en uso: el mismo dato al SF mas alto que la tabla conozca. Asi T_hat
+        // recorre (0,1] de verdad en vez de quedarse en 0.009-0.017, donde el
+        // termino no sobrevive a la cuantizacion del wire (VALIDATION.md).
+        double ceiling = 0.0;
+        for (double v : m_dataToaBySf)
+        {
+            ceiling = std::max(ceiling, v);
+        }
+        if (auto* cm = BuiltinMetricOrNull(); cm && ceiling > 0.0)
+        {
+            cm->SetAttribute("ToaCeilingUs", DoubleValue(ceiling));
+        }
     }
 }
 

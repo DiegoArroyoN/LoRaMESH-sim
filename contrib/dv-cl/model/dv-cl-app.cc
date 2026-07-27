@@ -1438,6 +1438,7 @@ DvClApp::StartApplication()
                                                                             m_cr,
                                                                             dataBytes)));
         }
+
     }
     m_routing->SetRouteChangeCallback(MakeCallback(&DvClApp::HandleRouteChange, this));
     m_routing->SetFloodCallback(MakeCallback(&DvClApp::HandleFloodRequest, this));

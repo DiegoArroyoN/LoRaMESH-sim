@@ -34,6 +34,15 @@ cell() {
   local row="$OUT/cells/$id.row"
   [ -s "$row" ] && return 0
 
+  # El criterio es SUPERAR a toa_only, asi que la referencia se corre en las
+  # mismas semillas, escenarios y tamanos que las combinaciones de pesos.
+  local metricflags
+  if [ "$a" = "toaref" ]; then
+      metricflags="--allowMetricModeOverride=true --routeMetricMode=toa_only"
+  else
+      metricflags="--routeMetricMode=composite_score --compositeWToa=$a --compositeWHop=$b --compositeWEnergy=$dl"
+  fi
+
   local scenflags
   case $scen in
     grid_a2a)  scenflags="--nodePlacementMode=pueyo_grid --trafficMode=pueyo_all_to_all" ;;
@@ -42,10 +51,9 @@ cell() {
 
   local d="$OUT/work/$id"; mkdir -p "$d"; cd "$d" || return 1
   ("$BIN" --profile=proposal_pueyo_like_csmacad --nEd="$n" --stopSec=40000 --rngRun="$seed" \
-      --allowDutyOverride=true --routeMetricMode=composite_score \
-      --compositeWToa="$a" --compositeWHop="$b" --compositeWEnergy="$dl" \
+      --allowDutyOverride=true \
       --enablePcap=false --verboseLogs=false --enableMetricsEssentialOnly=true \
-      $scenflags > run.log 2>&1) 2>/dev/null
+      $scenflags $metricflags > run.log 2>&1) 2>/dev/null
   local rc=$?
 
   A=$a B=$b D=$dl SC=$scen N=$n SEED=$seed RC=$rc ROW="$row" python3 - <<'PY'
@@ -75,17 +83,28 @@ export BIN LD_LIBRARY_PATH OUT
 
 [ -f "$CSV" ] || echo "$HDR" > "$CSV"
 echo "Barrido de pesos: rejilla gruesa, $JOBS jobs ($(date '+%F %H:%M'))"
-for a in 0.2 0.6 1.0; do
-  for b in 0.0 0.05 0.15; do
-    for dl in 0.0 0.25; do
-      for scen in grid_a2a rnd_conv1; do
-        for n in 16 25 49; do
-          for seed in $(seq 1 10); do echo "$a $b $dl $scen $n $seed"; done
+{
+  # referencia obligatoria: toa_only en las mismas celdas
+  for scen in grid_a2a rnd_conv1; do
+    for n in 16 25 49; do
+      for seed in $(seq 1 10); do echo "toaref 0 0 $scen $n $seed"; done
+    done
+  done
+  # Rejilla informada por el piloto en WSL (2026-07-26): la meseta esta en
+  # beta >= 0.02; beta = 0 se conserva solo como control, porque con alfa bajo
+  # degrada mucho (-5.5% de PDR y MAS relevo, no menos).
+  for a in 0.2 0.6 1.0; do
+    for b in 0.0 0.02 0.05 0.15; do
+      for dl in 0.0 0.25; do
+        for scen in grid_a2a rnd_conv1; do
+          for n in 16 25 49; do
+            for seed in $(seq 1 10); do echo "$a $b $dl $scen $n $seed"; done
+          done
         done
       done
     done
   done
-done | shuf | xargs -P "$JOBS" -L1 bash -c 'cell "$@"' _
+} | shuf | xargs -P "$JOBS" -L1 bash -c 'cell "$@"' _
 
 { echo "$HDR"; cat "$OUT"/cells/*.row 2>/dev/null; } > "$CSV"
 echo "FIN E5W. $(( $(wc -l < "$CSV") - 1 )) celdas en $CSV"
