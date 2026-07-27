@@ -2430,3 +2430,40 @@ Suites 10/10. Las rutas siguen difiriendo entre métricas (83-88% de los pares
 (nodo, destino)), y ahora por razones correctas. **Todos los resultados de
 comparación de métricas (E1) quedan pendientes de re-correr**; los de MAC, duty
 (Q5), energía y flooding no dependen del término de ToA.
+
+## 2026-07-26 — El término de energía no se puede evaluar en corridas cortas
+
+A raíz de otra pregunta de Diego («la métrica también considera la batería,
+¿por qué no analizaste su peso?»). El piloto de pesos fijó δ=0.25 sin barrerlo,
+y al ir a corregirlo apareció que el problema no era el barrido sino el
+**régimen**: en una corrida perf de 40 ks el término δ·Ψ **no puede hacer
+nada**.
+
+Ψ(b) vale 0 por encima de b_hi = 0.50. Estado de carga al final de la corrida
+(25 nodos, tráfico sostenido, duty 1%):
+
+| duración | SoC mín | SoC p50 | SoC máx | nodos con Ψ>0 |
+|---|---:|---:|---:|---:|
+| **40 ks (perf)** | 0.472 | 0.594 | 0.862 | **4 de 25** |
+| 150 ks | 0.107 | 0.254 | 0.518 | 23 de 25 |
+| 300 ks | 0.000 | 0.000 | 0.049 | 25 de 25 |
+
+**A 40 ks el término es inerte por construcción**: casi nadie cruza el umbral,
+así que δ multiplica cero y barrerlo no mide nada. Cualquier conclusión sobre δ
+sacada de corridas perf es vacía.
+
+Y hay un segundo filo: **a 300 ks todos terminan en 0**, es decir Ψ saturado al
+máximo para todos — otra constante. El régimen donde δ discrimina es el
+intermedio (~150 ks), donde el SoC está repartido a lo largo de la rampa
+[b_lo, b_hi] = [0.20, 0.50]: mín 0.11, p50 0.25, máx 0.52.
+
+Esto matiza hacia atrás el resultado de E3: la comparación a 300 ks mide δ en
+un régimen donde acaba saturado, así que subestima su efecto. No lo invalida
+—el FND se decide antes de que todos mueran— pero conviene tenerlo presente.
+
+**Consecuencia de diseño.** Los pesos no se pueden optimizar en dos barridos
+separados: α y β se ven en PDR, pero δ solo aparece cuando la batería entra en
+la rampa. Se añade `run_e5_joint.sh`, que corre 300 ks y mide **PDR y FND en la
+misma corrida**, barriendo α, β y δ juntos con `toa_only` como referencia en
+las mismas semillas. Es lo único que responde el criterio de Diego: superar a
+toa_only en entrega **y** en batería.
