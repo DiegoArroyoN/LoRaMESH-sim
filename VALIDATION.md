@@ -2467,3 +2467,34 @@ la rampa. Se añade `run_e5_joint.sh`, que corre 300 ks y mide **PDR y FND en la
 misma corrida**, barriendo α, β y δ juntos con `toa_only` como referencia en
 las mismas semillas. Es lo único que responde el criterio de Diego: superar a
 toa_only en entrega **y** en batería.
+
+## 2026-07-27 — Verificación previa al barrido, y un límite del escenario
+
+Antes de gastar horas barriendo δ se comprobó que puede actuar. Corridas de
+150 ks (el régimen discriminante), 25 nodos, α=0.6, β=0.05:
+
+| comprobación | resultado |
+|---|---|
+| SoC anunciado en balizas | p10=0.347, p50=0.567, p90=0.791; **35% dentro de la rampa** [0.20, 0.50] |
+| ¿δ cambia rutas? | **80.2%** de los 600 pares (nodo,destino) difieren entre δ=0 y δ=0.25 |
+| resolución del score | 20-55 valores distintos, solo 4-5% en score ≤ 2 |
+
+El término de energía tiene material sobre el que actuar y actúa. El barrido
+conjunto tiene sentido.
+
+### Límite del escenario: casi no hay diversidad de SF
+
+Medido sobre las transmisiones de esa misma corrida: **SF7 el 17%, SF8 el 83%,
+y nada más**. La rejilla de 178 m con 20 dBm da enlaces buenos, y el SF por
+sensibilidad se queda en la parte baja del rango.
+
+Consecuencia directa sobre el término de ToA: solo puede distinguir entre dos
+valores de T̂ (0.039 y 0.073 con el techo derivado), un factor de 1.9. Por muy
+bien calibrado que esté, **en este escenario el término de ToA tiene poco que
+discriminar**, mientras que β es constante por salto. Eso acota cuánto puede
+separarse la métrica compuesta del conteo de saltos, con cualquier peso.
+
+No es un defecto del simulador ni de la métrica: es una propiedad del
+escenario. Pero conviene decirlo en el paper y, si se quiere ejercitar el
+término de ToA, hace falta un escenario con enlaces largos que fuercen SF10-12
+(por ejemplo `pueyoGridSpacingM` mayor, o menos potencia de transmisión).
