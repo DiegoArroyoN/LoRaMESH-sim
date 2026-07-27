@@ -666,6 +666,13 @@ DvClApp::GetTypeId()
                           UintegerValue(5),
                           MakeUintegerAccessor(&DvClApp::m_routeSwitchMinDeltaX100),
                           MakeUintegerChecker<uint16_t>())
+            .AddAttribute("RouteSwitchHysteresis",
+                          "Enable route-switch damping for ALL metric modes (protocol policy, "
+                          "not part of the metric). Disabling it in only some modes biases any "
+                          "comparison against the reference metric.",
+                          BooleanValue(true),
+                          MakeBooleanAccessor(&DvClApp::m_routeSwitchHysteresis),
+                          MakeBooleanChecker())
             .AddAttribute("AvoidImmediateBacktrack",
                           "Avoid forwarding data back to the packet prevHop (loop guard).",
                           BooleanValue(true),
@@ -1425,6 +1432,7 @@ DvClApp::StartApplication()
     m_routing->SetAdvertRoutePolicy(m_routeAdvertPolicy);
     m_routing->SetSinkNodeId(m_collectorNodeId);
     m_routing->SetRouteSwitchMinDeltaX100(m_routeSwitchMinDeltaX100);
+    m_routing->SetAttribute("RouteSwitchHysteresis", BooleanValue(m_routeSwitchHysteresis));
     // Airtime de un paquete de DATOS en cada SF, para que el coste de enlace
     // precie el transporte de datos y no la baliza que anuncio la ruta. La app
     // es quien conoce la carga util y los parametros de radio.

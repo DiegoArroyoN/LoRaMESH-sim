@@ -105,6 +105,10 @@ main(int argc, char* argv[])
     uint32_t sfMax = 12;
     uint32_t initTtl = 10;
     uint32_t routeSwitchMinDeltaX100 = 5;
+    // Politica de conmutacion, comun a todos los modos de metrica. Se expone
+    // como flag para poder correr el 2x2 metrica x histeresis y separar el
+    // efecto de la formula del de la pegajosidad de ruta.
+    bool routeSwitchHysteresis = true;
     bool avoidImmediateBacktrack = true;
     double dataPeriodJitterMaxSec = 3.0;
     bool dataPeriodJitterSymmetric = false;
@@ -366,6 +370,10 @@ main(int argc, char* argv[])
     cmd.AddValue("routeSwitchMinDeltaX100",
                  "Minimum score delta to switch next-hop in DV updates",
                  routeSwitchMinDeltaX100);
+    cmd.AddValue("routeSwitchHysteresis",
+                 "Amortiguacion de conmutacion de ruta, aplicada a TODOS los modos de metrica. "
+                 "Es politica del protocolo, no parte de la metrica.",
+                 routeSwitchHysteresis);
     cmd.AddValue("avoidImmediateBacktrack",
                  "Drop forwarding decisions that immediately backtrack to prevHop",
                  avoidImmediateBacktrack);
@@ -1936,6 +1944,8 @@ main(int argc, char* argv[])
                                BooleanValue(avoidImmediateBacktrack));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataPeriodJitterMax",
                                DoubleValue(dataPeriodJitterMaxSec));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::RouteSwitchHysteresis",
+                               BooleanValue(routeSwitchHysteresis));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataPeriodJitterSymmetric",
                                BooleanValue(dataPeriodJitterSymmetric));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataStartPhaseMaxSec",

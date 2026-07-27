@@ -413,6 +413,7 @@ class DvClApp : public Application
     uint8_t ResolveSfForLink(uint8_t observedSf, double rxPowerDbm) const;
     void AccountRxScanEnergyDelta();
     uint16_t m_routeSwitchMinDeltaX100{5};
+    bool m_routeSwitchHysteresis{true};
     bool m_avoidImmediateBacktrack{true};
     bool m_pueyoValidationTrace{false};
     int32_t m_pueyoSyntheticEntriesNodeId{-1};

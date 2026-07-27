@@ -272,6 +272,11 @@ class DvClRouting : public Object
     double m_linkWeight{0.70};
     double m_pathWeight{0.25};
     uint16_t m_routeSwitchMinDeltaX100{5};
+    /// Amortiguacion de conmutacion de ruta. Es politica del protocolo, no de
+    /// la metrica: si se activa solo en unos modos, la comparacion entre
+    /// metricas mezcla formula con pegajosidad de ruta. Ver
+    /// DvClRouting::GetTypeId (RouteSwitchHysteresis).
+    bool m_routeSwitchHysteresis{true};
     bool m_advertiseAllRoutes{false};
     AdvertRoutePolicy m_advertRoutePolicy{AdvertRoutePolicy::TOP_SCORE};
     /// ToA de un paquete de DATOS por SF (indice 0 = SF7). 0 = sin fijar, en

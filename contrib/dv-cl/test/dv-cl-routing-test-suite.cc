@@ -1,11 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include "ns3/boolean.h"
 #include "ns3/double.h"
 #include "ns3/dv-cl-routing.h"
 #include "ns3/simulator.h"
 #include "ns3/test.h"
 
 #include <algorithm>
+#include <string>
 
 namespace ns3
 {
@@ -160,6 +162,66 @@ class DvClRoutingSwitchHysteresisTestCase : public TestCase
         r->UpdateFromDvMsg(Msg(1, 2, {Adv(2, 60)}), Link(1, 2, 143360));
         NS_TEST_ASSERT_MSG_EQ(r->LookupNextHop(2), 3u, "tie/worse does not flap");
         Simulator::Destroy();
+    }
+};
+
+/**
+ * \ingroup dv-cl
+ * Route-switch damping is protocol policy, not part of the metric: the same
+ * RouteSwitchHysteresis setting must produce the same switching behaviour in
+ * every metric mode.
+ *
+ * This pins a defect that silently biased the weight sweep of 2026-07-27. The
+ * damping used to be gated on `m_metricMode != TOA_ONLY`, so the reference
+ * metric was the only mode that switched on any raw improvement while every
+ * other mode required the improvement to survive score quantization. Since
+ * toa_only is the baseline of every routing comparison, each of those
+ * comparisons mixed the metric formula with route stickiness -- and because the
+ * gate ignored the weights, the bias was flat across the whole (alpha, beta,
+ * delta) grid, which is exactly what made it look like a property of the
+ * composite metric.
+ */
+class DvClRoutingHysteresisIsModeAgnosticTestCase : public TestCase
+{
+  public:
+    DvClRoutingHysteresisIsModeAgnosticTestCase()
+        : TestCase("dv-cl route-switch damping does not depend on the metric mode")
+    {
+    }
+
+  private:
+    /// Feeds a sub-quantum improvement and reports whether the route switched.
+    /// Out-param rather than a return value because NS_TEST_ASSERT_MSG_EQ
+    /// expands to a bare `return` on failure.
+    void SwitchesOnMarginalGain(const std::string& mode, bool hysteresis, bool* switched)
+    {
+        auto r = CreateObject<DvClRouting>();
+        r->SetAttribute("RouteSwitchHysteresis", BooleanValue(hysteresis));
+        r->SetMetricMode(mode);
+        r->SetNodeId(0);
+        r->UpdateFromDvMsg(Msg(1, 1, {Adv(2, 60)}), Link(1, 1, 143360));
+        NS_TEST_ASSERT_MSG_EQ(r->LookupNextHop(2), 1u, "initially via 1");
+        // Neighbour 3 is better, but by so little that the improvement is lost
+        // to quantization: damping must hold the route, its absence must not.
+        r->UpdateFromDvMsg(Msg(3, 1, {Adv(2, 59)}), Link(3, 1, 143000));
+        *switched = (r->LookupNextHop(2) == 3u);
+        Simulator::Destroy();
+    }
+
+    void DoRun() override
+    {
+        for (const bool hyst : {false, true})
+        {
+            bool toa = false;
+            bool cmp = false;
+            SwitchesOnMarginalGain("toa_only", hyst, &toa);
+            SwitchesOnMarginalGain("composite_score", hyst, &cmp);
+            NS_TEST_ASSERT_MSG_EQ(toa,
+                                  cmp,
+                                  "with RouteSwitchHysteresis=" << hyst
+                                  << " toa_only and composite_score must damp alike; a mode-gated "
+                                     "damping biases every comparison against the reference");
+        }
     }
 };
 
@@ -338,6 +400,7 @@ class DvClRoutingTestSuite : public TestSuite
         AddTestCase(new DvClRoutingInstallTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClRoutingPoisonTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClRoutingSwitchHysteresisTestCase, TestCase::Duration::QUICK);
+        AddTestCase(new DvClRoutingHysteresisIsModeAgnosticTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClRoutingExpiryTestCase, TestCase::Duration::QUICK);
         AddTestCase(new DvClRoutingMetricSeamTestCase, TestCase::Duration::QUICK);
     }

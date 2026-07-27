@@ -147,6 +147,16 @@ DvClRouting::GetTypeId()
                           BooleanValue(true),
                           MakeBooleanAccessor(&DvClRouting::m_useBeaconSoC),
                           MakeBooleanChecker())
+            .AddAttribute("RouteSwitchHysteresis",
+                          "Amortigua la conmutacion de ruta: una ruta candidata mejor solo "
+                          "desbanca a la primaria si la mejora sobrevive a la cuantizacion del "
+                          "score (y supera RouteSwitchMinDeltaX100 cuantos). Se aplica a TODOS "
+                          "los modos de metrica: es politica del protocolo, no de la formula. "
+                          "Activarla solo en unos modos confunde metrica con pegajosidad de "
+                          "ruta y sesga cualquier comparacion contra la referencia.",
+                          BooleanValue(true),
+                          MakeBooleanAccessor(&DvClRouting::m_routeSwitchHysteresis),
+                          MakeBooleanChecker())
             .AddAttribute("SoCHysteresisPercent",
                           "§BatBeacon: min SoC change [0-50%] before updating composite link cost. "
                           "0=no hysteresis (default). 5=recommended for CMP stability.",
@@ -1952,7 +1962,13 @@ DvClRouting::UpdateRoute(const RouteEntry& candidate)
 
     bool tie = false;
     const bool candidateBeatsPrimary = IsCandidateBetter(candidate, primary, &tie);
-    const bool applyHysteresis = (m_metricMode != MetricMode::TOA_ONLY);
+    // La amortiguacion NO depende del modo de metrica. Cuando dependia, la
+    // referencia toa_only era el unico modo que conmutaba con cualquier mejora
+    // bruta mientras el resto exigia que la mejora sobreviviese a la
+    // cuantizacion: toda comparacion contra esa referencia mezclaba la formula
+    // con la pegajosidad de ruta, y el sesgo resultante era ademas
+    // independiente de los pesos.
+    const bool applyHysteresis = m_routeSwitchHysteresis;
     const uint32_t candidateQuant = QuantizeCompositeMetric(candidate.rawMetric);
     const uint32_t primaryQuant = QuantizeCompositeMetric(primary.rawMetric);
     const int32_t quantizedImprovement =
