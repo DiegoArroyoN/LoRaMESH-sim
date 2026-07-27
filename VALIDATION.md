@@ -2974,3 +2974,71 @@ chosen randomly among the contenders"*). Nuestro codigo desempata por SF y
 luego por id de destino, de forma determinista. Es preferible para
 reproducibilidad, pero introduce un sesgo sistematico hacia ids bajos que ellos
 no tienen. Documentar como desviacion deliberada en el paper.
+
+## 2026-07-27 (g) — De donde sale el espaciado de 178 m, y por que importa
+
+Consultado NotebookLM. Los espaciados de Pueyo-Centelles **no son arbitrarios**
+y el paper lo dice explicitamente:
+
+> *"When nodes are arranged following a grid topology, four different spacing
+> between them are used (both vertical and horizontal): 177m, 178m, 246m and
+> 247m. These values are not arbitrarily chosen but have a specific purpose...
+> A spacing of 177m allows nodes using the shortest-range SF7 to communicate
+> with their adjacent nodes in horizontal, vertical, and diagonal. When the
+> spacing is increased by one unit, diagonal communication with adjacent nodes
+> is no longer possible with SF7, only vertically and horizontally. Similarly,
+> a 246m spacing or 247m allows communication between adjacent nodes in
+> diagonal with SF8 or requires using the slower SF9."*
+
+Son **pares que rodean un umbral de SF**. A 177 m la diagonal mide 177*raiz(2)
+= 250.3 m, justo el alcance de SF7 (250 m en su simulador), asi que cada nodo
+alcanza a sus 8 vecinos en SF7. A 178 m la diagonal ya no entra y la red tiene
+que elegir entre un salto diagonal en SF8 o dos saltos SF7 por los vecinos H/V.
+
+**Estamos corriendo en 178 m, o sea en el lado hostil del umbral**, y el dilema
+que eso crea es exactamente el que mide el diagnostico de dispersion: un salto
+SF8 (107.01 ms) contra dos saltos SF7 (117.25 ms). El punto de operacion esta
+elegido por ellos para exponer justo esa decision, lo que explica que el efecto
+salga tan consistente entre semillas.
+
+### El umbral transfiere a nuestro simulador
+
+Con los parametros del perfil (FLoRa urbano: n=2.08, L(40 m)=127.41 dB, TX=20
+dBm, sensibilidad SX1276):
+
+| SF | sensibilidad | alcance |
+|---:|---:|---:|
+| 7 | -124 dBm | **251.0 m** |
+| 8 | -127 dBm | 349.9 m |
+| 9 | -130 dBm | 487.7 m |
+| 10 | -133 dBm | 679.7 m |
+| 11 | -135 dBm | 848.2 m |
+| 12 | -137 dBm | 1058.4 m |
+
+Su alcance SF7 es 250 m y el nuestro 251.0: el espaciado umbral sale en 177.5
+m, asi que 177 m deja la diagonal dentro (250.3 <= 251.0) y 178 m la deja fuera
+(251.7 > 251.0). **El diseño reproduce el suyo con 1 m de diferencia.**
+
+Matiz: con sombreado sigma=3.57 dB el margen de 0.7 m equivale a 0.025 dB, o
+sea nada. El umbral duro del diseño se vuelve blando y la diagonal entra en SF7
+aproximadamente la mitad de las veces, lo que encaja con el 84%/16% de SF7/SF8
+medido a 178 m.
+
+### Robustez que esto sugiere
+
+La comprobacion natural no es la que yo habia propuesto (aleatoria a 3 km,
+dispersa a 600 m) sino **la suya**: barrer los cuatro espaciados 177/178/246/247.
+A 177 m no hay dilema —SF7 llega a los 8 vecinos— asi que la compuesta y
+toa_only deberian converger; a 246/247 m se repite el dilema un nivel de SF mas
+arriba. Eso dice si la disyuntiva PDR-vida util es un efecto de umbral o algo
+general, y lo dice con el diseño experimental del paper de referencia.
+
+### Otros parametros del paper, para el encuadre
+
+Topologias: rejilla NxN simetrica y aleatoria uniforme con N^2 nodos.
+Despliegues de N^2 = {9,16,25,36,49,64} nodos (nosotros llegamos a 100). Areas
+de 354x354 m2 (9 nodos a 177 m) a 1736x1736 m2 (64 nodos a 248 m), mas un
+experimento de densidad con area fija de 500x500 m2. Propagacion delegada a
+FLoRa en entorno urbano; el paper **no da** el exponente de path loss ni la
+varianza de sombreado, solo la tabla de alcances resultante. Hardware real solo
+como referencia: dos TTGO ESP32 a 2 m con atenuador de 15 dB.
