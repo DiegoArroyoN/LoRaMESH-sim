@@ -2238,3 +2238,53 @@ Defecto propio corregido en el camino: la primera versión pasaba
 contaban y los contadores salían en cero — justo la magnitud que la comparación
 mide. Ahora se registran y el colector las clasifica por `nodeId != src` como en
 el plano DV.
+
+## 2026-07-25 (f) — E6: DV-CL frente a flooding, con dos cruces opuestos
+
+320 celdas, 0 fallos. Flooding gestionado × {grid all-to-all, convergecast} ×
+N {9..100} × 20 semillas, duty-on 1%, comparado celda a celda contra las filas
+de E1 (mismos escenarios, N y semillas).
+
+**Global: DV-CL entrega +25.08% más que el flooding** (t=12.92, 235/320
+semillas). Por escenario: +37.90% en la rejilla (t=18.62), +12.26% en
+convergecast (t=4.10).
+
+Pero el promedio esconde lo interesante. La razón DV/flooding por tamaño:
+
+| N | grid all-to-all | convergecast |
+|---|---:|---:|
+| 9 | **1.55×** | 0.76× |
+| 16 | 1.57× | 0.70× |
+| 25 | 1.56× | 0.88× |
+| 36 | 1.53× | 1.11× |
+| 49 | 1.50× | 1.32× |
+| 64 | 1.41× | 1.41× |
+| 81 | 1.08× | 1.46× |
+| 100 | **0.83×** | **1.49×** |
+
+**Hay dos cruces, y van en sentidos contrarios.** En la rejilla DV domina hasta
+N≈64 y el flooding lo alcanza y supera en N=100. En convergecast ocurre lo
+inverso: el flooding gana claramente hasta N≈25 y DV se impone desde N≈36,
+creciendo hasta 1.49×.
+
+Lectura mecánica, coherente con el resto de los hallazgos:
+
+- **Convergecast con pocos nodos**: casi todos alcanzan el único sumidero en uno
+  o dos saltos (el flooding entrega con 1.33 saltos medios), así que la
+  redundancia del flooding es barata y cubre los fallos de enlace, mientras DV
+  apuesta por un camino único que a veces elige mal. Al crecer N la redundancia
+  se vuelve prohibitiva bajo duty 1% y DV gana.
+- **Rejilla con N=100**: la red está saturada (PDR 0.008–0.010 en ambos), y en
+  régimen de colapso la redundancia del flooding rescata algo donde el camino
+  único ya no llega. No es que el flooding escale mejor: es que ambos han caído
+  y a esos niveles la comparación pierde sentido práctico.
+
+Es un resultado más defendible que un «ganamos siempre»: los cruces tienen
+mecanismo explicable y delimitan **cuándo** conviene cada plano de datos.
+
+Cautela sobre la latencia: la media favorece a DV (−27.47%, t=−14.14) pero solo
+la mitad de las celdas (160/320) lo hacen individualmente, así que la
+distribución está sesgada por unas pocas celdas con diferencia grande. No se
+afirma ventaja de latencia sin un análisis de la distribución.
+
+Datos: `tools/validation/e6_results.csv`.
