@@ -2844,3 +2844,70 @@ del punto de cambio**, por eso beta parecia inerte.
 Lanzado `run_e5_beta_low.sh` (56 celdas): beta en {0, 0.005, 0.01, 0.02} con el
 paso por defecto, mas paso en {0.010, 0.005} a beta fijo. beta=0 con alfa=1 es
 ToA reescalado, o sea la costura contra toa_only.
+
+## 2026-07-27 (e) — `toa_only` no es la compuesta con pesos a cero: son dos subsistemas
+
+56 celdas, 300 ks, N=25, 8 semillas. Datos: `tools/validation/e5_beta_low.csv`.
+
+### La costura falla
+
+Con alfa=1, beta=0 y delta=0 la formula compuesta se reduce a `T_hat =
+toa/techo`, o sea ToA reescalado. Un reescalado monotono positivo **no puede
+cambiar el orden de las rutas**, asi que esa configuracion tendria que
+reproducir `toa_only`. No lo hace:
+
+| beta | paso | dPDR | dFND | SF8 | saltos | airtime |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0.000 | 0.0250 | +1.15% | -1.69% | 14.0% | -32.5% | +1.12% |
+| 0.005 | 0.0250 | +1.10% | -1.68% | 14.0% | -32.6% | +1.10% |
+| 0.010 | 0.0250 | +1.28% | -1.71% | 14.0% | -32.6% | +1.10% |
+| 0.020 | 0.0250 | +0.41% | -1.88% | 15.8% | -32.6% | +1.26% |
+| 0.050 | 0.0100 | +1.07% | -1.75% | 14.6% | -33.2% | +1.19% |
+| 0.050 | 0.0050 | +0.40% | -1.97% | 16.5% | -35.3% | +1.33% |
+| *toa_only* | | *ref* | *ref* | *1.7%* | *ref* | *ref* |
+
+beta=0 se aparta de la referencia tanto como beta=0.05. **beta no es la
+palanca, y el paso del cuantizador tampoco** (afinarlo lo empeora). Sigue sin
+haber ninguna combinacion que gane en PDR y en FND a la vez.
+
+### La causa: dos tuberias de coste distintas
+
+`toa_only` no pasa por la metrica enchufable. Es una rama entera aparte
+(`dv-cl-routing.cc` lineas 1162, 1293, 1541, 1649) con:
+
+```cpp
+ToaHopCostUnits(sf) = 1u << (sf - 7);   // SF7..SF12 -> 1,2,4,8,16,32
+```
+
+coste entero por salto, acumulacion exacta en enteros, codificacion de anuncio
+propia (`ToaUnitsToAdvertMetric` / `AdvertMetricToToaPathUnits`) y desempate
+propio que **prefiere el SF mas bajo**. La compuesta usa el ToA real medido,
+cuantizado con paso 0.025.
+
+El modelo entero de potencias de dos se aparta del airtime real hasta un 26%:
+
+| SF | ToA real | ratio vs SF7 | modelo `2^(sf-7)` | error |
+|---:|---:|---:|---:|---:|
+| 7 | 58.62 ms | 1.000 | 1 | 0.0% |
+| 8 | 107.01 ms | 1.825 | 2 | **-8.7%** |
+| 9 | 193.54 ms | 3.301 | 4 | -17.5% |
+| 10 | 346.11 ms | 5.904 | 8 | -26.2% |
+| 11 | 692.22 ms | 11.808 | 16 | -26.2% |
+| 12 | 1384.45 ms | 23.616 | 32 | -26.2% |
+
+De ahi sale la divergencia concreta. Un salto SF8 directo cuesta 107.01 ms y
+dos saltos SF7 cuestan 117.25 ms: **en airtime real gana el SF8 por un 8.7%**.
+El modelo entero los declara empate (2 = 2) y su desempate por SF bajo escoge
+la cadena SF7. Por eso `toa_only` sale con el 98.3% de las transmisiones en SF7
+y la compuesta con el 85.4%.
+
+### Que significa para el DoE
+
+La pregunta Q1 compara "nuestra metrica compuesta contra metricas de una sola
+capa (ToA, saltos, RSSI, SNR)". Tal como esta, **la comparacion contra ToA no
+enfrenta dos formulas: enfrenta dos subsistemas de coste**, que difieren en la
+formula, en las unidades, en la cuantizacion, en la codificacion del anuncio y
+en el desempate. El -1.73% de FND no es atribuible a la formula compuesta
+mientras eso siga asi.
+
+Decision pendiente con Diego, ver DOE.md.
