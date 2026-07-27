@@ -2662,3 +2662,69 @@ sería sordo a los demás, y la malla multi-SF necesitaría otro mecanismo.
 (Nota: el árbol tiene `enableSfScanRx` y `sfScanEdThresholdDbm`, o sea que el
 escaneo explícito llegó a implementarse, pero el perfil lo deja en `false`; el
 PHY ya da el comportamiento equivalente.)
+
+## 2026-07-27 (b) — Barrido conjunto con la métrica ya operativa: hay disyuntiva
+
+Primer barrido de pesos con el término de ToA funcionando (SF por enlace, techo
+derivado, ToA de datos). 560 celdas, 0 fallos: α{0.2,0.6,1.0} × β{0.02,0.05,
+0.15} × δ{0,0.25,0.5} × N{25,49} × 10 semillas, más `toa_only` de referencia en
+las mismas celdas. Corridas de 300 ks, duty 1%, pareado por semilla y N.
+
+### El resultado, sin adornos
+
+**Las 27 combinaciones superan a `toa_only` en PDR. Las 27 pierden en vida
+útil.** No hay ni una que gane en ambos.
+
+| | rango | significación |
+|---|---|---|
+| ΔPDR | **+0.72% a +2.38%** | t de 3.3 a 10.9, todas a favor |
+| ΔFND | **−1.69% a −2.23%** | t de −31 a −49, todas en contra |
+| ΔT50 | −1.54% a −2.12% | mismo patrón |
+| relevos | −29% a −44% | la compuesta releva mucho menos |
+
+Mejor PDR: **α=1.0, β=0.05, δ=0** → +2.38% de PDR (t=10.9), −1.69% de FND.
+
+### δ empeora las dos cosas
+
+Promediando sobre α y β:
+
+| δ | ΔPDR medio | ΔFND medio |
+|---|---:|---:|
+| 0.00 | **+1.68%** | **−1.84%** |
+| 0.25 | +1.16% | −2.05% |
+| 0.50 | +1.08% | −2.08% |
+
+Subir el peso de la energía **reduce el PDR y acorta la vida útil**, de forma
+monótona. Esto **contradice** el hallazgo del 2026-07-22 (δ daba +9.69% de FND
+sin duty), pero aquel se midió con el término de ToA saturado, o sea con una
+métrica que era conteo de saltos: no es comparable.
+
+### El mecanismo, en parte
+
+Comparando niveles absolutos (N=25, semilla 1) contra `toa_only`:
+
+| | PDR | FND | TX mAh | relevos | Tx origen |
+|---|---:|---:|---:|---:|---:|
+| toa_only | 0.1006 | 200957 | 2003.6 | 60367 | 568496 |
+| α=1.0 β=0.05 δ=0 | 0.1017 | 196518 | 1993.0 | 37866 | 534975 |
+
+**La compuesta gasta MENOS energía de transmisión en total (−0.4 a −0.55%) y
+aun así el primer nodo muere antes.** Menos energía total pero peor FND solo
+puede significar que la carga se **reparte peor**: el coste de camino se
+minimiza concentrando el tráfico en los nodos bien situados, y el FND lo fija
+el que más aguanta el peso.
+
+**Es una hipótesis, no un hecho medido**: el CSV agregado suma la energía de
+todos los nodos y no permite ver la dispersión. Para confirmarlo hace falta el
+desglose por nodo, que el runner descarta. `soc_min` no sirve aquí porque a
+300 ks todos terminan en 0 (saturado).
+
+### Qué decisión fuerza
+
+El criterio pedido —superar a `toa_only` en PDR **y** en batería— **no lo
+cumple ninguna combinación de esta rejilla**. Las opciones son: aceptar la
+disyuntiva y elegir punto de operación, buscar fuera de la rejilla, o entender
+primero por qué se concentra la carga, que puede revelar otro defecto o un
+resultado de fondo.
+
+Datos: `tools/validation/e5_joint.csv`.
