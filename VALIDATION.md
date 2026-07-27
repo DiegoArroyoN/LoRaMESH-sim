@@ -2600,3 +2600,65 @@ Y con el rango completo 7-12 aparece el abanico entero:
 Con esto el ToA de referencia deja de ser constante y el término α·T̂ puede
 por fin preciar el aire, que era el propósito del diseño cross-layer. Suites
 10/10.
+
+### Parche al PHY: el receptor etiqueta el SF que demoduló, y comprobación cruzada
+
+Diego preguntó por qué el SF no llega al receptor si el propio receptor sabe
+qué está demodulando. Tenía razón: lo sabe y no lo escribía.
+
+Comparando los dos PHY del módulo `lorawan`:
+
+- `SimpleEndDeviceLoraPhy::Send` **sí** etiqueta el paquete con su SF.
+- `SimpleGatewayLoraPhy::Send` **no** lo hace — y nuestros nodos usan el de
+  gateway. Además, en la recepción correcta el PHY escribe potencia y
+  frecuencia en el `LoraTag` (`SetReceivePower`, `SetFrequency`) pero **no el
+  SF**, pese a tenerlo en `event->GetSpreadingFactor()`.
+
+Eso explica que el RSSI llegara bien y el SF no. Parche de una línea, junto a
+los otros dos que ya aplicamos a `lorawan`, en
+`tools/validation/server_setup_lorawan.sh`:
+
+    tag.SetSpreadingFactor(event->GetSpreadingFactor());
+
+### La comprobación cruzada: consistentes, y no idénticos (como debe ser)
+
+Con el parche puesto se comparó, en cada baliza recibida, el SF **demodulado**
+(tag) contra el SF **mínimo que la sensibilidad exige** para ese enlace (sens),
+derivado del RSSI:
+
+| rango | n | coinciden | discrepancias observadas |
+|---|---:|---:|---|
+| [7,8] | 8760 | 68.2% | siempre `tag=SF8, sens=SF7` |
+| [7,12] | 2204 | 41.3% | siempre `tag > sens` (p.ej. tag=SF9, sens=SF7) |
+
+**No se observó ni un solo caso de `tag < sens`**, que sería una contradicción
+física: no se puede demodular en un SF que el enlace no soporta. Las dos vías
+son consistentes.
+
+Y no debían coincidir: miden cosas distintas. `tag` es el SF que el emisor
+eligió *para esa baliza* (rotan con la PMF geométrica, sin saber quién
+escucha); `sens` es el SF mínimo que *este* enlace admite. Un enlace bueno oye
+al vecino en muchos SF, y el mínimo de ellos es el que conviene usar para
+datos, porque es el que menos aire gasta. Por eso el plano de datos usa `sens`
+y no `tag`: el RSSI es propiedad del enlace (no depende del SF), así que la
+tabla de sensibilidad da la respuesta correcta sea cual sea el SF en que llegó
+la baliza.
+
+### El modelo de recepción, y qué asume Pueyo-Centelles
+
+Consulta a NotebookLM (`Papers_Magister`, 2026-07-27) sobre cómo resuelve
+Pueyo-Centelles 2024 el mismo problema. **Asumen transceptores LoRa de un solo
+canal** (tipo ESP32) con **detección automática del SF por preámbulo/CAD**: el
+chip detecta el SF de la transmisión entrante y **se reconfigura al vuelo** para
+decodificarla, con la limitación física de **un paquete a la vez**.
+
+Es exactamente lo que modela nuestro `SimpleGatewayLoraPhy` con **una sola ruta
+de recepción**: la clase `ReceptionPath` no tiene campo de SF —se engancha a un
+evento, no a un factor— así que puede recibir cualquier SF, pero solo uno a la
+vez. **El modelo coincide con el supuesto del paper ancla**, lo que conviene
+declarar como nota al pie: un end-device puro con el demodulador fijado a un SF
+sería sordo a los demás, y la malla multi-SF necesitaría otro mecanismo.
+
+(Nota: el árbol tiene `enableSfScanRx` y `sfScanEdThresholdDbm`, o sea que el
+escaneo explícito llegó a implementarse, pero el perfil lo deja en `false`; el
+PHY ya da el comportamiento equivalente.)

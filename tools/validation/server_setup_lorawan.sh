@@ -27,6 +27,16 @@ if grep -q 'ns3/core-module.h' "$f"; then
     echo "== parche aplicado a network-scheduler.h =="
 fi
 
+# Parche 2: el receptor sabe en que SF demodulo (event->GetSpreadingFactor())
+# pero no lo deja en el LoraTag. SimpleEndDeviceLoraPhy::Send si etiqueta el SF
+# al transmitir; SimpleGatewayLoraPhy::Send no, y nuestros nodos usan el de
+# gateway. Resultado: el SF no llegaba a las capas superiores.
+g="$NS3/src/lorawan/model/simple-gateway-lora-phy.cc"
+if ! grep -q 'tag.SetSpreadingFactor(event->GetSpreadingFactor())' "$g"; then
+    sed -i 's#^\( *\)tag.SetFrequency(event->GetFrequency());#\1tag.SetFrequency(event->GetFrequency());\n\1tag.SetSpreadingFactor(event->GetSpreadingFactor());#' "$g"
+    echo "== parche del SF en el tag aplicado =="
+fi
+
 # lorawan es una dependencia, no objeto de estudio: sus ejemplos y tests traen
 # mas includes de agregador que la guarda de ns-3.46 rechaza y romperian el
 # build completo que test.py fuerza. Los quitamos -> lorawan library-only.
