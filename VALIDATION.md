@@ -2911,3 +2911,66 @@ en el desempate. El -1.73% de FND no es atribuible a la formula compuesta
 mientras eso siga asi.
 
 Decision pendiente con Diego, ver DOE.md.
+
+## 2026-07-27 (f) — Correccion: `toa_only` es fiel a Pueyo-Centelles, no es un defecto
+
+Consultado NotebookLM sobre el paper de referencia (Pueyo-Centelles et al.,
+LoRaMesher). La implementacion de `toa_only` **reproduce la suya**, punto por
+punto:
+
+| aspecto | Pueyo-Centelles | nuestro `toa_only` |
+|---|---|---|
+| coste de enlace | ec. (4): `h_lm = 2^(SF_lm - SF_min)` | `1u << (sf - 7)` |
+| justificacion | simplicidad en MCU de 8/32 bits | — |
+| coste de camino | ec. (5): suma de los saltos | acumulacion aditiva |
+| desempate | SF mas bajo del siguiente salto | SF mas bajo |
+| cuantizacion en baliza | **no la especifican** | COST255 |
+
+Citas del paper: *"switching to a SF one step higher (e.g., SF7 -> SF8) doubles
+the transmission time"*; *"It ponders the cost of the hop h_l,m between two
+neighbor nodes n_l and n_m as a power of 2"*; y el ejemplo *"the three-hops
+path via nodes n_2 and n_3 would be preferred, since its ToA metric would be
+2^(7-7) + 2^(8-7) + 2^(7-7) = 1 + 2 + 1 = 4"*.
+
+Es decir: la aproximacion de potencias de dos **es la metrica publicada**, no
+una idealizacion nuestra. Que se aparte del airtime real hasta un 26% es una
+propiedad de la linea base de la literatura, no un error de implementacion.
+Rectifica el encuadre de la entrada (e): no es un confusor que haya que
+eliminar, es parte legitima de lo que separa a los dos protocolos.
+
+### Decision de Diego (2026-07-27)
+
+Mantener `toa_only` fiel a la implementacion de Pueyo-Centelles. La comparacion
+justa es contra su metrica **tal como esta publicada**, no contra una version
+mejorada por nosotros.
+
+### La atribucion se resuelve con la ablacion que ya esta medida
+
+La pregunta legitima que quedaba —si el -1.73% de FND lo causa la formula
+compuesta o el hecho de usar ToA real en vez de la aproximacion— **ya tiene
+respuesta en `e5_beta_low.csv`**, sin tocar la linea base. La fila beta=0,
+delta=0 es exactamente la ablacion "nuestra tuberia, solo ToA real":
+
+| arm | dPDR | dFND |
+|---|---:|---:|
+| ToA real, sin beta ni delta (beta=0, delta=0) | +1.15% | **-1.69%** |
+| compuesta completa (beta=0.05, delta=0) | +0.98% | **-1.73%** |
+| efecto de los terminos compuestos | -0.17 pp | **-0.04 pp** |
+
+**Practicamente todo el efecto viene de modelar el ToA de verdad en lugar de
+aproximarlo por potencias de dos. Los terminos beta y delta no aportan nada
+medible.** Coherente con que beta fuese inerte entre 0 y 0.15, y con que delta
+solo empeore (joint: delta=0 -> -1.84%, delta=0.5 -> -2.08%).
+
+Esto reencuadra el resultado del paper: la diferencia frente a la linea base no
+la produce la estructura compuesta de la metrica, la produce la fidelidad del
+modelo de airtime.
+
+### Desviacion menor detectada
+
+Pueyo-Centelles desempata por SF mas bajo y, si persiste el empate, **al azar**
+(*"in case of a tie (same metric and same SF in the next hop), the path is
+chosen randomly among the contenders"*). Nuestro codigo desempata por SF y
+luego por id de destino, de forma determinista. Es preferible para
+reproducibilidad, pero introduce un sesgo sistematico hacia ids bajos que ellos
+no tienen. Documentar como desviacion deliberada en el paper.
