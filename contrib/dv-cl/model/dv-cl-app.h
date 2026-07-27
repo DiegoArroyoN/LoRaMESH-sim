@@ -392,6 +392,12 @@ class DvClApp : public Application
         std::array<std::deque<Time>, 6> rxTimesBySf; // Historial corto de Rx por SF
         Time lastUpdate{Seconds(0)};                 // Última actualización general del vecino
         uint8_t lastRxSf{12};                        // Último SF observado (solo debug)
+        /// SF que la sensibilidad exige para ESTE enlace, derivado del RSSI con
+        /// el que se oye al vecino. Es la via fiable: el SF que reporta el tag
+        /// del paquete no llega bien al receptor, pero el RSSI si, y la tabla de
+        /// sensibilidad del SX1276 lo traduce al SF minimo que cierra el enlace
+        /// (VALIDATION.md 2026-07-27). 0 = sin medir.
+        uint8_t sensitivitySf{0};
     };
 
     std::map<uint32_t, AppNeighborLink> m_neighborLinks;

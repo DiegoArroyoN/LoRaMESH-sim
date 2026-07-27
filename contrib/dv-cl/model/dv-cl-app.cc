@@ -2467,27 +2467,62 @@ DvClApp::UpdateNeighborLinkSf(uint32_t neighborId, uint8_t rxSf)
 uint8_t
 DvClApp::GetDataSfForNeighbor(uint32_t nextHopId) const
 {
+    // El SF de un enlace lo revela cual de las balizas del vecino se oye: las
+    // balizas rotan por el rango con una PMF geometrica que favorece los SF
+    // bajos, asi que un vecino cercano se oye en SF bajo y uno lejano solo en
+    // los altos. Esa observacion es la que debe gobernar el SF de datos.
+    //
+    // Antes esta funcion devolvia un 12 fijo en cuanto la ventana "robusta" no
+    // se cumplia -- y no se cumplia NUNCA, porque exige 2 muestras del mismo SF
+    // dentro de un intervalo de baliza y cada vecino baliza una vez por
+    // intervalo. El 100% de las llamadas caia a ese 12, que luego se recorta a
+    // sfMax: todos los enlaces acababan con el MISMO SF, el termino de ToA de
+    // la metrica quedaba constante y no podia preciar el aire
+    // (VALIDATION.md 2026-07-27). La cadena de reserva es ahora especifica del
+    // enlace, que es lo que el diseno pretendia.
     auto it = m_neighborLinks.find(nextHopId);
     if (it != m_neighborLinks.end())
     {
+        const AppNeighborLink& link = it->second;
         const Time now = Simulator::Now();
+
+        // 0) El SF que la sensibilidad exige para este enlace, derivado del
+        //    RSSI medido. Es especifico del enlace y es lo que hace que el
+        //    termino de ToA de la metrica pueda preciar el aire.
+        if (link.sensitivitySf >= 7 && link.sensitivitySf <= 12)
+        {
+            return link.sensitivitySf;
+        }
+
+        // 1) Si no hay medida: el SF mas bajo con evidencia reciente suficiente.
         uint8_t bestRecentSf = 12;
-        if (TryGetBestRecentSf(it->second, now, &bestRecentSf))
+        if (TryGetBestRecentSf(link, now, &bestRecentSf))
         {
             return bestRecentSf;
         }
 
-        // Sin SF vigente en ventana: fallback robusto.
-        NS_LOG_DEBUG(
-            "Node " << GetNode()->GetId() << " GetDataSfForNeighbor: neighbor=" << nextHopId
-                    << " no recent SF in window=" << m_neighborLinkTimeout.GetSeconds() << "s"
-                    << ", lastRxSf=" << unsigned(it->second.lastRxSf) << ", using SF12");
-        return 12;
+        // 2) Sin evidencia "robusta": el SF mas bajo en el que se haya oido a
+        //    este vecino alguna vez. Envejece, pero describe ESTE enlace.
+        const uint8_t lo = std::clamp<uint8_t>(m_sfMin, 7, 12);
+        const uint8_t hi = std::clamp<uint8_t>(m_sfMax, 7, 12);
+        for (uint8_t sf = lo; sf <= hi; ++sf)
+        {
+            if (!link.lastSeenBySf[static_cast<size_t>(sf - 7)].IsZero())
+            {
+                return sf;
+            }
+        }
+
+        // 3) Ni eso: lo ultimo que se le oyo.
+        if (link.lastRxSf >= 7 && link.lastRxSf <= 12)
+        {
+            return link.lastRxSf;
+        }
     }
 
-    // Sin historial del vecino, usar SF conservador
-    NS_LOG_DEBUG("Node " << GetNode()->GetId() << " GetDataSfForNeighbor: neighbor=" << nextHopId
-                         << " no history, using SF12");
+    // Sin ningun historial del vecino: conservador de verdad.
+    NS_LOG_DEBUG("GetDataSfForNeighbor: vecino " << nextHopId
+                                                 << " sin historial, SF conservador");
     return 12;
 }
 
@@ -3987,6 +4022,8 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
         }
         UpdateNeighborLinkSf(src, rxSf);
         const uint8_t linkSf = ResolveSfForLink(rxSf, rxPowerDbm);
+        // El SF que exige la sensibilidad de ESTE enlace, para los datos.
+        m_neighborLinks[src].sensitivitySf = linkSf;
         if (m_sfLinkMode == SfLinkMode::DETERMINISTIC_SENSITIVITY)
         {
             m_sfLinkSamples++;

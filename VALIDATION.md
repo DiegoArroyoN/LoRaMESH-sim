@@ -2561,3 +2561,42 @@ mostrara diferencias entre α que solo venían de la cuantización.
 - No afecta a: efecto del MAC, Q5 (duty), presupuesto de energía, mecanismo de
   la cola del SoC, ni al término δ·Ψ, que sí varía con el SoC del vecino y sí
   actúa (verificado 2026-07-27: cambia el 80.2% de las rutas).
+
+### Arreglo (2026-07-27): el SF de datos lo decide la sensibilidad del enlace
+
+Diagnóstico fino, con instrumentación de las ramas de `GetDataSfForNeighbor`:
+el 100% de las llamadas terminaba en la reserva devolviendo **12**, porque
+`lastSeenBySf` estaba vacío para todo el rango y `lastRxSf` valía 12. Es decir,
+`UpdateNeighborLinkSf` se llamaba siempre con `rxSf = m_sfControl` (12): **el SF
+que el receptor lee del paquete no llega**, aunque el RSSI del mismo tag sí.
+
+La vía fiable es el RSSI. `ComputeMinSfBySensitivity` ya estaba bien
+implementado (tabla del SX1276 a 125 kHz, devuelve el SF mínimo que supera la
+sensibilidad) y `ResolveSfForLink` ya lo usaba para el registro de enlace del
+ruteo. Solo faltaba que el plano de datos lo consumiera.
+
+Se añade `AppNeighborLink::sensitivitySf`, que se rellena al recibir baliza con
+el SF exigido por la sensibilidad de ese enlace, y `GetDataSfForNeighbor` lo usa
+como primera opción.
+
+**Verificación tras el arreglo** — el SF ahora depende del enlace y de la
+distancia:
+
+| escenario | SF de datos |
+|---|---|
+| rejilla 178 m, N=25 | SF7 84%, SF8 16% |
+| aleatoria 1 km, N=25 | SF7 85%, SF8 15% |
+| aleatoria 3 km, N=25 | SF7 46%, SF8 54% |
+| **aleatoria 5 km, N=25** | **SF7 39%, SF8 61%** |
+
+Y con el rango completo 7-12 aparece el abanico entero:
+
+| escenario (SF 7-12) | SF7 | SF8 | SF9 | SF10 | SF11 | SF12 |
+|---|---|---|---|---|---|---|
+| rejilla 178 m | 56% | 23% | 13% | 7% | 0% | 0% |
+| aleatoria 3 km | 48% | 17% | 18% | 14% | 1% | 2% |
+| **rejilla dispersa 600 m** | 12% | 27% | **32%** | **25%** | 2% | 1% |
+
+Con esto el ToA de referencia deja de ser constante y el término α·T̂ puede
+por fin preciar el aire, que era el propósito del diseño cross-layer. Suites
+10/10.
