@@ -237,6 +237,14 @@ main(int argc, char* argv[])
     double referenceDistance = 40.0; // FLoRa reference (thesis: d₀=40m)
     double referenceLossDb = 127.41; // FLoRa urban L(d₀=40m) = 127.41 dB (thesis specification)
     double shadowingSigmaDb = 3.57;
+    // Como se aplica el sombreado. "static" (por defecto) saca una muestra
+    // por enlace y la mantiene: es lo que hace que el RSSI de la baliza
+    // prediga el de los datos. "per_packet" sortea en cada transmision, que
+    // es desvanecimiento rapido y no sombreado; se conserva solo para
+    // reproducir las campañas anteriores al 2026-07-28. "none" lo desactiva
+    // y deja el canal determinista, que es la condicion de
+    // Pueyo-Centelles: su paper no modela sombreado ni fast fading.
+    std::string shadowingModel = "static";
     bool enableSfScanRx = true;
     bool pueyoFloraLikeRx = false;
     bool enableNs3EnergyFramework = false;
@@ -567,6 +575,11 @@ main(int argc, char* argv[])
     cmd.AddValue("pathLossExponent", "Log-distance path loss exponent", pathLossExponent);
     cmd.AddValue("referenceDistance", "Path loss reference distance [m]", referenceDistance);
     cmd.AddValue("referenceLossDb", "Path loss at reference distance [dB]", referenceLossDb);
+    cmd.AddValue("shadowingModel",
+                 "Aplicacion del sombreado: static (una muestra por enlace) | per_packet "
+                 "(heredado, en realidad fast fading) | none (canal determinista, la "
+                 "condicion de Pueyo-Centelles).",
+                 shadowingModel);
     cmd.AddValue("shadowingSigmaDb",
                  "Log-normal shadowing sigma [dB] in propagation model (0 disables shadowing)",
                  shadowingSigmaDb);
@@ -1179,6 +1192,11 @@ main(int argc, char* argv[])
         {"sfMin", "allowPaperLikeSfRangeVariant"},
         {"shadowingSigmaDb", "allowShadowOverride"},
     };
+
+    NS_ABORT_MSG_IF(shadowingModel != "static" && shadowingModel != "per_packet" &&
+                        shadowingModel != "none",
+                    "Error: shadowingModel debe ser static, per_packet o none (recibido '"
+                        << shadowingModel << "')");
 
     // Que toco el perfil ENCIMA de la base. El sfMax=8 de los perfiles estuvo
     // ahi desde f30a63359 sin que nadie lo eligiera: truncaba la red a 350 m de
@@ -1922,6 +1940,7 @@ main(int argc, char* argv[])
     cfg.referenceDistance = referenceDistance;
     cfg.referenceLossDb = referenceLossDb;
     cfg.shadowingSigmaDb = shadowingSigmaDb;
+    cfg.shadowingModel = shadowingModel;
     cfg.initTtl = static_cast<uint8_t>(std::min<uint32_t>(initTtl, 63));
 
     Ptr<DvClHelper> helper = CreateObject<DvClHelper>();

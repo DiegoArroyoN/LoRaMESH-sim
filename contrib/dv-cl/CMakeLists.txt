@@ -6,6 +6,7 @@ build_lib(
     model/dv-cl-regional-profile.cc
     model/dv-cl-wire.cc
     model/dv-cl-routing.cc
+    model/dv-cl-static-shadowing.cc
     model/dv-cl-mac-csma-cad.cc
     model/dv-cl-lora-energy-model.cc
     model/dv-cl-metric-tag.cc
@@ -20,6 +21,7 @@ build_lib(
     model/dv-cl-regional-profile.h
     model/dv-cl-wire.h
     model/dv-cl-routing.h
+    model/dv-cl-static-shadowing.h
     model/dv-cl-mac-csma-cad.h
     model/dv-cl-lora-energy-model.h
     model/dv-cl-metric-tag.h
@@ -37,6 +39,7 @@ build_lib(
     test/dv-cl-test-suite.cc
     test/dv-cl-wire-test-suite.cc
     test/dv-cl-routing-test-suite.cc
+    test/dv-cl-shadowing-test-suite.cc
     test/dv-cl-mac-test-suite.cc
     test/dv-cl-energy-test-suite.cc
     test/dv-cl-region-test-suite.cc

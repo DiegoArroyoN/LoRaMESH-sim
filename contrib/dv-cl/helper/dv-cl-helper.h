@@ -35,6 +35,12 @@ struct DvClMeshConfig
     double referenceDistance{1.0};
     double referenceLossDb{7.7};
     double shadowingSigmaDb{3.57};
+    /// Como se aplica el sombreado: "none" lo desactiva, "static" saca
+    /// una muestra por enlace y la mantiene toda la corrida, y
+    /// "per_packet" saca una nueva en cada transmision. Este ultimo es lo
+    /// que habia hasta 2026-07-28 y no es sombreado sino desvanecimiento
+    /// rapido: ver DvClStaticShadowingPropagationLossModel.
+    std::string shadowingModel{"static"};
     uint8_t initTtl{10};
 };
 

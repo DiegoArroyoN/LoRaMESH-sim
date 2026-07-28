@@ -4,6 +4,7 @@
 
 #include "ns3/dv-cl-app.h"
 #include "ns3/dv-cl-lora-net-device.h"
+#include "ns3/dv-cl-static-shadowing.h"
 #include "ns3/lora-channel.h"
 #include "ns3/mac48-address.h"
 #include "ns3/mobility-helper.h"
@@ -205,15 +206,32 @@ DvClHelper::InstallDevices(NodeContainer& nodes)
     loss->SetPathLossExponent(m_cfg.pathLossExponent);
     loss->SetReference(m_cfg.referenceDistance, m_cfg.referenceLossDb);
 
-    if (m_cfg.shadowingSigmaDb > 0.0)
+    if (m_cfg.shadowingSigmaDb > 0.0 && m_cfg.shadowingModel != "none")
     {
-        Ptr<RandomPropagationLossModel> shadowing = CreateObject<RandomPropagationLossModel>();
-        Ptr<NormalRandomVariable> shadowingVar = CreateObject<NormalRandomVariable>();
-        shadowingVar->SetAttribute("Mean", DoubleValue(0.0));
-        shadowingVar->SetAttribute("Variance",
-                                   DoubleValue(m_cfg.shadowingSigmaDb * m_cfg.shadowingSigmaDb));
-        shadowing->SetAttribute("Variable", PointerValue(shadowingVar));
-        loss->SetNext(shadowing); // Chain: LogDistance → Shadowing
+        if (m_cfg.shadowingModel == "per_packet")
+        {
+            // Comportamiento heredado, conservado solo para reproducir campañas
+            // anteriores a 2026-07-28. RandomPropagationLossModel sortea en CADA
+            // transmision, que es desvanecimiento rapido y no sombreado, y sesga
+            // la estimacion de enlace del protocolo: un nodo solo recibe las
+            // balizas que sacaron una muestra favorable, asi que mide la cola
+            // alta de la distribucion y deriva un SF demasiado bajo.
+            Ptr<RandomPropagationLossModel> shadowing = CreateObject<RandomPropagationLossModel>();
+            Ptr<NormalRandomVariable> shadowingVar = CreateObject<NormalRandomVariable>();
+            shadowingVar->SetAttribute("Mean", DoubleValue(0.0));
+            shadowingVar->SetAttribute(
+                "Variance",
+                DoubleValue(m_cfg.shadowingSigmaDb * m_cfg.shadowingSigmaDb));
+            shadowing->SetAttribute("Variable", PointerValue(shadowingVar));
+            loss->SetNext(shadowing);
+        }
+        else
+        {
+            Ptr<dvcl::DvClStaticShadowingPropagationLossModel> shadowing =
+                CreateObject<dvcl::DvClStaticShadowingPropagationLossModel>();
+            shadowing->SetAttribute("SigmaDb", DoubleValue(m_cfg.shadowingSigmaDb));
+            loss->SetNext(shadowing);
+        }
     }
 
     Ptr<PropagationDelayModel> delay = CreateObject<ConstantSpeedPropagationDelayModel>();
