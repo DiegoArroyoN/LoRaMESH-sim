@@ -3120,3 +3120,97 @@ Tal como esta formulada, la metrica compuesta **no domina**: compra PDR a
 cambio de vida util, de forma consistente en toda condicion probada, y una
 metrica de una sola capa (RSSI) compra mas PDR que ella. Decision de encuadre
 pendiente con Diego.
+
+## 2026-07-28 (b) — Por que el PDR es bajo: no es la carga
+
+Diego pregunta si alguna campaña llega al 80% de PDR. El maximo en las 2880
+corridas de E1/E2 es **0.742** (multi-sink, N=9). Investigado a fondo, y la
+respuesta tiene tres partes, ninguna de ellas la saturacion.
+
+### 1. No es la carga
+
+N=9, rejilla, bajando el caudal 100x:
+
+| periodo/nodo | generados | PDR | admision | cola desbordada | retardo p50 |
+|---|---:|---:|---:|---:|---:|
+| 10 s | 35877 | 0.275 | 0.93 | 4315 | 309 s |
+| 100 s | 3592 | 0.334 | 1.08 | 0 | 0.075 s |
+| 1000 s | 360 | 0.353 | 1.13 | 0 | 0.075 s |
+
+Con la red **completamente ociosa** —cola vacia, retardo de 75 ms, cero
+descartes por cola, TTL, ruta o reintentos— se sigue perdiendo el **65%**. De
+405 transmisiones al aire llegan 127, y nadie las descarta: se emiten hacia
+destinos que no pueden oirlas.
+
+### 2. El perfil restringe el SF a 7-8
+
+`proposal_pueyo_like_csmacad` (el de TODAS las campañas) fija `sfMin=7;
+sfMax=8`, heredado de `pueyo2024_paper_like`, sin comentario que lo justifique
+y pisando el `applyPueyoComparableBase()` que deja 7-12. Alcances: SF7 251 m,
+SF8 350 m. En rejilla a 178 m los nodos a dos celdas estan a 356 m y las
+esquinas opuestas a 503 m: **fuera de alcance de todo SF permitido**.
+
+Esto corrige una lectura mia anterior: cuando observe "a 178 m solo se usan SF7
+y SF8" lo interprete como *solo hacen falta*; eran *los unicos permitidos*.
+
+Pueyo-Centelles usa el rango completo. NotebookLM, citando el paper: el nodo
+determina *"the smallest SF required to successfully transmit between nodes n_l
+and n_m"*, su tabla de sensibilidad cubre SF7-SF12 con alcances hasta 1058 m, y
+discuten explicitamente configuraciones multi-SF de SF7 a SF10. **Nuestro
+sfMax=8 es una desviacion de la referencia.**
+
+Coste medido (red ociosa, SF7-8 frente a SF7-12):
+
+| N | SF7-8 | SF7-12 | mejora |
+|---:|---:|---:|---:|
+| 9 | 0.353 | 0.419 | +19% |
+| 25 | 0.182 | 0.226 | +24% |
+| 49 | 0.099 | 0.119 | +20% |
+
+### 3. El sombreado hace OPTIMISTA la estimacion del enlace (dominante)
+
+El SF de datos hacia un vecino sale del RSSI con que se oyo su baliza. Pero
+solo se oyen las balizas **que tuvieron suerte**: de un enlace marginal llegan
+las realizaciones de +5 dB y no las de -5 dB. El RSSI medido es el de la cola
+alta, no el mediano, el SF derivado queda demasiado bajo, y los datos van
+despues por el canal mediano y se pierden. Es sesgo de supervivencia en la
+estimacion de enlace.
+
+Contraste con sigma=0 (rango SF7-12, red ociosa):
+
+| N | sigma=3.57 | sigma=0 | mejora | saltos entregados | relevos |
+|---:|---:|---:|---:|---|---:|
+| 9 | 0.419 | **0.725** | +73% | 0.079 -> 0.142 | 20 -> 55 |
+| 25 | 0.226 | **0.567** | +151% | 0.119 -> 0.457 | 136 -> 401 |
+| 49 | 0.119 | **0.341** | +187% | 0.193 -> 0.840 | 274 -> 1087 |
+
+La firma es exactamente la predicha: al quitar el sombreado el **multisalto
+empieza a funcionar** (saltos entregados x4.4, relevos x4). Con sigma=3.57 se
+instalan rutas sobre enlaces que no sostienen datos y las cadenas se rompen; de
+ahi que casi todo lo entregado sea de un solo salto, que en una malla es
+justamente lo que no deberia pasar.
+
+## 2026-07-28 (c) — E8: delta medido por fin con Psi viva
+
+320 celdas a 150 ks. **Comprobado que Psi estuvo viva**, no supuesto: SoC min
+0.2199, p10 0.2550, p50 0.4087, max 0.6024, con practicamente todos los nodos
+dentro de la rampa [0.20, 0.50].
+
+| contraste | dPDR | t | dSoC_min | t | dSoC_p10 | t |
+|---|---:|---:|---:|---:|---:|---:|
+| d=0.25 vs d=0 | -0.148% | -3.27 | -0.000168 | -3.08 | -0.000228 | -4.59 |
+| d=0.5 vs d=0 | -0.122% | -2.48 | -0.000210 | -3.95 | -0.000254 | -6.09 |
+
+**Con Psi plenamente viva, delta empeora las dos cosas.** Los tamaños son
+minusculos (el SoC del nodo peor parado se mueve 0.0002, o sea 0.02 puntos
+porcentuales) pero son significativos y van en contra. Por escenario: rejilla
+-0.00054 (t=-9.0), convergecast +0.00012 (t=+2.5).
+
+El termino que justifica llamar cross-layer a la metrica, medido por primera
+vez en el unico regimen donde puede actuar, no sirve para lo que fue diseñado.
+
+Nota estructural: en las **320 celdas nadie murio a 150 ks**, asi que FND no es
+medible ahi. Psi solo esta viva a mitad de corrida y el FND solo ocurre al
+final, cuando Psi ya esta saturada: las dos condiciones se excluyen en este
+montaje. Cualquier afirmacion sobre "delta mejora la vida util" tiene que
+lidiar con eso.
