@@ -90,6 +90,11 @@ main(int argc, char* argv[])
     std::string wireFormat = "pueyo7b";           // default operativo; v2 queda como legacy
     std::string trafficMode = "periodic_any_to_any"; // periodic_any_to_any | pueyo_all_to_all
     uint32_t pueyoPacketsPerPair = 100;
+    // Periodo de generacion por nodo [s]. 0 = usar el preajuste de
+    // trafficLoad. Existe para barrer la carga de forma continua: los
+    // preajustes (100/10/1/0.1 s) van de diez en diez y no permiten situar
+    // la rodilla de saturacion, que cae entre 100 s y 10 s.
+    double dataPeriodSec = 0.0;
     uint32_t dataPayloadSizeBytes = 20;
     uint32_t dvBeaconMaxRoutes = 0;
     uint32_t dvPayloadMaxBytes = 0;              // 0: MTU-derived
@@ -290,6 +295,10 @@ main(int argc, char* argv[])
         "multisink: auto-place K spread sinks (over node bounding box) if sinkNodeIds empty. "
         "0=disabled. Works for pueyo_grid and random.",
         numSinks);
+    cmd.AddValue("dataPeriodSec",
+                 "Periodo de generacion de datos por nodo [s]. >0 manda sobre trafficLoad; "
+                 "0 usa el preajuste.",
+                 dataPeriodSec);
     cmd.AddValue("pueyoPacketsPerPair",
                  "Packets generated per source-destination pair in pueyo_all_to_all mode",
                  pueyoPacketsPerPair);
@@ -1944,6 +1953,8 @@ main(int argc, char* argv[])
                                BooleanValue(avoidImmediateBacktrack));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataPeriodJitterMax",
                                DoubleValue(dataPeriodJitterMaxSec));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataPeriodSec",
+                               DoubleValue(dataPeriodSec));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::RouteSwitchHysteresis",
                                BooleanValue(routeSwitchHysteresis));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::DataPeriodJitterSymmetric",

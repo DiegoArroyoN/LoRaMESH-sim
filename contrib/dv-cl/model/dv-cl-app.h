@@ -505,6 +505,9 @@ class DvClApp : public Application
     int32_t m_forcedDataDestinationId{-1};
     bool m_enableDvBroadcast{true}; // Enable/disable DV discovery broadcasts
     TrafficLoadMode m_trafficLoadMode{TrafficLoadMode::MEDIUM};
+    /// >0 manda sobre el preajuste de TrafficLoad. Ver
+    /// DvClApp::UpdateDataPeriod.
+    double m_dataPeriodSec{0.0};
     TrafficMode m_trafficMode{TrafficMode::PERIODIC_ANY_TO_ANY};
     SfLinkMode m_sfLinkMode{SfLinkMode::OBSERVED_RXSF};
     double m_sfLinkMarginDb{0.0};

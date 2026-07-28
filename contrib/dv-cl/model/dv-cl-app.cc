@@ -300,6 +300,14 @@ DvClApp::GetTypeId()
                           DoubleValue(60.0),
                           MakeDoubleAccessor(&DvClApp::m_beaconWarmupSec),
                           MakeDoubleChecker<double>(0.0))
+            .AddAttribute("DataPeriodSec",
+                          "Periodo de generacion de datos por nodo [s]. >0 manda sobre el "
+                          "preajuste de TrafficLoad; 0 usa el preajuste. Existe para barrer la "
+                          "carga de forma continua: los preajustes van de diez en diez y no "
+                          "permiten situar la rodilla de saturacion.",
+                          DoubleValue(0.0),
+                          MakeDoubleAccessor(&DvClApp::m_dataPeriodSec),
+                          MakeDoubleChecker<double>(0.0))
             .AddAttribute("TrafficLoad",
                           "Data traffic load: low/medium/high/saturation.",
                           StringValue("medium"),
@@ -838,7 +846,16 @@ DvClApp::GetTrafficMode() const
 void
 DvClApp::UpdateDataPeriod()
 {
-    // Data generation period is driven only by traffic load presets.
+    // Un valor explicito manda sobre el preajuste. Los cuatro preajustes estan
+    // separados por factores de diez (100 s, 10 s, 1 s, 0.1 s), asi que sirven
+    // para nombrar regimenes pero no para localizar la rodilla de saturacion,
+    // que en las campañas de 2026-07 cae entre 100 s y 10 s. Este mando da la
+    // resolucion que falta sin tocar el significado de los preajustes.
+    if (m_dataPeriodSec > 0.0)
+    {
+        m_dataGenerationPeriod = Seconds(m_dataPeriodSec);
+        return;
+    }
     switch (m_trafficLoadMode)
     {
     case TrafficLoadMode::LOW:
