@@ -3042,3 +3042,81 @@ experimento de densidad con area fija de 500x500 m2. Propagacion delegada a
 FLoRa en entorno urbano; el paper **no da** el exponente de path loss ni la
 varianza de sombreado, solo la tabla de alcances resultante. Hardware real solo
 como referencia: dos TTGO ESP32 a 2 m con atenuador de 15 dB.
+
+## 2026-07-28 — Campañas re-lanzadas sobre el arbol corregido, y E7
+
+E1/E2 (2880), E3 (240), E6 (320) y E7 (320): **0 fallos** en las cuatro.
+Resultados anteriores conservados como `*_pre20260727`.
+
+### E1 — ranking de metricas bajo CSMA/CAD (40 ks, perf)
+
+| metrica | PDR | vs toa_only | t | gana |
+|---|---:|---:|---:|---:|
+| toa_only | 0.1752 | ref | | |
+| composite | 0.1779 | +2.74% | 7.7 | 321/480 |
+| hops | 0.1774 | +2.82% | 4.2 | 304/480 |
+| **rssi** | **0.1787** | **+4.06%** | 5.3 | 343/480 |
+
+**La compuesta no gana el ranking de PDR.** RSSI, que es de una sola capa, la
+supera (+4.06% frente a +2.74%), y `hops` la iguala. Por escenario el efecto
+vive casi todo en convergecast: composite +6.34%, hops +7.05%, rssi +9.45%; en
+rejilla all-to-all es +1.13% / +0.78% / +1.65%.
+
+### E2 — efecto del MAC (CSMA/CAD frente a ALOHA, metrica igualada)
+
++10.45% de PDR con la compuesta (t=14.8), +11.56% con toa_only (t=16.2).
+Interaccion de -1.11 pp: el MAC rinde **algo menos** con la compuesta, no mas.
+No hay sinergia cross-layer favorable. Por escenario: rejilla +15.40%,
+convergecast +6.67%, multi-sink +9.29%.
+
+### E3 — vida util (300 ks, trafico sostenido)
+
+| variable | delta | t | gana |
+|---|---:|---:|---:|
+| FND | -1.56% | -33.6 | **0/120** |
+| T50 | -1.57% | -34.9 | 0/118 |
+| PDR | +3.49% | 9.8 | 102/120 |
+| energia TX | -0.59% | -24.3 | 1/120 |
+| relevos | -40.78% | -92.7 | 0/120 |
+
+La compuesta **pierde vida util en las 120 celdas**, sin una sola excepcion.
+
+### E7 — los cuatro espaciados: la prediccion FALLA
+
+| espaciado | papel | dPDR | dFND |
+|---:|---|---:|---:|
+| 177 | diagonal entra en SF7 | +0.41% (t=4.1) | -2.10% (t=-68.3) |
+| 178 | diagonal cae, dilema SF8 | +0.37% (t=4.1) | -2.10% (t=-67.5) |
+| 246 | diagonal entra en SF8 | +2.98% (t=19.7) | -1.75% (t=-47.5) |
+| 247 | diagonal cae, dilema SF9 | +2.98% (t=20.2) | -1.72% (t=-42.8) |
+
+**Los pares de un metro son indistinguibles**: 177 y 178 dan el mismo -2.10%,
+ratio 1.00x. Dos motivos, los dos instructivos:
+
+1. **El umbral no sobrevive al sombreado.** El margen de 0.7 m son 0.025 dB
+   frente a sigma=3.57 dB. El diseño de Pueyo-Centelles supone canal
+   determinista; con sombreado, 177 y 178 m son la misma red.
+
+2. **Mi explicacion del mecanismo era falsa en su forma concreta.** A 177 m,
+   donde la diagonal SI se alcanza en SF7, la compuesta pone igualmente el
+   **19.4%** del trafico en SF8 (toa_only: 1.9%). Luego el intercambio no lo
+   causa la diagonal: la compuesta prefiere saltos largos **donde la geometria
+   se lo permita**, por ejemplo saltando dos celdas (354 m a 177 m de
+   espaciado, que exige SF8) en vez de dar dos saltos SF7.
+
+**Lo que si sobrevive, y sale reforzado:** el intercambio saltos-por-SF se
+confirma en los cuatro espaciados (SF7 98.1%->80.6% a 177/178, 94.3%->76.6% a
+246/247; saltos -39% y -27%; airtime siempre +2%). Y **dFND es
+independiente del espaciado** (-2.10, -2.10, -1.75, -1.72), lo que es un
+resultado mas fuerte que un efecto de umbral: generaliza.
+
+dPDR en cambio si depende, y mucho: +0.4% a 177/178 frente a **+3.0% a
+246/247**. La ventaja de la compuesta crece 7x cuando la red se estresa (el PDR
+absoluto cae de 0.070 a 0.033).
+
+### Lectura conjunta
+
+Tal como esta formulada, la metrica compuesta **no domina**: compra PDR a
+cambio de vida util, de forma consistente en toda condicion probada, y una
+metrica de una sola capa (RSSI) compra mas PDR que ella. Decision de encuadre
+pendiente con Diego.
