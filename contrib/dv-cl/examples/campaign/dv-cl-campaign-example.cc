@@ -804,6 +804,8 @@ main(int argc, char* argv[])
 
     constexpr double kPueyoDefaultDataStartPhaseMaxSec = 100.0;
 
+    // Foto de la base, para poder decir despues que toco el perfil encima.
+    std::map<std::string, std::string> baseSnapshot;
     auto applyPueyoComparableBase = [&]() {
         cfg.enableCsma = false;
         cfg.enableDutyCycle = false; // Equivalent to 100% duty availability (no duty gate).
@@ -849,6 +851,7 @@ main(int argc, char* argv[])
         shadowingSigmaDb = 3.57;
         dataPayloadSizeBytes = 20;
         enableNs3EnergyFramework = true; // active in all profiles [thesis: FND/T50/Psi(bj)]
+        baseSnapshot = snapshotProfileForced();
     };
 
     if (profileLower == "pueyo2024")
@@ -869,7 +872,14 @@ main(int argc, char* argv[])
         socHysteresisPercent = 0;
         sfLinkMode = "deterministic_sensitivity";
         sfMin = 7;
-        sfMax = 8;
+        // SF7-12, el rango de la referencia. Estuvo en 7-8 hasta 2026-07-28 y
+        // eso truncaba la red: SF7 alcanza 251 m y SF8 350 m, asi que en
+        // rejilla a 178 m los nodos a dos celdas (356 m) y las esquinas
+        // opuestas (503 m) quedaban fuera del alcance de TODO SF permitido, y
+        // el PDR salia entre un 19% y un 24% por debajo. Pueyo-Centelles usa
+        // el rango completo: su tabla de sensibilidad cubre SF7-SF12 y el nodo
+        // elige "the smallest SF required to successfully transmit".
+        sfMax = 12;
         pueyoFloraLikeRx = true;
         enableSfScanRx = false;
         enableNs3EnergyFramework = true; // KPIs: FND y T_50 requieren modelo de energia
@@ -904,7 +914,14 @@ main(int argc, char* argv[])
         socHysteresisPercent = 0;
         sfLinkMode = "deterministic_sensitivity";
         sfMin = 7;
-        sfMax = 8;
+        // SF7-12, el rango de la referencia. Estuvo en 7-8 hasta 2026-07-28 y
+        // eso truncaba la red: SF7 alcanza 251 m y SF8 350 m, asi que en
+        // rejilla a 178 m los nodos a dos celdas (356 m) y las esquinas
+        // opuestas (503 m) quedaban fuera del alcance de TODO SF permitido, y
+        // el PDR salia entre un 19% y un 24% por debajo. Pueyo-Centelles usa
+        // el rango completo: su tabla de sensibilidad cubre SF7-SF12 y el nodo
+        // elige "the smallest SF required to successfully transmit".
+        sfMax = 12;
         pueyoFloraLikeRx = true;
         enableSfScanRx = false;
         if (allowPaperLikeSfRangeVariant)
@@ -946,7 +963,14 @@ main(int argc, char* argv[])
         socHysteresisPercent = 0;
         sfLinkMode = "deterministic_sensitivity";
         sfMin = 7;
-        sfMax = 8;
+        // SF7-12, el rango de la referencia. Estuvo en 7-8 hasta 2026-07-28 y
+        // eso truncaba la red: SF7 alcanza 251 m y SF8 350 m, asi que en
+        // rejilla a 178 m los nodos a dos celdas (356 m) y las esquinas
+        // opuestas (503 m) quedaban fuera del alcance de TODO SF permitido, y
+        // el PDR salia entre un 19% y un 24% por debajo. Pueyo-Centelles usa
+        // el rango completo: su tabla de sensibilidad cubre SF7-SF12 y el nodo
+        // elige "the smallest SF required to successfully transmit".
+        sfMax = 12;
         pueyoFloraLikeRx = true;
         enableSfScanRx = false;
         if (allowPaperLikeSfRangeVariant)
@@ -1018,7 +1042,14 @@ main(int argc, char* argv[])
         socHysteresisPercent = 5; // 5% threshold reduces routing churn
         sfLinkMode = "deterministic_sensitivity";
         sfMin = 7;
-        sfMax = 8;
+        // SF7-12, el rango de la referencia. Estuvo en 7-8 hasta 2026-07-28 y
+        // eso truncaba la red: SF7 alcanza 251 m y SF8 350 m, asi que en
+        // rejilla a 178 m los nodos a dos celdas (356 m) y las esquinas
+        // opuestas (503 m) quedaban fuera del alcance de TODO SF permitido, y
+        // el PDR salia entre un 19% y un 24% por debajo. Pueyo-Centelles usa
+        // el rango completo: su tabla de sensibilidad cubre SF7-SF12 y el nodo
+        // elige "the smallest SF required to successfully transmit".
+        sfMax = 12;
         pueyoFloraLikeRx = true;
         enableSfScanRx = false;
         enableNs3EnergyFramework = true; // Psi(b_j) en routing + KPIs FND/T_50
@@ -1056,7 +1087,14 @@ main(int argc, char* argv[])
         socHysteresisPercent = 5; // 5% threshold reduces routing churn
         sfLinkMode = "deterministic_sensitivity";
         sfMin = 7;
-        sfMax = 8;
+        // SF7-12, el rango de la referencia. Estuvo en 7-8 hasta 2026-07-28 y
+        // eso truncaba la red: SF7 alcanza 251 m y SF8 350 m, asi que en
+        // rejilla a 178 m los nodos a dos celdas (356 m) y las esquinas
+        // opuestas (503 m) quedaban fuera del alcance de TODO SF permitido, y
+        // el PDR salia entre un 19% y un 24% por debajo. Pueyo-Centelles usa
+        // el rango completo: su tabla de sensibilidad cubre SF7-SF12 y el nodo
+        // elige "the smallest SF required to successfully transmit".
+        sfMax = 12;
         pueyoFloraLikeRx = true;
         enableSfScanRx = false;
         enableNs3EnergyFramework = true;
@@ -1141,6 +1179,31 @@ main(int argc, char* argv[])
         {"sfMin", "allowPaperLikeSfRangeVariant"},
         {"shadowingSigmaDb", "allowShadowOverride"},
     };
+
+    // Que toco el perfil ENCIMA de la base. El sfMax=8 de los perfiles estuvo
+    // ahi desde f30a63359 sin que nadie lo eligiera: truncaba la red a 350 m de
+    // alcance y costaba entre un 19% y un 24% de PDR, y no se vio en tres meses
+    // porque el valor solo aparecia enterrado en el JSON de cada corrida. Un
+    // perfil PUEDE apartarse de la base -- para eso existe -- pero apartarse en
+    // silencio es lo que hace que una campaña diga medir una cosa y mida otra.
+    if (!baseSnapshot.empty())
+    {
+        const std::map<std::string, std::string> tras = snapshotProfileForced();
+        std::ostringstream cambios;
+        std::size_t nCambios = 0;
+        for (const auto& [clave, valorBase] : baseSnapshot)
+        {
+            const auto it = tras.find(clave);
+            if (it != tras.end() && it->second != valorBase)
+            {
+                cambios << (nCambios++ ? ", " : "") << clave << ": " << valorBase << " -> "
+                        << it->second;
+            }
+        }
+        std::cerr << "[perfil] '" << profileLower << "' modifica " << nCambios
+                  << " valor(es) de la base comparable"
+                  << (nCambios ? ": " + cambios.str() : "") << std::endl;
+    }
 
     // Contraste: lo pedido por linea de comandos frente a lo que quedo tras
     // aplicar el perfil. Un flag aceptado y descartado en silencio hace que la
@@ -1261,8 +1324,8 @@ main(int argc, char* argv[])
             "Error: profile=pueyo2024_paper_like requiere sfLinkMode=deterministic_sensitivity");
         if (!allowPaperLikeSfRangeVariant)
         {
-            NS_ABORT_MSG_IF(sfMin != 7 || sfMax != 8,
-                            "Error: profile=pueyo2024_paper_like requiere sfMin=7 y sfMax=8");
+            NS_ABORT_MSG_IF(sfMin != 7 || sfMax != 12,
+                            "Error: profile=pueyo2024_paper_like requiere sfMin=7 y sfMax=12");
         }
         else
         {
@@ -1301,8 +1364,8 @@ main(int argc, char* argv[])
         if (!allowPaperLikeSfRangeVariant)
         {
             NS_ABORT_MSG_IF(
-                sfMin != 7 || sfMax != 8,
-                "Error: profile=pueyo2024_paper_like_csmacad requiere sfMin=7 y sfMax=8");
+                sfMin != 7 || sfMax != 12,
+                "Error: profile=pueyo2024_paper_like_csmacad requiere sfMin=7 y sfMax=12");
         }
         else
         {
@@ -1334,8 +1397,8 @@ main(int argc, char* argv[])
             "Error: profile=csmacad_free_backoff requiere sfLinkMode=deterministic_sensitivity");
         if (!allowPaperLikeSfRangeVariant)
         {
-            NS_ABORT_MSG_IF(sfMin != 7 || sfMax != 8,
-                            "Error: profile=csmacad_free_backoff requiere sfMin=7 y sfMax=8");
+            NS_ABORT_MSG_IF(sfMin != 7 || sfMax != 12,
+                            "Error: profile=csmacad_free_backoff requiere sfMin=7 y sfMax=12");
         }
         else
         {
@@ -1423,8 +1486,8 @@ main(int argc, char* argv[])
                         "sfLinkMode=deterministic_sensitivity");
         if (!allowPaperLikeSfRangeVariant)
         {
-            NS_ABORT_MSG_IF(sfMin != 7 || sfMax != 8,
-                            "Error: profile=proposal_pueyo_like_aloha requiere sfMin=7 y sfMax=8");
+            NS_ABORT_MSG_IF(sfMin != 7 || sfMax != 12,
+                            "Error: profile=proposal_pueyo_like_aloha requiere sfMin=7 y sfMax=12");
         }
         else
         {
@@ -1469,8 +1532,8 @@ main(int argc, char* argv[])
         if (!allowPaperLikeSfRangeVariant)
         {
             NS_ABORT_MSG_IF(
-                sfMin != 7 || sfMax != 8,
-                "Error: profile=proposal_pueyo_like_csmacad requiere sfMin=7 y sfMax=8");
+                sfMin != 7 || sfMax != 12,
+                "Error: profile=proposal_pueyo_like_csmacad requiere sfMin=7 y sfMax=12");
         }
         else
         {
