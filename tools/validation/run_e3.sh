@@ -16,9 +16,15 @@
 set -u
 NS3=${1:-$HOME/ns346/ns-3-dev}
 JOBS=${2:-15}
+# Canal y semillas por entorno: el mismo runner sirve para el brazo
+# determinista (CHAN=none, la condicion de Pueyo-Centelles) y para el de
+# sombreado por enlace (CHAN=static). La salida va a directorios distintos
+# para que un brazo no se coma las celdas del otro por el cache de .row.
+CHAN=${CHAN:-static}
+SEEDS=${SEEDS:-20}
 BIN="$NS3/build/contrib/dv-cl/examples/ns3-dev-dv-cl-campaign-example-default"
 export LD_LIBRARY_PATH="$NS3/build/lib"
-OUT=$HOME/ns3-runs/e3
+OUT=$HOME/ns3-runs/e3_$CHAN
 mkdir -p "$OUT/cells"
 CSV="$OUT/e3_results.csv"
 HDR="metric,scenario,nEd,seed,rc,secs,fnd_s,t50_s,pdr,gen,deliv,last_data_s,soc_min,soc_p10,soc_mean,tx_mah,idle_mah,rx_mah,relay_tx,src_tx"
@@ -52,7 +58,7 @@ cell() {
   local t0=$SECONDS
   ("$BIN" --profile=proposal_pueyo_like_csmacad --nEd="$n" --stopSec=300000 --rngRun="$seed" \
       --allowDutyOverride=true --allowPacketsPerPairOverride=true --pueyoPacketsPerPair="$ppp" \
-      --enablePcap=false --verboseLogs=false --enableMetricsEssentialOnly=true \
+      --shadowingModel="$CHAN" --enablePcap=false --verboseLogs=false --enableMetricsEssentialOnly=true \
       $scenflags $metricflags > run.log 2>&1) 2>/dev/null
   local rc=$?
   local secs=$(( SECONDS - t0 ))
@@ -117,7 +123,7 @@ for n in 25 49 100; do
   echo "=== tanda N=$n ($(date +%H:%M)) ==="
   for scen in grid_a2a rnd_conv1; do
     for met in composite toa; do
-      for seed in $(seq 1 20); do echo "$met $scen $n $seed"; done
+      for seed in $(seq 1 "$SEEDS"); do echo "$met $scen $n $seed"; done
     done
   done | shuf | xargs -P "$JOBS" -L1 bash -c 'cell "$@"' _
   { echo "$HDR"; cat "$OUT"/cells/*.row 2>/dev/null; } > "$CSV"

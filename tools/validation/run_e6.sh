@@ -8,9 +8,15 @@
 set -u
 NS3=${1:-$HOME/ns346/ns-3-dev}
 JOBS=${2:-15}
+# Canal y semillas por entorno: el mismo runner sirve para el brazo
+# determinista (CHAN=none, la condicion de Pueyo-Centelles) y para el de
+# sombreado por enlace (CHAN=static). La salida va a directorios distintos
+# para que un brazo no se coma las celdas del otro por el cache de .row.
+CHAN=${CHAN:-static}
+SEEDS=${SEEDS:-20}
 BIN="$NS3/build/contrib/dv-cl/examples/ns3-dev-dv-cl-campaign-example-default"
 export LD_LIBRARY_PATH="$NS3/build/lib"
-OUT=$HOME/ns3-runs/e6
+OUT=$HOME/ns3-runs/e6_$CHAN
 mkdir -p "$OUT/cells"
 CSV="$OUT/e6_results.csv"
 HDR="metric,scenario,nEd,seed,rc,pdr,adm,fwd,delay_p50,delay_p95,gen,deliv,oh_ratio,src_tx,relay_tx,hops"
@@ -21,7 +27,7 @@ HDR="metric,scenario,nEd,seed,rc,pdr,adm,fwd,delay_p50,delay_p95,gen,deliv,oh_ra
 mkdir -p /tmp/e6check && cd /tmp/e6check
 if ! "$BIN" --profile=proposal_pueyo_like_csmacad --nEd=9 --stopSec=3000 --rngRun=1 \
         --allowDutyOverride=true --floodingMode=true \
-        --enablePcap=false --verboseLogs=false >/dev/null 2>&1; then
+        --shadowingModel="$CHAN" --enablePcap=false --verboseLogs=false >/dev/null 2>&1; then
     echo "ABORTA: el binario no acepta --floodingMode. Sincroniza y recompila antes."
     exit 1
 fi
@@ -73,7 +79,7 @@ export BIN LD_LIBRARY_PATH OUT
 [ -f "$CSV" ] || echo "$HDR" > "$CSV"
 for scen in grid_a2a rnd_conv1; do
   for n in 9 16 25 36 49 64 81 100; do
-    for seed in $(seq 1 20); do echo "$scen $n $seed"; done
+    for seed in $(seq 1 "$SEEDS"); do echo "$scen $n $seed"; done
   done
 done | shuf | xargs -P "$JOBS" -L1 bash -c 'cell "$@"' _
 

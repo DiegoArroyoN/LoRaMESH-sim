@@ -13,9 +13,15 @@
 set -u
 NS3=${1:-$HOME/ns346/ns-3-dev}
 JOBS=${2:-15}
+# Canal y semillas por entorno: el mismo runner sirve para el brazo
+# determinista (CHAN=none, la condicion de Pueyo-Centelles) y para el de
+# sombreado por enlace (CHAN=static). La salida va a directorios distintos
+# para que un brazo no se coma las celdas del otro por el cache de .row.
+CHAN=${CHAN:-static}
+SEEDS=${SEEDS:-20}
 BIN="$NS3/build/contrib/dv-cl/examples/ns3-dev-dv-cl-campaign-example-default"
 export LD_LIBRARY_PATH="$NS3/build/lib"
-OUT=$HOME/ns3-runs/e1e2
+OUT=$HOME/ns3-runs/e1e2_$CHAN
 mkdir -p "$OUT/cells"
 CSV="$OUT/e1e2_results.csv"
 HDR="block,mac,metric,scenario,nEd,seed,rc,pdr,adm,fwd,delay_p50,delay_p95,gen,deliv,oh_ratio"
@@ -46,7 +52,7 @@ cell() {
 
   local d="$OUT/work/$id"; mkdir -p "$d"; cd "$d" || return 1
   ("$BIN" --profile="$prof" --nEd="$n" --stopSec=40000 --rngRun="$seed" \
-      --allowDutyOverride=true --enablePcap=false --verboseLogs=false \
+      --allowDutyOverride=true --shadowingModel="$CHAN" --enablePcap=false --verboseLogs=false \
       --enableMetricsEssentialOnly=true $scenflags $metricflags > run.log 2>&1) 2>/dev/null
   local rc=$?
 
@@ -79,7 +85,7 @@ export BIN LD_LIBRARY_PATH OUT
 gen_cells() {
   local N="9 16 25 36 49 64 81 100"
   local SC="grid_a2a rnd_conv1 rnd_msink4"
-  local S=$(seq 1 20)
+  local S=$(seq 1 "$SEEDS")
   for scen in $SC; do for n in $N; do for seed in $S; do
     # E1: CSMA/CAD, 4 metricas (rssi anadida 2026-07-25)
     for m in composite toa hops rssi; do echo "E1 csmacad $m $scen $n $seed"; done

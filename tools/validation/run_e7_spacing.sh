@@ -42,9 +42,15 @@
 set -u
 NS3=${1:-$HOME/ns346/ns-3-dev}
 JOBS=${2:-12}
+# Canal y semillas por entorno: el mismo runner sirve para el brazo
+# determinista (CHAN=none, la condicion de Pueyo-Centelles) y para el de
+# sombreado por enlace (CHAN=static). La salida va a directorios distintos
+# para que un brazo no se coma las celdas del otro por el cache de .row.
+CHAN=${CHAN:-static}
+SEEDS=${SEEDS:-20}
 BIN="$NS3/build/contrib/dv-cl/examples/ns3-dev-dv-cl-campaign-example-default"
 export LD_LIBRARY_PATH="$NS3/build/lib"
-OUT=$HOME/ns3-runs/e7
+OUT=$HOME/ns3-runs/e7_$CHAN
 mkdir -p "$OUT/cells"
 CSV="$OUT/e7_spacing.csv"
 HDR="spacing,cfg,nEd,seed,rc,pdr,fnd_s,t50_s,relay_tx,src_tx,tx_sum,soc_min,dtx,d_sf_mean,d_air_s,d_sf7,d_sf8,d_sf9,d_sf10,d_sf11,d_sf12,hops_mean"
@@ -67,7 +73,7 @@ cell() {
       --allowDutyOverride=true --nodePlacementMode=pueyo_grid --trafficMode=pueyo_all_to_all \
       --pueyoGridSpacingM="$sp" \
       --allowPacketsPerPairOverride=true --pueyoPacketsPerPair=1400 \
-      --enablePcap=false --verboseLogs=false --enableMetricsEssentialOnly=true \
+      --shadowingModel="$CHAN" --enablePcap=false --verboseLogs=false --enableMetricsEssentialOnly=true \
       $mf > run.log 2>&1) 2>/dev/null
   local rc=$?
 
@@ -163,7 +169,7 @@ fi
 for sp in 177 178 246 247; do
   for cfg in toaref comp; do
     for n in 25 49; do
-      for seed in $(seq 1 20); do echo "$sp $cfg $n $seed"; done
+      for seed in $(seq 1 "$SEEDS"); do echo "$sp $cfg $n $seed"; done
     done
   done
 done | xargs -P "$JOBS" -L1 bash -c 'cell $0 $1 $2 $3'
