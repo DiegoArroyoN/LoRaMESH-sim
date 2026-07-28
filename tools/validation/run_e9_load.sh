@@ -27,9 +27,13 @@
 set -u
 NS3=${1:-$HOME/ns346/ns-3-dev}
 JOBS=${2:-12}
+# Canal y semillas por entorno, como el resto de runners: mismo script
+# para el brazo determinista y para el de sombreado, con salidas separadas.
+CHAN=${CHAN:-static}
+SEEDS=${SEEDS:-20}
 BIN="$NS3/build/contrib/dv-cl/examples/ns3-dev-dv-cl-campaign-example-default"
 export LD_LIBRARY_PATH="$NS3/build/lib"
-OUT=$HOME/ns3-runs/e9
+OUT=$HOME/ns3-runs/e9_$CHAN
 mkdir -p "$OUT/cells"
 CSV="$OUT/e9_load.csv"
 HDR="period,metric,nEd,seed,rc,pdr,adm,fwd,delay_p50,delay_p95,gen,deliv,oh_ratio,src_tx,relay_tx"
@@ -54,7 +58,7 @@ cell() {
       --allowDutyOverride=true --nodePlacementMode=pueyo_grid --trafficMode=pueyo_all_to_all \
       --dataPeriodSec="$per" \
       --allowPacketsPerPairOverride=true --pueyoPacketsPerPair=1400 \
-      --enablePcap=false --verboseLogs=false --enableMetricsEssentialOnly=true \
+      --shadowingModel="$CHAN" --enablePcap=false --verboseLogs=false --enableMetricsEssentialOnly=true \
       $mf > run.log 2>&1) 2>/dev/null
   local rc=$?
 
@@ -120,7 +124,7 @@ fi
 for per in 2000 1000 500 200 100 50 20 10 5; do
   for met in composite toa hops rssi; do
     for n in 25 49; do
-      for seed in $(seq 1 20); do echo "$per $met $n $seed"; done
+      for seed in $(seq 1 "$SEEDS"); do echo "$per $met $n $seed"; done
     done
   done
 done | xargs -P "$JOBS" -L1 bash -c 'cell $0 $1 $2 $3'
