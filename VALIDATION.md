@@ -3214,3 +3214,72 @@ medible ahi. Psi solo esta viva a mitad de corrida y el FND solo ocurre al
 final, cuando Psi ya esta saturada: las dos condiciones se excluyen en este
 montaje. Cualquier afirmacion sobre "delta mejora la vida util" tiene que
 lidiar con eso.
+
+## 2026-07-28 (d) — El canal de Pueyo-Centelles es DETERMINISTA
+
+Consultado NotebookLM sobre estimacion de enlace y modelo de propagacion. Las
+dos respuestas apuntan al mismo sitio.
+
+### Su canal
+
+> *"[the grid] offers a regular and predictable environment. Therefore, once
+> the right SF and transmission power are set, single SF routing provides
+> communication to either all or none of the nodes"*
+
+- **No mencionan sombreado.** Ningun sigma en todo el paper.
+- **No modelan desvanecimiento rapido**; describen CSS como resistente al
+  multitrayecto.
+- La perdida por distancia es determinista y de "todos o ninguno" segun la
+  tabla de alcances. Lo unico aleatorio son las colisiones.
+- Del modelo solo dicen *"the radio propagation model implemented in the
+  simulator framework (in this case, an urban environment)"*: ni formula ni
+  parametros.
+
+### Su estimacion de enlace
+
+- El SF sale del RSSI de **una** baliza. No promedian, no filtran, no acumulan.
+- **Sin margen** sobre el umbral de sensibilidad.
+- Cuentan perdidas **solo para la linea base ETX** (*"The quality of a link
+  between two nodes is calculated based on the number of lost routing packets
+  over a period of time"*), nunca para ToA.
+- **Sin ACKs, sin retransmision, sin reintento con SF mas alto, sin degradacion
+  de enlace.** Cita: *"lack of certain features, such as ... node-to-node or
+  end-to-end transmission reliability"*. Una ruta mala expira por temporizador
+  a los 300 s.
+
+### Lo que implica para nosotros
+
+Su protocolo **esta diseñado para un canal determinista**, y ahi estimar el SF
+de una sola baliza es exactamente correcto: lo que oyes es lo que hay.
+
+Nosotros añadimos sigma=3.57 dB **sorteado en cada transmision**. Eso no tiene
+contraparte en su trabajo, y ademas esta mal implementado: sortear por paquete
+es desvanecimiento rapido, justo lo que ellos dicen no modelar. El sigma=3.57
+de la especificacion de la tesis es un parametro de **sombreado**, que por
+definicion depende de obstaculos y posicion, no del instante.
+
+O sea que el PDR bajo no dice que su protocolo sea mejor ni que el nuestro
+falle: le estamos aplicando un canal que su diseño no contempla, y encima
+modelado como el fenomeno equivocado.
+
+### Opciones
+
+| | canal | comparabilidad | realismo |
+|---|---|---|---|
+| (a) sigma=0 | determinista, como ellos | **directa** | bajo |
+| (b) sombreado correlacionado | fijo por posicion | indirecta | **alto** |
+| (c) las dos | — | (a) primaria, (b) robustez | — |
+
+`CorrelatedShadowingPropagationLossModel` del modulo lorawan es el modelo
+correcto para (b): sombreado dependiente de la posicion con distancia de
+correlacion (110 m por defecto). Trae sigma fija a 4 dB (varianza 16) sin
+atributo expuesto, asi que usar el 3.57 de la tesis pide un parche pequeño --
+ya parcheamos ese modulo para la etiqueta de SF.
+
+Recomendacion: (c). Con (a) las comparaciones entre metricas ocurren en las
+condiciones de la referencia, que es la comparacion justa. Con (b) se ve que
+pasa con propagacion realista, donde la estimacion de una sola baliza se rompe
+--- y esa es una afirmacion sobre la CLASE de protocolo, no sobre una
+implementacion. Ademas es donde la metrica compuesta podria mostrar valor por
+primera vez: una metrica consciente del enlace deberia degradarse mejor que una
+que solo cuenta airtime. Es contrastable.
