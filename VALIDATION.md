@@ -3367,3 +3367,62 @@ porque la baliza ya predice a los datos, y la topologia efectiva se enriquece.
 Quien mas se beneficia es `toa_only` (+44%), que es la que mas encorsetada
 estaba por el modelo de potencias de dos. Nada que ver con el -73% a -187% que
 producia el sombreado por paquete, que no era sombreado sino ruido.
+
+## 2026-07-29 (b) — E7 en los dos brazos: la prediccion vuelve a fallar, y uno de los pares estaba mal diseñado
+
+### El par 246/247 no mide nada, y hay prueba
+
+En el brazo determinista, **las 80 celdas de 246 m son bit a bit identicas a
+las de 247 m** en las nueve variables (PDR, FND, T50, relevos, Tx origen,
+energia, transmisiones, airtime y saltos). En el brazo con sombreado difieren
+las 80, pero solo porque 1 m cambia la perdida por distancia en 0.016 dB y eso
+basta para voltear enlaces que el sombreado dejo al borde de la sensibilidad;
+en la rejilla uniforme sin sombreado no hay ningun enlace tan al borde, asi que
+no voltea nada.
+
+La causa es un error de diseño mio. Los umbrales reales de nuestro simulador:
+
+| SF | alcance | espaciado umbral (diagonal = alcance) |
+|---:|---:|---:|
+| 7 | 251.0 m | **177.5 m** |
+| 8 | 349.9 m | **247.4 m** |
+| 9 | 487.7 m | 344.8 m |
+
+El par 177/178 rodea correctamente el umbral de SF7 (177 dentro, 178 fuera).
+Pero **246 y 247 caen los dos DENTRO** del umbral de SF8, que esta en 247.4 m:
+la diagonal a 247 m mide 349.3 m y SF8 alcanza 349.9. Para rodearlo hacia falta
+**247 frente a 248** (248*raiz2 = 350.7 m). Las tablas del paper listan 248 m,
+asi que probablemente el valor correcto era ese y tome el 247 del texto.
+
+### El par que SI esta bien diseñado sigue sin mostrar umbral
+
+| brazo | dFND a 177 m | dFND a 178 m | ratio |
+|---|---:|---:|---:|
+| determinista | -7.26% (t=-11.5) | -7.44% (t=-11.6) | **1.02x** |
+| sombreado | -5.36% (t=-12.5) | -5.51% (t=-12.9) | **1.03x** |
+
+Esto **cierra la cuestion**. El 2026-07-27 atribui el fallo de la prediccion a
+que el sombreado difuminaba un margen de 0.7 m (0.025 dB). Ahora, en un canal
+**determinista** donde el umbral es duro y no hay nada que lo difumine, el
+resultado es el mismo. Aquella excusa no se sostiene: **la explicacion del
+mecanismo era simplemente incorrecta**.
+
+Y los niveles absolutos dicen por que. A 177 m, donde la diagonal SI se alcanza
+en SF7, la compuesta usa SF medio **8.30** frente al 7.00 de toa_only, con 0.018
+saltos frente a 0.063. No espera a que la diagonal se caiga: prefiere saltos
+largos de SF alto **donde la geometria se lo permita**, que era la lectura
+alternativa que ya apunte el 28-jul y que aqui queda confirmada en canal limpio.
+
+### Un regimen degenerado que conviene conocer
+
+A 246 m con canal determinista, `toa_only` se hunde a PDR = **0.00007**, con SF
+medio 7.0165 y 0.0002 saltos. O sea: se niega a salir de SF7, que alcanza 251 m,
+asi que solo llega a sus 4 vecinos en horizontal y vertical y **el resto de
+destinos no se entrega jamas**. La compuesta saca 0.00839 ahi, 120 veces mas,
+pero las dos redes estan practicamente muertas. El +12937% que sale del cociente
+no es una ganancia interpretable, es division por casi cero, y asi hay que
+reportarlo.
+
+Es sin embargo un hallazgo real sobre la metrica de la referencia: su
+preferencia por SF bajo, que en rejilla densa es una ventaja de airtime, en
+rejilla dispersa le cuesta la conectividad.
