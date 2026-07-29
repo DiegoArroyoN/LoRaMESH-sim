@@ -3283,3 +3283,87 @@ pasa con propagacion realista, donde la estimacion de una sola baliza se rompe
 implementacion. Ademas es donde la metrica compuesta podria mostrar valor por
 primera vez: una metrica consciente del enlace deberia degradarse mejor que una
 que solo cuenta airtime. Es contrastable.
+
+## 2026-07-29 — Campañas en dos brazos de canal: 10 400 corridas, 0 fallos
+
+Cadena completa (E1/E2, E6, E9, E3, E7 × {determinista, sombreado}) cerrada a
+las 08:34. Datos en `tools/validation/twoarms/`.
+
+### E1 — el ranking de metricas, y una rectificacion
+
+| metrica | PDR (none) | vs toa | PDR (static) | vs toa |
+|---|---:|---:|---:|---:|
+| toa_only | 0.1358 | ref | 0.1459 | ref |
+| composite | 0.1676 | **+65.1%** | 0.1716 | **+37.5%** |
+| hops | 0.1679 | +66.7% | 0.1701 | +36.0% |
+| rssi | 0.1706 | +71.9% | 0.1725 | +39.5% |
+
+Entre alternativas, en cambio:
+
+| contraste | determinista | sombreado |
+|---|---|---|
+| rssi vs composite | +4.29%, gana **237/480** | +1.21%, gana **212/479** |
+| hops vs composite | +1.57%, gana 253/480 | **-0.60%**, gana 177/479 |
+
+Las tres baten a `toa_only` ganando en el 96% de las celdas, pero entre si ganan
+en el 37% al 53%: una moneda al aire. **Las medias positivas de rssi las
+arrastra una minoria de celdas con cola larga, y la mediana es cero o negativa.**
+
+Esto **rectifica lo que reporte el 2026-07-28** ("RSSI supera a nuestra
+compuesta"). Aquella lectura salio de datos con el rango de SF truncado a 7-8,
+que aplastaba las diferencias entre metricas al obligarlas a comportarse igual.
+Con el rango abierto, la conclusion defendible es que **composite, hops y rssi
+son equivalentes en PDR, y la metrica publicada de la referencia se queda muy
+atras**. En el brazo realista la compuesta es ademas la mejor por mediana de las
+tres.
+
+### E9 — la rodilla, y que el regimen decide el ranking
+
+| N | satura entre | PDR techo (composite) | PDR a 10 s/nodo |
+|---:|---|---:|---:|
+| 25 | 100 s y 50 s por nodo | **0.55** | 0.068 |
+| 49 | 500 s y 200 s por nodo | **0.36** | 0.009 |
+
+Todas las campañas anteriores corrian a 10 s por nodo, o sea **saturacion
+profunda** (admision 0.18 en N=25 y 0.042 en N=49). De ahi el PDR de 0.07.
+
+La ventaja de la compuesta sobre la referencia es **mayor fuera de saturacion**:
++43% a +49% en N=25 y +109% a +160% en N=49, frente a +16% a +36% en saturacion.
+
+Y el orden entre alternativas **se invierte con el regimen**: a carga baja
+compuesta ~ rssi > hops; en saturacion compuesta > rssi y hops > compuesta. Un
+ranking medido en un solo punto de operacion no se sostiene.
+
+### E3 — la disyuntiva sigue, con otra escala y mejorando con el tamaño
+
+| variable | delta | t | gana |
+|---|---:|---:|---:|
+| PDR | **+111.71%** | 10.2 | **120/120** |
+| FND | -4.96% | -14.2 | 4/120 |
+| energia TX | -3.62% | -13.4 | 0/120 |
+| relevos | -79.38% | -63.8 | 0/120 |
+
+| N | dFND | dPDR |
+|---:|---:|---:|
+| 25 | -9.64% | +40.70% |
+| 49 | -3.82% | +79.64% |
+| 100 | **-1.41%** | **+214.80%** |
+
+El compromiso **mejora con el tamaño de red**: a 100 nodos la compuesta triplica
+el PDR por un 1.41% de vida util.
+
+### El canal: el sombreado bien modelado SUBE el PDR
+
+| metrica | dPDR (static frente a none) | t |
+|---|---:|---:|
+| toa_only | +44.03% | 8.5 |
+| composite | +16.19% | 10.8 |
+| hops | +13.40% | 9.5 |
+| rssi | +12.73% | 9.3 |
+
+Contraintuitivo solo en apariencia: con sombreado **estatico** la mitad de los
+enlaces mejora respecto de la rejilla uniforme, el protocolo aprende cuales son
+porque la baliza ya predice a los datos, y la topologia efectiva se enriquece.
+Quien mas se beneficia es `toa_only` (+44%), que es la que mas encorsetada
+estaba por el modelo de potencias de dos. Nada que ver con el -73% a -187% que
+producia el sombreado por paquete, que no era sombreado sino ruido.
