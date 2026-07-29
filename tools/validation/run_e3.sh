@@ -117,6 +117,11 @@ open(e["ROW"],"w").write("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%.1f
     e["MET"],e["SC"],e["N"],e["SEED"],e["RC"],e["SECS"],fnd,t50,pdr,gen,deliv,last,
     smin,sp10,smean,tx,idle,rx,relay,srctx))
 PY
+  # La configuracion efectiva viaja con la fila. Sin esto el unico rastro vive
+  # en el JSON de la corrida, que se borra dos lineas mas abajo, y asi es como
+  # sfMax=8 estuvo tres meses invisible.
+  [ -s mesh_dv_effective_config.csv ] && echo "$id,$(tail -1 mesh_dv_effective_config.csv)" > "$OUT/cells/$id.cfg"
+
   cd "$OUT" && rm -rf "$d"
 }
 export -f cell
@@ -127,12 +132,28 @@ export BIN LD_LIBRARY_PATH OUT
 # Por tandas de N ascendente: la de N=25 termina pronto y ya es analizable.
 for n in 25 49 100; do
   echo "=== tanda N=$n ($(date +%H:%M)) ==="
+# La campaña DECLARA lo que cree medir y el binario lo confirma antes de gastar
+# una sola celda. El sfMax=8 de los perfiles invalido cuatro campañas y
+# sobrevivio tres meses porque nadie comparaba la configuracion efectiva contra
+# la intencion; esto convierte ese defecto en un aborto en la primera celda.
+# Solo se declaran INVARIANTES de la campaña: los factores que se barren
+# (metrica, pesos, espaciado, caudal) cambian por celda y no se declaran aqui.
+if [ -x "$HOME/assert_config.sh" ] || [ -f "$HOME/assert_config.sh" ]; then
+    bash "$HOME/assert_config.sh" "$BIN" /tmp/cfgchk_$$         "--profile=proposal_pueyo_like_csmacad --nEd=16 --stopSec=6000 --rngRun=1          --allowDutyOverride=true --shadowingModel=$CHAN          --enablePcap=false --verboseLogs=false"         sfmin=7 sfmax=12 wire=pueyo7b hyst=1 shadow=$CHAN spacing=178 || { echo "ABORTA: la configuracion efectiva no es la declarada."; exit 5; }
+    [ -s /tmp/cfgchk_$$/mesh_dv_effective_config.csv ] && echo "cell,$(head -1 /tmp/cfgchk_$$/mesh_dv_effective_config.csv)" > "$OUT/config_header.txt"
+    rm -rf /tmp/cfgchk_$$
+else
+    echo "AVISO: falta assert_config.sh; la campaña corre SIN comprobar su configuracion."
+fi
+
   for scen in grid_a2a rnd_conv1; do
     for met in composite toa; do
       for seed in $(seq 1 "$SEEDS"); do echo "$met $scen $n $seed"; done
     done
   done | shuf | xargs -P "$JOBS" -L1 bash -c 'cell "$@"' _
   { echo "$HDR"; cat "$OUT"/cells/*.row 2>/dev/null; } > "$CSV"
+CFGCSV="${CSV%.csv}_config.csv"
+{ cat "$OUT/config_header.txt" 2>/dev/null; cat "$OUT"/cells/*.cfg 2>/dev/null | sort; } > "$CFGCSV"
   echo "  N=$n listo. filas acumuladas: $(( $(wc -l < "$CSV") - 1 ))"
 done
 echo "FIN E3. $(( $(wc -l < "$CSV") - 1 )) celdas en $CSV"

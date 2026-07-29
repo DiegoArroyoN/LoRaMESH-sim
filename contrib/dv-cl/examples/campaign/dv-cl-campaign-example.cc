@@ -1877,6 +1877,65 @@ main(int argc, char* argv[])
     runMeta.codingRate = "4/5";
     runMeta.sfMin = sfMin;
     runMeta.sfMax = sfMax;
+
+    // Configuracion EFECTIVA en un fichero propio, tras aplicar el perfil y
+    // todos los overrides.
+    //
+    // El sfMax=8 de los perfiles sobrevivio tres meses de campañas porque su
+    // valor solo aparecia en el JSON de cada corrida, que los runners borraban
+    // al reducir la corrida a una fila. El rastro existia y nadie lo leyo. Con
+    // un fichero aparte, corto y estable, los runners pueden (a) guardarlo
+    // junto a cada fila de resultados y (b) COMPROBAR que coincide con lo que
+    // la campaña dice estar midiendo, que es lo que convierte un defecto
+    // silencioso en un aborto en la primera celda.
+    //
+    // Dos lineas: cabecera y valores, para que un runner pueda pegar la segunda
+    // a su fila y verificar la primera contra lo que espera.
+    {
+        std::ofstream cfgFile("mesh_dv_effective_config.csv");
+        const std::vector<std::pair<std::string, std::string>> efectiva = {
+            {"git", gitCommitShort},
+            {"profile", profileLower},
+            {"metric", routeMetricMode},
+            {"alpha", std::to_string(compositeWToa)},
+            {"beta", std::to_string(compositeWHop)},
+            {"delta", std::to_string(compositeWEnergy)},
+            {"wsum", std::to_string(compositeWToa + compositeWHop + compositeWEnergy)},
+            {"coststep", std::to_string(compositeCostStep)},
+            {"costenc", costEncoding},
+            {"sfmin", std::to_string(sfMin)},
+            {"sfmax", std::to_string(sfMax)},
+            {"sflinkmode", sfLinkMode},
+            {"shadow", shadowingModel},
+            {"sigma", std::to_string(shadowingSigmaDb)},
+            {"pathloss", std::to_string(pathLossExponent)},
+            {"periodsec", std::to_string(dataPeriodSec)},
+            {"trafficload", trafficLoad},
+            {"trafficmode", trafficMode},
+            {"placement", nodePlacementMode},
+            {"spacing", std::to_string(pueyoGridSpacingM)},
+            {"pktsperpair", std::to_string(pueyoPacketsPerPair)},
+            {"duty", cfg.enableDutyCycle ? std::to_string(cfg.dutyLimit) : std::string("off")},
+            {"hyst", routeSwitchHysteresis ? "1" : "0"},
+            {"hystdelta", std::to_string(routeSwitchMinDeltaX100)},
+            {"socmin", std::to_string(socInitMin)},
+            {"socmax", std::to_string(socInitMax)},
+            {"socbimodal", socInitBimodal ? "1" : "0"},
+            {"wire", wireFormat},
+            {"mac", cfg.enableCsma ? "csmacad" : "aloha"},
+            {"flooding", floodingMode ? "1" : "0"},
+        };
+        for (std::size_t i = 0; i < efectiva.size(); ++i)
+        {
+            cfgFile << (i ? "," : "") << efectiva[i].first;
+        }
+        cfgFile << std::endl;
+        for (std::size_t i = 0; i < efectiva.size(); ++i)
+        {
+            cfgFile << (i ? "," : "") << efectiva[i].second;
+        }
+        cfgFile << std::endl;
+    }
     runMeta.txPowerDbm = txPowerDbm;
     runMeta.profile = profileLower;
     runMeta.preambleSymbols = preambleSymbols;
