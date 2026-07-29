@@ -3426,3 +3426,55 @@ reportarlo.
 Es sin embargo un hallazgo real sobre la metrica de la referencia: su
 preferencia por SF bajo, que en rejilla densa es una ventaja de airtime, en
 rejilla dispersa le cuesta la conectividad.
+
+## 2026-07-29 (c) — E10: los pesos, y la prediccion se cumple
+
+960 celdas, 0 fallos, brazo con sombreado, 20 semillas. Diseño de una variable
+cada vez alrededor de los valores de la tesis.
+
+### Alfa ES la palanca (prediccion registrada, y confirmada)
+
+| alfa | PDR | vs toa | SF medio | FND | vs toa |
+|---:|---:|---:|---:|---:|---:|
+| 0.2 | 0.3680 | +39.6% | 7.796 | 163396 | -6.12% |
+| 0.6 | 0.3610 | +36.5% | 7.720 | 164498 | -5.51% |
+| 1.0 | 0.3549 | +33.7% | 7.611 | 165856 | -4.76% |
+| 2.0 | 0.3434 | +29.3% | 7.556 | 167458 | -3.89% |
+| 4.0 | 0.3218 | +20.6% | 7.377 | 170029 | -2.46% |
+| *toa_only* | *0.2730* | *ref* | *7.074* | *174505* | *ref* |
+
+**Monotono en las cuatro columnas.** Subir alfa baja el SF medio, baja la
+ganancia de PDR y sube la vida util, interpolando suavemente hacia toa_only. Es
+exactamente el mando que faltaba: **alfa fija el punto de operacion en la
+frontera PDR-vida util**, y confirma de paso que el mecanismo identificado (el
+intercambio de saltos por SF) es el correcto, porque el peso que pondera el
+airtime es el que lo gobierna.
+
+### Beta importa y satura en 0.15
+
+| beta | PDR vs toa | FND vs toa |
+|---:|---:|---:|
+| 0.00 | +12.4% | -2.30% |
+| 0.05 | +28.5% | -4.02% |
+| 0.15 | +36.5% | -5.51% |
+| 0.30 | +36.7% | -5.76% |
+
+Beta empuja en el sentido contrario a alfa (menos saltos, mas SF alto) y **se
+agota en 0.15**: pasar a 0.30 no añade nada. El valor de la tesis esta
+justo en la rodilla, bien elegido.
+
+### Delta sigue sin hacer nada, y ahora con tres medidas independientes
+
+| delta | PDR vs toa | FND vs toa | SoC min |
+|---:|---:|---:|---:|
+| 0.00 | +36.7% | -5.33% | 0.0000 |
+| 0.25 | +36.5% | -5.51% | 0.0000 |
+| 0.50 | +36.5% | -5.59% | 0.0000 |
+| 1.00 | +37.1% | -5.71% | 0.0000 |
+
+Cuadruplicar delta no mueve el PDR y empeora ligeramente el FND. `soc_min = 0`
+en las cuatro: a 300 ks Psi vuelve a estar saturada, o sea otra vez fuera de su
+rampa. Sumado a E8 (150 ks, con Psi verificada viva, donde delta salia
+levemente contraproducente) y al barrido conjunto, son **tres medidas
+independientes que coinciden**: el termino de energia no hace lo que fue
+diseñado para hacer.
