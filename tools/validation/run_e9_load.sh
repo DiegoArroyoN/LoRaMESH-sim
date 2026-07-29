@@ -31,6 +31,12 @@ JOBS=${2:-12}
 # para el brazo determinista y para el de sombreado, con salidas separadas.
 CHAN=${CHAN:-static}
 SEEDS=${SEEDS:-20}
+# Exportar, no solo asignar: cell() corre en un bash nuevo lanzado por
+# xargs, que hereda el entorno y no las variables de shell. Sin esto el
+# valor por defecto no llega y --shadowingModel viaja vacio, que aborta
+# cada corrida. Funcionaba al invocarlo como "CHAN=x bash runner" porque
+# entonces la variable ya venia del entorno.
+export CHAN SEEDS
 BIN="$NS3/build/contrib/dv-cl/examples/ns3-dev-dv-cl-campaign-example-default"
 export LD_LIBRARY_PATH="$NS3/build/lib"
 OUT=$HOME/ns3-runs/e9_$CHAN
