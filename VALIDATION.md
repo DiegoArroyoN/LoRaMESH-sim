@@ -3478,3 +3478,74 @@ rampa. Sumado a E8 (150 ks, con Psi verificada viva, donde delta salia
 levemente contraproducente) y al barrido conjunto, son **tres medidas
 independientes que coinciden**: el termino de energia no hace lo que fue
 diseñado para hacer.
+
+## 2026-07-29 (d) — Auditoria de mandos, y dos correcciones a lo reportado
+
+### La auditoria
+
+`tools/validation/audit_knobs.sh`: 18 aserciones sobre 13 mandos del DoE, cada
+una exigiendo que el mando **cambie el comportamiento en la direccion
+esperada**, no solo que el flag exista. Corre en minutos. **18 pasan, 0 fallan**
+en los dos arboles (WSL gcc 13 y servidor gcc 15).
+
+Cubre: modo de metrica (4 modos), rango de SF, modelo de canal (3 modos),
+caudal, espaciado de rejilla, duty, los tres pesos sobre el coste bruto
+calculado, MAC, flooding, carga inicial de bateria, histeresis y
+topologia/trafico.
+
+Durante su construccion **encontro dos errores mios**, que es exactamente para
+lo que sirve:
+
+1. La asercion de duty comparaba `duty_blocked_data`, que es un CONTEO. Con mas
+   presupuesto el nodo admite mucho mas trafico e intenta mucho mas, asi que el
+   conteo absoluto SUBE aunque cada intento tenga mas holgura. El mando mordia;
+   la asercion estaba mal formulada. Corregida a fraccion sobre intentos.
+
+2. La auditoria de delta salio **OMITE** con el SoC en [0.5905, 0.9134], fuera
+   de la rampa (0.20, 0.50). Se resolvio **sembrando** el regimen en vez de
+   esperarlo: con `socInitBimodal` en 0.25 y 0.45, ambos dentro de la rampa,
+   Psi difiere entre vecinos y delta puede discriminar en 9 ks.
+
+### Correccion 1: delta SI muerde
+
+Con Psi viva, subir delta de 0 a 1.0 lleva el coste bruto medio de **0.340 a
+0.795**. El termino esta correctamente cableado.
+
+Lo que se dijo el 2026-07-29 ("tres medidas independientes coinciden en que
+delta no sirve") **era falso**, y hay que retirarlo:
+
+| medida | arbol limpio | Psi viva |
+|---|---|---|
+| barrido conjunto (27-jul) | NO | NO |
+| E8 a 150 ks (28-jul) | NO | SI |
+| E10 (29-jul) | SI | **NO** (`soc_min = 0.0000`) |
+
+**Delta nunca se ha medido con arbol limpio y Psi viva a la vez.** En E10 se
+repitio el defecto identificado el 26-jul: medirlo donde Psi es constante. El
+cero estaba en la tabla y se leyo como resultado en lugar de como invalidacion.
+Queda pendiente el barrido de delta a 150 ks sobre el arbol corregido, con la
+asercion de Psi viva obligatoria.
+
+### Correccion 2: el barrido de alfa confundia peso con escala
+
+Los pesos de la tesis (alfa=0.60, beta=0.15, delta=0.25) **suman exactamente
+1.00**, o sea que hay una convencion de combinacion convexa. El codigo NO la
+impone: `ComputeLinkCost` devuelve `alfa*T_hat + beta + delta*Psi` sin
+normalizar.
+
+Eso importa porque el barrido de alfa de E10 movio dos cosas a la vez:
+
+| alfa | suma | ratio alfa/beta |
+|---:|---:|---:|
+| 0.2 | 0.60 | 1.3 |
+| 0.6 | **1.00** | 4.0 |
+| 4.0 | 4.40 | 26.7 |
+
+La escala global no es inocua: el cuantizador usa paso 0.025 y recorta en 255,
+asi que multiplicar todo por 7 cambia la resolucion efectiva. "Alfa es la
+palanca" se sostiene en sentido laxo, pero **no separa "mas peso al airtime" de
+"cuantizador mas grueso"**, y el unico punto del barrido que respeta la
+convencion es alfa=0.60.
+
+Pendiente: barrer a **suma constante 1** redistribuyendo entre alfa y beta, y
+por separado barrer la escala global para aislar el efecto del cuantizador.
