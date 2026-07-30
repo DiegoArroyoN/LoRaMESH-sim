@@ -3699,3 +3699,70 @@ embudarse hacia un sumidero, o rejillas dispersas que fuerzan el multisalto --
 la fraccion reencaminable es mucho mayor y delta podria rendir. Lanzada E13 para
 medirlo, con la fraccion de relevo registrada en cada fila para que la
 interpretacion no dependa de recordar este analisis.
+
+## 2026-07-29 (g) — Sintesis: la metrica compuesta disuelve la malla
+
+Observacion de Diego: en las figuras de Pueyo-Centelles solo aparecen SF7 y
+SF8. Medido con SF7-12 **completamente disponibles**:
+
+| metrica | SF que elige | saltos/tx |
+|---|---|---:|
+| toa_only (la suya) | **SF7 99.8%**, SF8 0.1% | **0.1318** |
+| compuesta (la nuestra) | SF7 24.3%, SF8 21.1%, SF9 35.0%, SF10 18.2% | **0.0241** |
+
+**Sus figuras son consecuencia de su metrica, no de una restriccion de
+configuracion.** El coste `2^(SF-SF_min)` penaliza el SF alto tan duramente que
+su protocolo no sale de SF7 aunque tenga todo el rango.
+
+Eso reinterpreta el `sfMax=8` de nuestros perfiles: intentaba reproducir un
+RESULTADO restringiendo una ENTRADA, que es un error de categoria. Con el rango
+abierto, su metrica produce SF7/SF8 ella sola. El arreglo era correcto, y ahora
+por un motivo mejor del que se documento el 28-jul.
+
+### Las dos metricas producen estructuras de red distintas
+
+- **toa_only**: SF7 casi siempre -> alcance 251 m -> **malla multisalto**
+  (saltos 0.53, 900 relevos en la sonda sin saturar)
+- **compuesta**: SF7 a SF10 -> alcance hasta 680 m -> **estrella**
+  (saltos 0.31, 544 relevos)
+
+La metrica compuesta **optimiza hasta disolver la malla**: prefiere un salto
+largo de SF alto antes que una cadena corta, y con eso elimina la estructura
+multisalto que el protocolo existe para dar.
+
+### Alfa es el mando malla <-> estrella
+
+| alfa/beta | SF medio | saltos/tx | relevos | PDR |
+|---|---:|---:|---:|---:|
+| 0.95/0.05 | 7.354 | 0.3856 | 671 | 0.3206 |
+| 0.85/0.15 | 7.622 | 0.3311 | 574 | 0.3499 |
+| 0.70/0.30 | 7.762 | 0.3116 | 544 | 0.3661 |
+| 0.30/0.70 | 7.777 | 0.3061 | 533 | 0.3642 |
+| *toa_only* | *7.074* | *0.5262* | *900* | *0.2730* |
+
+Subir alfa baja el SF, sube los saltos y los relevos un 26%, e interpola de
+forma continua hacia toa_only. La escala global, como control, no mueve nada
+(saltos 0.345 con k=0.25 frente a 0.323 con k=4).
+
+**Esto explica en una sola causa todo lo medido este mes:**
+
+| observacion | por que |
+|---|---|
+| la compuesta gana PDR | menos saltos, menos ocasiones de perder |
+| la compuesta pierde vida util | SF alto, mas airtime por paquete |
+| delta no mueve el FND | en estrella el relevo es el 0.43% de la energia |
+| beta satura en 0.15 | pasado ese punto la red ya es estrella, no queda margen |
+| en saturacion el rango estrecho gana | el airtime es el recurso escaso |
+
+### Que se puede afirmar, y que no
+
+Se sostiene: la metrica compuesta **abre un eje de diseño que la metrica de
+referencia no tiene**. Permite elegir donde situarse entre malla y estrella, y
+esa eleccion cambia PDR y vida util en sentidos opuestos. La referencia esta
+clavada en el extremo malla.
+
+NO se sostiene todavia que esto generalice: el regimen estrella existe porque el
+alcance de SF12 (1058 m) cubre casi todo el despliegue (la diagonal de una
+rejilla 5x5 a 178 m son 1007 m). En un despliegue mas ancho que el alcance
+maximo la estrella no esta disponible y la malla es forzosa. El brazo `conv` de
+E13, en 3 km, es el que puede decirlo.
