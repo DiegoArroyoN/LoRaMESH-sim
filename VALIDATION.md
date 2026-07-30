@@ -3549,3 +3549,82 @@ convencion es alfa=0.60.
 
 Pendiente: barrer a **suma constante 1** redistribuyendo entre alfa y beta, y
 por separado barrer la escala global para aislar el efecto del cuantizador.
+
+## 2026-07-29 (e) — E11 y E12: los pesos, por fin decidibles
+
+1120 + 200 celdas, 0 fallos, con la configuracion efectiva registrada en las
+1320 filas y verificada constante (sfmax=12, shadow=static, coststep=0.025).
+
+### La escala del cuantizador es inocua (prediccion falsable, resuelta)
+
+| k | dPDR vs toa | dFND vs toa | SF medio | coste bruto |
+|---:|---:|---:|---:|---:|
+| x0.25 | +35.9% | -5.45% | 7.717 | 0.0935 |
+| x0.50 | +38.2% | -5.62% | 7.723 | 0.1762 |
+| x1.00 | +36.5% | -5.51% | 7.720 | 0.3661 |
+| x2.00 | +37.5% | -5.58% | 7.728 | 0.7329 |
+| x4.00 | +35.8% | -5.48% | 7.700 | 1.4563 |
+
+Multiplicar los pesos por 16 mueve el PDR entre +35.8% y +38.2% **sin
+tendencia**, dentro del ruido entre semillas. El coste bruto escala exactamente
+x16, o sea que el mando muerde; lo que no cambia es el ORDEN de las rutas. El
+paso de 0.025 no distorsiona nada.
+
+Esto **rehabilita el hallazgo de E10**: su barrido de alfa movia reparto y
+escala a la vez, pero como la escala es inerte, lo que medía era el reparto.
+"Alfa es la palanca" era cierto, aunque entonces no se pudiera demostrar.
+
+### El reparto alfa/beta traza la frontera, y satura
+
+| alfa/beta | PDR | vs toa | FND | vs toa | eficiencia |
+|---|---:|---:|---:|---:|---:|
+| 0.95/0.05 | 0.3206 | +20.0% | 170393 | -2.27% | **8.8** |
+| 0.85/0.15 | 0.3499 | +32.0% | 166412 | -4.45% | 7.2 |
+| 0.70/0.30 | 0.3661 | +39.0% | 164246 | -5.65% | 6.9 |
+| 0.50/0.50 | 0.3614 | +37.0% | 163951 | -5.82% | 6.4 |
+| 0.30/0.70 | 0.3642 | +38.1% | 163681 | -5.97% | 6.4 |
+
+(eficiencia = puntos de PDR ganados por punto de vida util perdido)
+
+**Satura en 0.70/0.30**: mas alla se paga vida util sin ganar PDR.
+
+### DELTA: medido por fin donde puede actuar, y es CONTRAPRODUCENTE
+
+E12, 100 ks calibrados, con la precondicion verificada **en cada celda**:
+**24.7 a 24.9 de 25 nodos dentro de la rampa** (0.20, 0.50). Psi discrimina.
+
+Suma constante 1, con delta cobrando su cuota a costa de alfa:
+
+| config | dPDR vs delta=0 | t | dSoC minimo | t |
+|---|---:|---:|---:|---:|
+| 0.80/0.15/0.05 | -2.50% | -5.21 | -0.00305 | -8.59 |
+| 0.70/0.15/0.15 | -5.17% | -9.73 | -0.00361 | -9.25 |
+| 0.60/0.15/0.25 | -4.09% | -8.57 | -0.00327 | -9.31 |
+
+Con Psi plenamente viva, **delta empeora las dos cosas**. Pierde PDR, y ademas
+**baja el SoC del nodo peor parado**, que es exactamente lo que fue diseñado
+para subir. No es inerte: es contraproducente, y su presupuesto rinde mas en el
+termino de airtime.
+
+Es la cuarta medida de delta y la primera que podia concluir: arbol limpio, Psi
+verificada viva, suma constante, y la cuota tomada de alfa para que la
+comparacion sea "delta frente a darle eso al airtime" y no "delta frente a
+nada".
+
+### Pesos recomendados
+
+```
+alfa = 0.85    beta = 0.15    delta = 0      (suma = 1.00)
+```
+
+- Respeta la convencion de combinacion convexa de la tesis.
+- **beta se queda en 0.15**, el valor de la tesis, que resulta bien elegido: ahi
+  la ganancia de PDR ya es el 80% del maximo alcanzable.
+- delta pasa a 0 sobre evidencia que por fin lo sostiene.
+- Es el cambio MINIMO sobre los valores de la tesis: solo se reasigna la cuota
+  de delta a alfa.
+- Punto de operacion: **+32.0% de PDR por -4.45% de vida util**.
+
+Si se prefiere priorizar vida util, 0.95/0.05/0 da +20.0% por -2.27%, que es el
+punto mas eficiente de la frontera. Si se prefiere PDR, 0.70/0.30/0 da +39.0%
+por -5.65%. Las tres son defendibles; la eleccion es de producto, no de datos.
