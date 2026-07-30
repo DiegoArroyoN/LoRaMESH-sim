@@ -3766,3 +3766,56 @@ alcance de SF12 (1058 m) cubre casi todo el despliegue (la diagonal de una
 rejilla 5x5 a 178 m son 1007 m). En un despliegue mas ancho que el alcance
 maximo la estrella no esta disponible y la malla es forzosa. El brazo `conv` de
 E13, en 3 km, es el que puede decirlo.
+
+## 2026-07-29 (h) — E13: delta donde el relevo pesa
+
+360 filas, 0 fallos. Regimenes medidos, no supuestos:
+
+| escenario | frac. relevo | saltos/tx | Psi dentro/N |
+|---|---:|---:|---:|
+| ref (178 m SF7-12) | 0.84% | 0.0367 | 24.7/25 |
+| rico (178 m SF7-8) | **8.96%** | 0.1683 | 18.7 |
+| conv (3 km SF7-9) | 1.57% | 0.1491 | 8.2 |
+
+**El FND no es medible aqui**: a 100 ks nadie ha muerto, que es exactamente la
+condicion para que Psi este viva. Es la tercera vez que aparece esta tension y
+conviene declararla como limitacion metodologica del trabajo: **Psi solo
+discrimina a mitad de vida y el FND solo ocurre al final, cuando Psi ya esta
+saturada**. Se usa el SoC del nodo mas debil como proxy.
+
+### Delta a suma constante (su cuota a costa de alfa)
+
+| escenario | dSoC min | t | dPDR | t |
+|---|---:|---:|---:|---:|
+| ref (relevo 0.84%) | -0.00327 | -9.31 | -4.09% | -8.57 |
+| rico (relevo 8.96%) | **-0.00111** | -9.22 | -2.63% | -14.73 |
+| conv (relevo 1.57%) | +0.00011 | 1.01 | -0.09% | -0.20 |
+
+**El daño de delta se reduce a un tercio cuando el relevo crece diez veces**
+(-0.00327 a -0.00111), que es la direccion predicha. Pero **nunca llega a ser
+beneficio**: en el mejor caso es neutro (conv, t=1.01 y t=-0.20, ambos no
+significativos).
+
+### Un matiz que separa dos preguntas distintas
+
+A suma constante, darle cuota a delta se la quita a alfa, y alfa es el mando
+malla-estrella. Asi que este contraste responde **"delta merece su parte del
+presupuesto?"** -- y la respuesta es no -- pero NO aisla lo que delta hace por
+si mismo.
+
+El forense del 29-jul, que añadia delta SIN quitarselo a alfa, si lo aisla: alli
+delta bajaba el CV del relevo un 12% y su maximo un 8%. **Delta funciona como
+mecanismo.** Aqui, en `rico`, a suma constante sube el CV un 1.96% (t=3.02),
+pero eso es el efecto de haberle quitado 0.25 a alfa, que vuelve la red mas
+estrella y concentra el poco relevo que queda.
+
+Las dos cosas son ciertas a la vez: delta reparte lo que se le da a repartir, y
+su presupuesto rinde mas en alfa.
+
+### Limite de alcance, declarado
+
+Ni siquiera `rico` llega a un regimen donde el relevo DOMINE: es el 8.96% del
+airtime. Para que dominara haria falta un despliegue mucho mas ancho que el
+alcance de SF12 (1058 m), o sea una red genuinamente multisalto por geometria.
+Lo que se puede afirmar es que **delta no aporta en ninguno de los regimenes
+alcanzables con esta topologia**, no que sea inutil en cualquier red.
