@@ -36,7 +36,7 @@ export LD_LIBRARY_PATH="$NS3/build/lib"
 OUT=$HOME/ns3-runs/e5disp
 mkdir -p "$OUT/cells"
 CSV="$OUT/e5_dispersion.csv"
-HDR="bat,cfg,nEd,seed,rc,pdr,relay_tx,src_tx,tx_sum,tx_max,tx_mean,tx_cv,tx_gini,tx_top3,tot_sum,tot_max,tot_cv,tot_gini,soc_min,soc_p10,nz"
+HDR="bat,cfg,nEd,seed,rc,pdr,relay_tx,src_tx,tx_sum,tx_max,tx_mean,tx_cv,tx_gini,tx_top3,tot_sum,tot_max,tot_cv,tot_gini,soc_min,soc_p10,nz,dtx,d_sf_mean,d_air_s,d_air_per_tx,d_sf7,d_sf8,d_sf9,d_sf10,d_sf11,d_sf12,b_sf_mean,b_air_s,hops_mean"
 
 cell() {
   local bat=$1 cfg=$2 n=$3 seed=$4
@@ -116,10 +116,48 @@ try:
 except Exception:
     pass
 
+# Reparto no es lo mismo que coste. Si la compuesta hace MENOS transmisiones y
+# aun asi gasta mas, es que cada transmision sale mas cara, o sea SF mas alto:
+# rutas de menos saltos pero mas largos. El histograma de SF de los datos lo
+# separa del reparto. Las balizas van aparte porque su SF lo rota una PMF
+# geometrica ajena al ruteo, asi que sirven de control: deben coincidir entre
+# brazos.
+dsf = [0] * 6
+dn = dair = dhops = 0
+bn = bair = 0
+bsfsum = dsfsum = 0
+try:
+    for r in csv.DictReader(open("mesh_dv_metrics_tx.csv")):
+        try:
+            sf = int(r["sf"])
+            toa = float(r["toaUs"])
+        except (ValueError, KeyError):
+            continue
+        if r.get("dst") == "65535":
+            bn += 1
+            bair += toa
+            bsfsum += sf
+        else:
+            dn += 1
+            dair += toa
+            dsfsum += sf
+            if 7 <= sf <= 12:
+                dsf[sf - 7] += 1
+            try:
+                dhops += int(r["hops"])
+            except (ValueError, KeyError):
+                pass
+except Exception:
+    pass
+f6 = lambda x: "%.4f" % x
+dstats = ([dn, f6(dsfsum / dn) if dn else "", f6(dair / 1e6) if dn else "",
+           f6(dair / dn) if dn else "", *dsf, f6(bsfsum / bn) if bn else "",
+           f6(bair / 1e6) if bn else "", f6(dhops / dn) if dn else ""])
+
 open(e["ROW"], "w").write(",".join(str(x) for x in [
     e["BAT"], e["CFG"], e["N"], e["SEED"], e["RC"], pdr, relay, srctx,
     ts, tmax, tmean, tcv, tgini, ttop3, os_, omax, ocv, ogini,
-    smin, sp10, len(tx)]) + "\n")
+    smin, sp10, len(tx), *dstats]) + "\n")
 PY
   cd "$OUT" && rm -rf "$d"
 }

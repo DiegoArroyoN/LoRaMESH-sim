@@ -71,6 +71,10 @@ if [ "${nsf%% *}" = "1" ] || [ -z "$nsf" ]; then
     echo "ABORTA: el SF de datos no varia con el enlace. El arreglo no esta en este binario."
     exit 4
 fi
+# Salir del directorio ANTES de borrarlo: si no, el shell se queda con un cwd
+# inexistente y todo lo que venga despues -- incluidos los subshells de xargs --
+# arranca escupiendo errores de getcwd.
+cd "$HOME" || exit 2
 rm -rf $probe
 
 run_block() {
