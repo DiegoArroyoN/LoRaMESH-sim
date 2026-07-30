@@ -16,13 +16,22 @@
 #
 # Dos decisiones de diseño que hacen esta medida distinta de las anteriores:
 #
-#  1) 150 ks, no 300 ks. Psi es una rampa entre b_lo=0.20 y b_hi=0.50: por
-#     encima vale 0 y por debajo satura en 1, y en las dos puntas es una
-#     CONSTANTE que no cambia ningun orden. A 300 ks todos acaban en 0.
+#  1) 100 ks, CALIBRADO y no supuesto. Psi es una rampa entre b_lo=0.20 y
+#     b_hi=0.50: por encima vale 0, por debajo satura en 1, y en las dos puntas
+#     es una CONSTANTE que no cambia ningun orden. La calibracion del 29-jul,
+#     con la siembra por defecto U[60,100%], midio cuantos nodos caen dentro:
 #
-#  2) Se SIEMBRA el regimen con socInitBimodal en 0.30 y 0.48, ambos dentro de la
-#     rampa, en vez de confiar en que el consumo lleve a los nodos ahi. Asi Psi
-#     discrimina entre vecinos desde el primer beacon.
+#         40 ks   5/25       100 ks  19/25   <- optimo
+#         60 ks  11/25       120 ks  19/25   (pero el minimo ya baja de b_lo)
+#         80 ks  17/25
+#
+#     A 300 ks todos acaban en 0, que es lo que invalido E10.
+#
+#  2) Siembra POR DEFECTO, U[60,100%]. El primer intento sembraba bimodal DENTRO
+#     de la rampa (0.30 y 0.48) y salio peor: con trafico sostenido los nodos la
+#     atraviesan y salen por abajo, acabando todos en 0.0000, y el guardian
+#     aborto la campaña. Hay que arrancar por encima y dejar que el consumo los
+#     deposite dentro.
 #
 #  3) La precondicion se COMPRUEBA y aborta. Si el SoC se sale de la rampa, la
 #     campaña se detiene en vez de producir una tabla que no dice nada sobre
@@ -47,8 +56,6 @@ mkdir -p "$OUT/cells"
 CSV="$OUT/e12_delta.csv"
 HDR="cfg,alpha,beta,delta,nEd,seed,rc,pdr,fnd_s,t50_s,soc_min,soc_p10,soc_p50,soc_max,psi_dentro,tx_sum,tx_max,relay_tx,dtx,d_sf_mean,d_air_s,hops_mean,q_raw_mean"
 
-# Semilla del regimen: los dos grupos DENTRO de la rampa (0.20, 0.50).
-PSI="--socInitBimodal=true --socInitMin=0.30 --socInitMax=0.48"
 
 cell() {
   local cfg=$1 al=$2 be=$3 dl=$4 n=$5 seed=$6
@@ -64,10 +71,9 @@ cell() {
   fi
 
   local d="$OUT/work/$id"; mkdir -p "$d"; cd "$d" || return 1
-  ("$BIN" --profile=proposal_pueyo_like_csmacad --nEd="$n" --stopSec=150000 --rngRun="$seed" \
+  ("$BIN" --profile=proposal_pueyo_like_csmacad --nEd="$n" --stopSec=100000 --rngRun="$seed" \
       --allowDutyOverride=true --nodePlacementMode=pueyo_grid --trafficMode=pueyo_all_to_all \
       --allowPacketsPerPairOverride=true --pueyoPacketsPerPair=1400 \
-      --socInitBimodal=true --socInitMin=0.30 --socInitMax=0.48 \
       --shadowingModel="$CHAN" --enablePcap=false --verboseLogs=false \
       $mf > run.log 2>&1) 2>/dev/null
   local rc=$?
@@ -145,23 +151,22 @@ export BIN LD_LIBRARY_PATH OUT
 if [ -f "$HOME/assert_config.sh" ]; then
     bash "$HOME/assert_config.sh" "$BIN" /tmp/cfgchk_$$ \
         "--profile=proposal_pueyo_like_csmacad --nEd=16 --stopSec=6000 --rngRun=1 \
-         --allowDutyOverride=true --shadowingModel=$CHAN $PSI \
+         --allowDutyOverride=true --shadowingModel=$CHAN \
          --enablePcap=false --verboseLogs=false" \
-        sfmin=7 sfmax=12 wire=pueyo7b hyst=1 shadow=$CHAN socbimodal=1 socmin=0.30 socmax=0.48 \
+        sfmin=7 sfmax=12 wire=pueyo7b hyst=1 shadow=$CHAN socmin=0.60 socmax=1.00 \
         || { echo "ABORTA: la configuracion efectiva no es la declarada."; exit 5; }
     [ -s /tmp/cfgchk_$$/mesh_dv_effective_config.csv ] && echo "cell,$(head -1 /tmp/cfgchk_$$/mesh_dv_effective_config.csv)" > "$OUT/config_header.txt"
     rm -rf /tmp/cfgchk_$$
 fi
 
-# PRECONDICION DURA: Psi tiene que estar viva a 150 ks o la campaña no se lanza.
+# PRECONDICION DURA: Psi tiene que estar viva a 100 ks o la campaña no se lanza.
 # Es la leccion de E10 en forma de codigo: alli soc_min valia 0.0000 y se
 # concluyo sobre delta de todas formas.
-echo "== comprobando que Psi esta viva a 150 ks =="
+echo "== comprobando que Psi esta viva a 100 ks =="
 pchk=/tmp/psichk_$$; rm -rf $pchk; mkdir -p $pchk; cd $pchk || exit 2
-"$BIN" --profile=proposal_pueyo_like_csmacad --nEd=25 --stopSec=150000 --rngRun=1 \
+"$BIN" --profile=proposal_pueyo_like_csmacad --nEd=25 --stopSec=100000 --rngRun=1 \
     --allowDutyOverride=true --nodePlacementMode=pueyo_grid --trafficMode=pueyo_all_to_all \
     --allowPacketsPerPairOverride=true --pueyoPacketsPerPair=1400 \
-    --socInitBimodal=true --socInitMin=0.30 --socInitMax=0.48 \
     --shadowingModel="$CHAN" --enablePcap=false --verboseLogs=false \
     --routeMetricMode=composite_score --compositeWToa=0.60 --compositeWHop=0.15 \
     --compositeWEnergy=0.25 > run.log 2>&1
