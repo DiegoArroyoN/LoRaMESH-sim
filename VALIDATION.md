@@ -3628,3 +3628,74 @@ alfa = 0.85    beta = 0.15    delta = 0      (suma = 1.00)
 Si se prefiere priorizar vida util, 0.95/0.05/0 da +20.0% por -2.27%, que es el
 punto mas eficiente de la frontera. Si se prefiere PDR, 0.70/0.30/0 da +39.0%
 por -5.65%. Las tres son defendibles; la eleccion es de producto, no de datos.
+
+## 2026-07-29 (f) — Por que delta no puede mover el FND: forense por nodo
+
+Pregunta de Diego: si delta reparte la carga entre mas nodos, el FND deberia
+alargarse. Depurado con desglose POR NODO, y la respuesta es que **delta hace
+exactamente lo que fue diseñado para hacer, y aun asi no puede servir**.
+
+### Lo que el ruteo puede mover: el 0.43% de la energia
+
+Reparto del gasto de un nodo (N=25, 100 ks, rejilla a 178 m):
+
+| partida | % de la energia |
+|---|---:|
+| reposo | 42.6% |
+| **TX** | **31.3%** |
+| recepcion | 21.3% |
+| CAD | 4.9% |
+
+y dentro del TX:
+
+| | % del TX | % de la energia total |
+|---|---:|---:|
+| **balizas** | **60.3%** | **18.84%** |
+| datos propios | 38.3% | 11.98% |
+| **RELEVO** | **1.4%** | **0.43%** |
+
+El ruteo solo puede mover el relevo: el reposo es ineludible, la recepcion y el
+CAD dependen de lo que emitan los demas, y los datos propios salen de todas
+formas. **Ese margen es el 0.43% del gasto.** Aunque delta desviara TODO el
+relevo del nodo mas debil, le ahorraria un 0.43%, y el rodeo cuesta mas o menos
+lo mismo.
+
+Las balizas gastan **43 veces mas que el relevo**. Una metrica que quisiera
+alargar la vida util tendria que actuar sobre el plan de balizas, no sobre el
+encaminamiento.
+
+### Delta SI reparte, y se puede medir
+
+| | CV del airtime de relevo | max/media |
+|---|---:|---:|
+| delta=0 | 1.0774 | 3.96 |
+| delta=0.25 | **0.9465** | **3.62** |
+
+El relevo esta muy concentrado (un nodo relega 4x la media) y **delta lo reparte
+mejor**: baja el CV un 12% y el maximo un 8%. El mecanismo funciona. Lo que
+falla es que reparte algo que pesa 0.43%.
+
+### Y ademas, el FND lo decide la loteria de la bateria
+
+| | dispersion |
+|---|---:|
+| carga inicial U[60,100%] | **50.0%** |
+| consumo entre nodos | 11.6% |
+
+El primero en morir esta decidido **4.3 veces mas** por la carta que le toco al
+inicializar que por el trafico que cursa. Ninguna decision de ruteo compite con
+eso.
+
+### La causa raiz: en esta topologia casi no hay relevo
+
+`hops_mean` ronda 0.07, o sea que **casi todo el trafico es de un solo salto**.
+A 178 m con SF7-12 disponibles, casi cualquier nodo alcanza a casi cualquier
+otro directamente, asi que la malla apenas relega. Delta no tiene con que
+trabajar.
+
+Eso acota la conclusion en vez de cerrarla: **delta no es inutil, esta fuera de
+su regimen**. Donde el relevo pesa -- convergecast, donde todo el trafico debe
+embudarse hacia un sumidero, o rejillas dispersas que fuerzan el multisalto --
+la fraccion reencaminable es mucho mayor y delta podria rendir. Lanzada E13 para
+medirlo, con la fraccion de relevo registrada en cada fila para que la
+interpretacion no dependa de recordar este analisis.
