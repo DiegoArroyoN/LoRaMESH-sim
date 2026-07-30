@@ -3819,3 +3819,69 @@ airtime. Para que dominara haria falta un despliegue mucho mas ancho que el
 alcance de SF12 (1058 m), o sea una red genuinamente multisalto por geometria.
 Lo que se puede afirmar es que **delta no aporta en ninguno de los regimenes
 alcanzables con esta topologia**, no que sea inutil en cualquier red.
+
+## 2026-07-29 (i) — E14: el desglose de energia, con 20 semillas y los dos MAC
+
+320 celdas, 0 fallos, configuracion verificada en los dos perfiles antes de
+lanzar (el guardian exige `mac=csmacad` y `mac=aloha` por separado, porque si
+el perfil aloha corriera como CSMA nada en los resultados lo delataria).
+
+### El desglose de n=1 queda confirmado
+
+| | reposo | TX | RX | CAD |
+|---|---:|---:|---:|---:|
+| corrida unica del 29-jul | 42.6% | 31.3% | 21.3% | 4.9% |
+| **E14, 20 semillas** | **40.4%** | **29.8%** | **25.1%** | **4.7%** |
+
+(CSMA/CAD, SF7-12). La medida suelta era representativa.
+
+### CUENTA y AIRTIME no dicen lo mismo
+
+CSMA/CAD, SF7-12 (regimen estrella):
+
+| | transmisiones | % cuenta | airtime | % aire | ms/transmision |
+|---|---:|---:|---:|---:|---:|
+| balizas | 57 629 | 51.2% | 30 038 s | **79.7%** | **521.2** |
+| datos propios | 52 804 | 46.9% | 7 405 s | 19.7% | 140.2 |
+| relevo | 2 231 | 2.0% | 235 s | 0.6% | 105.4 |
+
+Se emiten **aproximadamente tantas balizas como datos** (51% frente a 47% de la
+cuenta), pero **cada baliza cuesta 3.7 veces mas airtime**, asi que se llevan el
+80% del aire. Las dos afirmaciones son distintas y solo la segunda es fuerte.
+
+### Pero eso es propio del regimen ESTRELLA, no universal
+
+CSMA/CAD, SF7-8 (regimen malla):
+
+| | transmisiones | % cuenta | airtime | % aire | ms/transmision |
+|---|---:|---:|---:|---:|---:|
+| balizas | 60 125 | 21.4% | 16 260 s | **45.8%** | **270.4** |
+| datos propios | 186 982 | 66.5% | 16 268 s | **45.8%** | 87.0 |
+| relevo | 33 878 | 12.1% | 2 972 s | **8.4%** | 87.7 |
+
+Al cerrar el rango de SF, balizas y datos **se reparten el aire a partes
+iguales** y el relevo sube del 0.6% al 8.4%. La afirmacion "las balizas
+dominan" hay que acotarla al regimen estrella.
+
+### La ineficiencia concreta que aparece
+
+Una baliza cuesta **521 ms en SF7-12 y 270 ms en SF7-8**: la mitad. La causa es
+que **el SF de las balizas lo rota una PMF geometrica sobre TODO el rango
+disponible, sin relacion con lo que los enlaces necesitan**. En regimen estrella
+eso significa emitir balizas en SF11 y SF12, que cuestan segundos, para
+descubrir vecinos que se alcanzan en SF7.
+
+Es un 2x de airtime de balizas disponible sin tocar el ruteo ni el MAC, solo la
+politica de rotacion. Y las balizas son el 80% del aire en ese regimen.
+
+### El MAC rinde mas en la estrella
+
+| regimen | PDR CSMA/CAD | PDR ALOHA | ventaja |
+|---|---:|---:|---:|
+| SF7-12 (estrella) | 0.0476 | 0.0402 | **+18.4%** |
+| SF7-8 (malla) | 0.1098 | 0.1058 | +3.8% |
+
+CAD cuesta 4.7% de la energia en estrella y 2.9% en malla, y desaparece con
+ALOHA. En estrella todo el mundo emite tramas largas de SF alto, asi que una
+colision cuesta mucho mas y escuchar antes compensa; en malla las tramas son
+cortas y el margen se estrecha.

@@ -18,6 +18,18 @@
 # estrella (saltos 0.07) y con SF7-8 se mantiene multisalto (saltos 0.33). El
 # reparto de energia tiene que medirse en los dos.
 #
+# Y el MAC tambien entra como factor. El desglose del 29-jul se midio SOLO bajo
+# CSMA/CAD, y el CAD no es neutral en ese balance: es el 4.9% de la energia y
+# solo existe con CSMA/CAD. Con ALOHA ese 4.9% desaparece, el nodo no escucha
+# antes de emitir, y el reparto entre reposo, recepcion y transmision se mueve
+# en una direccion que no se puede predecir de antemano. Si el trabajo futuro
+# apunta a la coordinacion entre nodos, el desglose de referencia tiene que
+# existir para los dos MAC.
+#
+# Comprobado antes de lanzar que los perfiles csmacad y aloha difieren en UNA
+# sola linea funcional (cfg.enableCsma); el resto son mensajes de log, asi que
+# la comparacion no arrastra un confusor como el de la histeresis.
+#
 #   bash run_e14_energia.sh [ns3_dir] [jobs]
 set -u
 NS3=${1:-$HOME/ns346/ns-3-dev}
@@ -30,15 +42,20 @@ export LD_LIBRARY_PATH="$NS3/build/lib"
 OUT=$HOME/ns3-runs/e14_$CHAN
 mkdir -p "$OUT/cells"
 CSV="$OUT/e14_energia.csv"
-HDR="rango,metrica,nEd,seed,rc,pdr,hops_mean,e_total,e_tx,e_rx,e_cad,e_idle,n_baliza,n_fuente,n_relevo,air_baliza,air_fuente,air_relevo,tx_cv,tot_cv"
+HDR="mac,rango,metrica,nEd,seed,rc,pdr,hops_mean,e_total,e_tx,e_rx,e_cad,e_idle,n_baliza,n_fuente,n_relevo,air_baliza,air_fuente,air_relevo,tx_cv,tot_cv"
 
 cell() {
-  local rango=$1 met=$2 n=$3 seed=$4
-  local id="${rango}_${met}_n${n}_s${seed}"
+  local mac=$1 rango=$2 met=$3 n=$4 seed=$5
+  local id="${mac}_${rango}_${met}_n${n}_s${seed}"
   local row="$OUT/cells/$id.row"
   [ -s "$row" ] && return 0
 
-  local mf rf
+  local mf rf perfil
+  case "$mac" in
+    csmacad) perfil=proposal_pueyo_like_csmacad ;;
+    aloha)   perfil=proposal_pueyo_like_aloha ;;
+    *) return 1 ;;
+  esac
   case "$met" in
     comp) mf="--routeMetricMode=composite_score --compositeWToa=0.85 --compositeWHop=0.15 --compositeWEnergy=0" ;;
     toa)  mf="--allowMetricModeOverride=true --routeMetricMode=toa_only" ;;
@@ -51,14 +68,14 @@ cell() {
   esac
 
   local d="$OUT/work/$id"; mkdir -p "$d"; cd "$d" || return 1
-  ("$BIN" --profile=proposal_pueyo_like_csmacad --nEd="$n" --stopSec=100000 --rngRun="$seed" \
+  ("$BIN" --profile="$perfil" --nEd="$n" --stopSec=100000 --rngRun="$seed" \
       --allowDutyOverride=true --nodePlacementMode=pueyo_grid --trafficMode=pueyo_all_to_all \
       --pueyoGridSpacingM=178 --allowPacketsPerPairOverride=true --pueyoPacketsPerPair=1400 \
       --shadowingModel="$CHAN" --enablePcap=false --verboseLogs=false \
       $rf $mf > run.log 2>&1) 2>/dev/null
   local rc=$?
 
-  R=$rango M=$met N=$n SEED=$seed RC=$rc ROW="$row" python3 - <<'PY'
+  MAC=$mac R=$rango M=$met N=$n SEED=$seed RC=$rc ROW="$row" python3 - <<'PY'
 import csv, json, os, statistics
 e = os.environ
 pdr = ""
@@ -98,7 +115,7 @@ except Exception:
 f4 = lambda x: "%.4f" % x
 cv = lambda v: "%.4f" % (statistics.stdev(v)/statistics.mean(v)) if len(v) > 1 and statistics.mean(v) > 0 else ""
 open(e["ROW"], "w").write(",".join(str(x) for x in [
-    e["R"], e["M"], e["N"], e["SEED"], e["RC"], pdr,
+    e["MAC"], e["R"], e["M"], e["N"], e["SEED"], e["RC"], pdr,
     f4(dh/dn) if dn else "",
     f4(tx+rx+cad+idle), f4(tx), f4(rx), f4(cad), f4(idle),
     nb, nf, nr, f4(ab/1e6), f4(af/1e6), f4(ar/1e6),
@@ -114,22 +131,30 @@ export BIN LD_LIBRARY_PATH OUT
 [ -f "$CSV" ] || echo "$HDR" > "$CSV"
 
 if [ -f "$HOME/assert_config.sh" ]; then
-    bash "$HOME/assert_config.sh" "$BIN" /tmp/cfgchk_$$ \
-        "--profile=proposal_pueyo_like_csmacad --nEd=16 --stopSec=6000 --rngRun=1 \
+    # Los DOS perfiles, porque el MAC es el factor de esta campaña: si el perfil
+    # aloha corriera en realidad como CSMA/CAD, la comparacion seria nula y no
+    # habria nada en los resultados que lo delatara. Se exige ademas que cada
+    # uno declare su propio mac.
+    for prf in proposal_pueyo_like_csmacad:csmacad proposal_pueyo_like_aloha:aloha; do
+      bash "$HOME/assert_config.sh" "$BIN" /tmp/cfgchk_$$ \
+        "--profile=${prf%%:*} --nEd=16 --stopSec=6000 --rngRun=1 \
          --allowDutyOverride=true --shadowingModel=$CHAN --enablePcap=false --verboseLogs=false" \
-        sfmin=7 sfmax=12 wire=pueyo7b hyst=1 shadow=$CHAN spacing=178 \
-        || { echo "ABORTA: la configuracion efectiva no es la declarada."; exit 5; }
+        sfmin=7 sfmax=12 wire=pueyo7b hyst=1 shadow=$CHAN spacing=178 mac=${prf##*:} \
+        || { echo "ABORTA: ${prf%%:*} no da la configuracion declarada."; exit 5; }
+    done
     [ -s /tmp/cfgchk_$$/mesh_dv_effective_config.csv ] && echo "cell,$(head -1 /tmp/cfgchk_$$/mesh_dv_effective_config.csv)" > "$OUT/config_header.txt"
     rm -rf /tmp/cfgchk_$$
 fi
 
-for rango in sf712 sf78; do
-  for met in comp toa; do
-    for n in 25 49; do
-      for seed in $(seq 1 "$SEEDS"); do echo "$rango $met $n $seed"; done
+for mac in csmacad aloha; do
+  for rango in sf712 sf78; do
+    for met in comp toa; do
+      for n in 25 49; do
+        for seed in $(seq 1 "$SEEDS"); do echo "$mac $rango $met $n $seed"; done
+      done
     done
   done
-done | xargs -P "$JOBS" -L1 bash -c 'cell $0 $1 $2 $3'
+done | xargs -P "$JOBS" -L1 bash -c 'cell $0 $1 $2 $3 $4'
 
 cat "$OUT"/cells/*.row 2>/dev/null | sort >> "$CSV"
 CFGCSV="${CSV%.csv}_config.csv"
