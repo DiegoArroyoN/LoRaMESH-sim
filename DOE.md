@@ -201,7 +201,7 @@ Se propone retirarlo y dedicar esas 40 celdas a M2. **Decisión para el G4.**
 | E19 | mecanismo de δ en 3 topologías × 2 rangos | 720 |
 | **E20** | **frontera de cadencia de balizas, 60 → 14400 s** | **720** |
 | E7 | umbral de SF, brazos con y sin sombreado | 640 |
-| **E21b** | **réplica de Pueyo-Centelles: fig. 11a reproducida (+0.2%…+3.9%)** | **2 880** |
+| **E21b+c** | **réplica de Pueyo-Centelles: las ocho subfiguras (11a-d rejilla, 12a-d aleatoria) con margen 1 dB y los dos modelos de interferencia, 20 semillas** | **3 840** |
 | E22 | precio de la baliza: óptimo interior en 18 rutas; su punto no es realizable | 300 |
 | E23 | cuánta reserva necesita el selector de SF; la banda muerta de 240–251 m | 500 |
 | E24 | las conclusiones sobreviven al margen: A intacto, B se atenúa | 320 |
@@ -217,8 +217,12 @@ campañas debe declararlo en el pie. Ver §10.4.
 **Deuda declarada de estas campañas:**
 - E22 corrió a margen 0. El mecanismo del ToA no depende del margen; el óptimo
   interior sí es contraste pareado y hay que repetirlo con margen 1.
-- Las figuras 11c (248 m) y 12 (aleatoria) de Pueyo **no están digitalizadas**.
-  Los resultados de 248 m de E21b y E26 no son reportables hasta que lo estén.
+- **Sus figuras son BOXPLOTS y no publican valores numéricos.** Cualquier cifra
+  "de Pueyo" es una lectura nuestra a ojo, no un dato. Retractado el 2026-08-07:
+  los seis valores que veníamos usando como "publicados" de su fig. 11a no
+  tenían fuente verificable -- aparecían solo en ficheros que habíamos escrito
+  nosotros. **La comparación con su trabajo es de TENDENCIA, no de números**, y
+  ninguna figura nuestra lleva ya una línea con sus valores.
 
 **Coste restante estimado:** ~13 500 celdas (11 520 perf + ~2 000 lifetime).
 Con el servidor a 14 hilos, del orden de 20–30 h de pared para perf y 15–20 h
