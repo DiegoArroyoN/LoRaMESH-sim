@@ -201,7 +201,24 @@ Se propone retirarlo y dedicar esas 40 celdas a M2. **Decisión para el G4.**
 | E19 | mecanismo de δ en 3 topologías × 2 rangos | 720 |
 | **E20** | **frontera de cadencia de balizas, 60 → 14400 s** | **720** |
 | E7 | umbral de SF, brazos con y sin sombreado | 640 |
+| **E21b** | **réplica de Pueyo-Centelles: fig. 11a reproducida (+0.2%…+3.9%)** | **2 880** |
+| E22 | precio de la baliza: óptimo interior en 18 rutas; su punto no es realizable | 300 |
+| E23 | cuánta reserva necesita el selector de SF; la banda muerta de 240–251 m | 500 |
+| E24 | las conclusiones sobreviven al margen: A intacto, B se atenúa | 320 |
+| E25 | δ = 0 también con margen 1 dB — cierra el último caveat de δ | 240 |
+| **E26** | **facturación plana de balizas: precio del supuesto de FLoRaMesh** | **240** |
 | sondas | dominancia de relevo (72 escenarios), consumo vs carga | 75 |
+
+**Nota sobre E21b y E26.** Las dos miden supuestos AJENOS, no nuestro protocolo.
+E26 en particular activa `--pueyoFlatBeaconBytes=12`, que es físicamente
+irrealizable y existe solo como instrumento. Cualquier figura que salga de esas
+campañas debe declararlo en el pie. Ver §10.4.
+
+**Deuda declarada de estas campañas:**
+- E22 corrió a margen 0. El mecanismo del ToA no depende del margen; el óptimo
+  interior sí es contraste pareado y hay que repetirlo con margen 1.
+- Las figuras 11c (248 m) y 12 (aleatoria) de Pueyo **no están digitalizadas**.
+  Los resultados de 248 m de E21b y E26 no son reportables hasta que lo estén.
 
 **Coste restante estimado:** ~13 500 celdas (11 520 perf + ~2 000 lifetime).
 Con el servidor a 14 hilos, del orden de 20–30 h de pared para perf y 15–20 h
@@ -252,7 +269,14 @@ comparación agregada.
   (10/10 suites, 9 perfiles; política de build: un árbol, asserts-on)
 - **G3b** ~~auditoría de los 147 parámetros + arreglo de los ocho silenciosos~~
   **CERRADO 2026-08-03** (§10). Gate nuevo: no estaba en la v2 porque no
-  sabíamos que hiciera falta.
+  sabíamos que hiciera falta. **Reabierto y vuelto a cerrar el 2026-08-06**: tres
+  defectos más (capacidad de baliza, margen de SF, tags en la cola de salida)
+  elevan la cuenta a **once**. El último, `ProcessTxQueue` borrando los packet
+  tags, dejó correr una campaña entera de 120 celdas sin ruteo y con rc=0.
+- **G3c** **replicación externa (nivel 3 de V&V)** — **CERRADO 2026-08-06 a
+  177 m, PARCIAL a 248 m.** Gate nuevo: `PAPER_STRATEGY.md` §2 lo declaraba
+  bloqueante de todo lo demás y lo era. Queda parcial porque las figuras 11c y 12
+  no están digitalizadas, no por falta de cómputo.
 - **G4** **este DoE aprobado por coautores y storyboard v1 acordado** —
   **ABIERTO**, es lo que este documento pide.
 
@@ -348,6 +372,26 @@ De los 147 parámetros expuestos por línea de comandos:
 Los 107 atributos cableados con `SetDefaultFailSafe` existen todos (96 de
 `dv-cl`, 11 de `lorawan`): no hay cableado que se descarte por nombre erróneo.
 
+**Actualización 2026-08-06 — tres defectos más, y el patrón que los une.** La
+auditoría de los 147 parámetros era necesaria pero no suficiente: encontró los
+que se aceptaban y no se aplicaban, no los que se aplicaban mal.
+
+| # | defecto | por qué no se veía |
+|---|---|---|
+| 9 | `GetBeaconRouteCapacity` salía por un return temprano si `dvPayloadMaxBytes>0`, y el perfil comparable lo fija en 251 | `--dvBeaconMaxRoutes` era código muerto: K=0,1,4,16 daban corridas **bit-idénticas** |
+| 10 | `sfLinkMarginDb=0` deja al selector eligiendo el SF más rápido que *teóricamente* alcanza, sin reserva | a 240–250 m el enlace queda con 0.04–0.40 dB y la red entrega **cero** con rc=0 y sin un error. Y en nuestro propio punto de operación deprimía el PDR ×2.3 |
+| 11 | `ProcessTxQueue` hace `RemoveAllPacketTags()` y repone solo el metric tag | el tag de rutas moría en la cola de salida. La primera pasada de E26 corrió entera con hops=0.0000 en 120 celdas y PDR 0.21, superando su propia guarda |
+
+**Lección de método, aplicable a toda campaña futura.** Cada campaña lleva una
+precondición que verifica que el factor MUERDE antes de gastar una celda. El
+defecto 11 enseñó la parte que faltaba: **el invariante de esa precondición no
+puede ser la métrica que la campaña mide.** En E26 la guarda pedía PDR>0.05 y el
+PDR era justo lo que la campaña variaba a propósito; el invariante correcto eran
+los saltos, que deben coincidir entre brazos. Y debe ser **de un solo lado**
+cuando el tratamiento puede moverlo legítimamente: en E26 los saltos suben hasta
+un 12.9% a 248 m porque las balizas baratas mejoran la convergencia, y eso es el
+efecto, no un fallo.
+
 ### 10.4 Convención de pie de figura
 
 Toda figura del paper declara **caso** y **variable**:
@@ -357,6 +401,18 @@ Toda figura del paper declara **caso** y **variable**:
 
 Lo que no aparezca en el corchete está en §10.1. Cualquier desviación respecto a
 §10.1 se declara en el corchete, no se omite.
+
+**Dos reglas añadidas el 2026-08-06:**
+
+1. **Toda figura es un boxplot sobre semillas**, no una línea de medias. Las
+   medias ocultan la dispersión y en varias campañas la dispersión entre semillas
+   es del orden del efecto que se reporta. Media y n van en el pie.
+2. **Las figuras de supuestos ajenos se marcan como tales.** Cualquier figura que
+   use `--pueyoFlatBeaconBytes` o `--interferenceModel=pueyo_fixed_capture`
+   describe el modelo de OTRO grupo, no el nuestro, y el pie lo dice:
+
+> `[EMULACIÓN de supuestos de FLoRaMesh: SF perfectamente ortogonales +`
+> `facturación de balizas a 12 B. NO es el comportamiento de DV-CL.]`
 
 ---
 
