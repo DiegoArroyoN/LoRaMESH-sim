@@ -2027,6 +2027,19 @@ main(int argc, char* argv[])
             {"wire", wireFormat},
             {"mac", cfg.enableCsma ? "csmacad" : "aloha"},
             {"flooding", floodingMode ? "1" : "0"},
+            // Añadidos el 2026-08-07. El DoE §10 promete que cualquier figura se
+            // puede rastrear hasta la configuracion que la produjo, y estos
+            // cuatro NO estaban: son justo los que hemos barrido en E20-E26 y
+            // los que causaron tres de los once defectos. Sin ellos aqui, la
+            // unica prueba de que una campaña NO llevaba facturacion plana era
+            // leer su runner -- que es exactamente la clase de verificacion
+            // circular que nos ha costado ya un retracto.
+            {"sfmargin", std::to_string(sfLinkMarginDb)},
+            {"interfmodel", interferenceModel},
+            {"dvpayloadmax", std::to_string(dvPayloadMaxBytes)},
+            {"flatbeaconbytes", std::to_string(pueyoFlatBeaconBytes)},
+            {"beaconwarm", std::to_string(beaconIntervalWarmSec)},
+            {"beaconstable", std::to_string(beaconIntervalStableSec)},
         };
         for (std::size_t i = 0; i < efectiva.size(); ++i)
         {
