@@ -1,0 +1,29 @@
+def build(bld):
+    module = bld.create_ns3_module('loramesh', ['core', 'network', 'internet', 'lorawan'])
+    module.source = [
+        'model/loramesh-routing-protocol.cc',
+        'model/loramesh-energy-model.cc',
+        'model/loramesh-tracer.cc',
+        'model/mesh-metric-tag.cc',
+        'model/mesh-lora-net-device.cc',
+        'helper/loramesh-helper.cc',
+    ]
+    
+    module_test = bld.create_ns3_module_test_library('loramesh')
+    module_test.source = [
+        # 'test/loramesh-test-suite.cc',
+    ]
+
+    headers = bld.new_task_gen(features=['ns3header'])
+    headers.module = 'loramesh'
+    headers.source = [
+        'model/loramesh-routing-protocol.h',
+        'model/loramesh-energy-model.h',
+        'model/loramesh-tracer.h',
+        'model/mesh-metric-tag.h',
+        'model/mesh-lora-net-device.h',
+        'helper/loramesh-helper.h',
+    ]
+
+    if bld.env.ENABLE_EXAMPLES:
+        bld.recurse('examples')

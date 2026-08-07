@@ -572,6 +572,17 @@ DvClApp::GetTypeId()
                 UintegerValue(0),
                 MakeUintegerAccessor(&DvClApp::m_dvPayloadMaxBytes),
                 MakeUintegerChecker<uint32_t>())
+            .AddAttribute(
+                "PueyoFlatBeaconBytes",
+                "ABLACION, NO MODO DE OPERACION. 0 = desactivado (por defecto). Si es > 0, toda "
+                "baliza se factura al aire con ese tamaño fijo en bytes mientras sus entradas de "
+                "ruta llegan intactas al receptor por un tag sin coste. Reproduce a proposito el "
+                "setByteLength(routingPacketMaxSize=12) de FLoRaMesh, que entrega informacion de "
+                "ruteo completa al precio de un paquete minimo. Fisicamente irrealizable: existe "
+                "solo para cuantificar cuanto vale esa decision de modelado ajena.",
+                UintegerValue(0),
+                MakeUintegerAccessor(&DvClApp::m_pueyoFlatBeaconBytes),
+                MakeUintegerChecker<uint32_t>())
             .AddAttribute("RouteAdvertPolicy",
                           "Route selection policy for beacon payload truncation: top_score | "
                           "uniform | cost_weighted.",
@@ -1083,9 +1094,19 @@ DvClApp::SendExtraDvBeacon(const std::string& reason)
 uint32_t
 DvClApp::GetBeaconRouteCapacity() const
 {
+    // Los dos topes COMPONEN, no se excluyen. Hasta el 2026-08-03 esto era un
+    // return temprano: si m_dvPayloadMaxBytes > 0 la funcion salia aqui y
+    // m_dvBeaconMaxRoutes no se miraba nunca. Como el perfil comparable con
+    // Pueyo fija dvPayloadMaxBytes=251, esa rama se tomaba SIEMPRE y
+    // --dvBeaconMaxRoutes era codigo muerto: se aceptaba por linea de comandos
+    // y no cambiaba nada (verificado con K=0,1,4,16 -> corridas bit-identicas).
+    // Es la misma familia que las ocho trampas del 31-jul, con otra forma: aqui
+    // no es un perfil el que pisa, son dos parametros que deberian componerse y
+    // el primero gana en silencio.
+    uint32_t byPayload = 0;
     if (m_dvPayloadMaxBytes > 0)
     {
-        return std::max(1u, m_dvPayloadMaxBytes / std::max(1u, kPueyoBeaconEntryBytes));
+        byPayload = std::max(1u, m_dvPayloadMaxBytes / std::max(1u, kPueyoBeaconEntryBytes));
     }
 
     uint32_t mtu = 255;
@@ -1116,6 +1137,10 @@ DvClApp::GetBeaconRouteCapacity() const
     const uint32_t overhead = std::min(mtu, overheadBytes);
     const uint32_t usable = (mtu > overhead) ? (mtu - overhead) : 0;
     uint32_t maxRoutes = (usable / entrySize);
+    if (byPayload > 0)
+    {
+        maxRoutes = std::min(maxRoutes, byPayload);
+    }
     if (m_dvBeaconMaxRoutes > 0)
     {
         maxRoutes = std::min(maxRoutes, m_dvBeaconMaxRoutes);
@@ -1222,7 +1247,34 @@ DvClApp::BuildAndSendDvPueyo(uint8_t sf)
         }
     }
 
-    Ptr<Packet> p = Create<Packet>(payload.data(), payload.size());
+    // Camino normal: el paquete lleva sus bytes y paga su aire.
+    // Camino de ABLACION (m_pueyoFlatBeaconBytes > 0): el paquete se queda en el
+    // tamaño facturado y las entradas viajan en un tag, que no cuenta para
+    // Packet::GetSize() y por tanto no entra en LoraPhy::GetOnAirTime. Es la
+    // emulacion exacta del setByteLength(12) de FLoRaMesh. Ver dv-cl-metric-tag.h.
+    Ptr<Packet> p;
+    if (m_pueyoFlatBeaconBytes > 0)
+    {
+        const uint32_t billedPayload = (m_pueyoFlatBeaconBytes > kPueyoBeaconHeaderBytes)
+                                           ? (m_pueyoFlatBeaconBytes - kPueyoBeaconHeaderBytes)
+                                           : 0;
+        p = Create<Packet>(billedPayload); // bytes ficticios: lo unico que se cobra
+        DvClFlatBeaconTag flatTag;
+        flatTag.SetPayload(payload.data(), payload.size());
+        p->AddPacketTag(flatTag);
+        if (m_pueyoValidationTrace)
+        {
+            DvClFlatBeaconTag back;
+            const bool ok = p->PeekPacketTag(back);
+            NS_LOG_INFO("DIAG_FLAT_TX node=" << GetNode()->GetId() << " puesto="
+                                             << payload.size() << "B releido=" << (ok ? 1 : 0)
+                                             << " bytes=" << (ok ? back.GetPayload().size() : 0));
+        }
+    }
+    else
+    {
+        p = Create<Packet>(payload.data(), payload.size());
+    }
 
     // §DC-wire: presupuesto de DC restante del emisor [0-100]; 0xFF si MAC no disponible.
     uint8_t dcRem8 = 0xFF;
@@ -3358,8 +3410,19 @@ DvClApp::ProcessTxQueue()
         }
 
         Ptr<Packet> p = entry.packet->Copy();
+        // Esta cola barre TODOS los tags y repone solo el metric tag. Cualquier
+        // otro tag puesto por la aplicacion muere aqui en silencio: fue lo que
+        // dejo al brazo de facturacion plana de E26 sin una sola ruta (hops=0.00
+        // en las 120 celdas) mientras el TX parecia correcto. Si se añaden mas
+        // tags de aplicacion en el futuro, hay que preservarlos igual.
+        DvClFlatBeaconTag flatKeep;
+        const bool hadFlatTag = p->PeekPacketTag(flatKeep);
         p->RemoveAllPacketTags();
         p->AddPacketTag(entry.tag);
+        if (hadFlatTag)
+        {
+            p->AddPacketTag(flatKeep);
+        }
 
         if (entry.tag.GetDst() == 0xFFFF)
         {
@@ -3947,6 +4010,46 @@ DvClApp::DecodeDvEntriesPueyo(Ptr<const Packet> p,
         return entries;
     }
 
+    // ABLACION: si la baliza viene del modo de facturacion plana, las entradas
+    // reales estan en el tag y los bytes del paquete son relleno. Se decodifica
+    // del tag. Este bloque queda muerto salvo que PueyoFlatBeaconBytes > 0,
+    // porque solo ese camino añade el tag.
+    DvClFlatBeaconTag flatTag;
+    if (p->PeekPacketTag(flatTag))
+    {
+        const auto& tagged = flatTag.GetPayload();
+        if (tagged.size() >= kPueyoBeaconEntryBytes)
+        {
+            std::vector<DvEntryWirePueyo> fromTag;
+            DeserializeDvEntriesPueyo(tagged.data(),
+                                      static_cast<uint32_t>(tagged.size()),
+                                      fromTag);
+            entries.reserve(fromTag.size());
+            for (const auto& route : fromTag)
+            {
+                if (route.destination == GetNode()->GetId())
+                {
+                    continue;
+                }
+                DvEntry e;
+                e.destination = route.destination;
+                e.hops = 0;
+                e.sf = 0;
+                e.scoreX100 = route.score;
+                e.toaUs = 0;
+                e.batt_mV = 0;
+                entries.push_back(e);
+            }
+        }
+        if (m_pueyoValidationTrace)
+        {
+            NS_LOG_INFO("PUEYO_VAL_RX_DECODE_FLAT node="
+                        << GetNode()->GetId() << " tag_bytes=" << tagged.size()
+                        << " entries=" << entries.size());
+        }
+        return entries;
+    }
+
     const uint32_t totalSize = p->GetSize();
     if (payloadOffset >= totalSize)
     {
@@ -4020,6 +4123,15 @@ DvClApp::L2ReceiveWire(Ptr<NetDevice> dev, Ptr<const Packet> p, uint16_t proto, 
     const bool isPueyoBeacon = ParseBeaconWirePacketPueyo(p, &beaconHdr, &payload);
     if (isPueyoBeacon)
     {
+        if (m_pueyoValidationTrace)
+        {
+            DvClFlatBeaconTag t1, t2;
+            DvClMetricTag mt;
+            NS_LOG_INFO("DIAG_FLAT_RX node=" << myId << " en_p=" << (p->PeekPacketTag(t1) ? 1 : 0)
+                                             << " en_payload="
+                                             << ((payload && payload->PeekPacketTag(t2)) ? 1 : 0)
+                                             << " metrictag=" << (p->PeekPacketTag(mt) ? 1 : 0));
+        }
         const uint16_t src = beaconHdr.GetSrc();
         const uint8_t rpCounter = UnpackTtl(beaconHdr.GetFlagsTtl());
         if (src == myId)

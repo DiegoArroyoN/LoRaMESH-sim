@@ -202,5 +202,56 @@ class DvClMetricTag : public Tag
     uint8_t m_dcRemaining = 0xFF; // §DC-wire: DC restante del emisor 0-100; 0xFF = N/A
 };
 
+/**
+ * \brief SOLO PARA LA ABLACION DE SUPUESTOS DE MODELADO. NO USAR EN PRODUCCION.
+ *
+ * Transporta el payload REAL de rutas de una baliza fuera del paquete, de modo
+ * que las entradas llegan al receptor sin que su tamaño se cobre al aire. Es la
+ * emulacion deliberada de un defecto ajeno: FLoRaMesh (Pueyo-Centelles et al.,
+ * 2024) hace `routingPacket->setByteLength(routingPacketMaxSize)` con
+ * routingPacketMaxSize = 12 B, de modo que un paquete de ruteo se factura
+ * siempre a 12 bytes por muchas entradas que lleve. En OMNeT++/INET las
+ * entradas viven en una estructura C++ que nunca se serializa y viaja por
+ * referencia, asi que el modelo entrega informacion de ruteo COMPLETA al precio
+ * de un paquete MINIMO.
+ *
+ * En ns-3 la duracion de la transmision sale de packet->GetSize()
+ * (LoraPhy::GetOnAirTime), y los tags NO cuentan para GetSize(). Poner las
+ * entradas en un tag y dejar el paquete en 12 B reproduce exactamente esa
+ * semantica sin tocar el PHY.
+ *
+ * Se activa unicamente con el atributo PueyoFlatBeaconBytes > 0, que por
+ * defecto vale 0 (desactivado) y en la linea de ordenes exige ademas la puerta
+ * --allowFlatBeaconBillingOverride. Fuera de ese modo esta clase no se
+ * instancia nunca.
+ */
+class DvClFlatBeaconTag : public Tag
+{
+  public:
+    static TypeId GetTypeId();
+    TypeId GetInstanceTypeId() const override;
+
+    DvClFlatBeaconTag() = default;
+    ~DvClFlatBeaconTag() override = default;
+
+    /// Tope: MTU LoRa (255 B) menos la cabecera de baliza de 6 B.
+    static constexpr uint16_t kMaxPayloadBytes = 249;
+
+    void SetPayload(const uint8_t* data, uint32_t len);
+
+    const std::vector<uint8_t>& GetPayload() const
+    {
+        return m_payload;
+    }
+
+    uint32_t GetSerializedSize() const override;
+    void Serialize(TagBuffer i) const override;
+    void Deserialize(TagBuffer i) override;
+    void Print(std::ostream& os) const override;
+
+  private:
+    std::vector<uint8_t> m_payload;
+};
+
 } // namespace dvcl
 } // namespace ns3

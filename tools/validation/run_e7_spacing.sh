@@ -22,9 +22,10 @@
 #
 # PREDICCION, para que esto sea una prueba y no una pesca:
 #
-#   - a 177 y 246 m (diagonal alcanzable) las dos metricas deberian CONVERGER:
-#     sin dilema que resolver, dPDR y dFND se acercan a cero.
-#   - a 178 y 247 m (diagonal recien caida) deberian DIVERGIR, y el reparto de
+#   - a 177 y 247 m (diagonal alcanzable con SF7 y con SF8, respectivamente) las
+#     dos metricas deberian CONVERGER: sin dilema que resolver, dPDR y dFND se
+#     acercan a cero.
+#   - a 178 y 248 m (diagonal recien caida) deberian DIVERGIR, y el reparto de
 #     SF de la compuesta debe cargarse hacia el SF superior de cada par.
 #
 # Si a 177 m tambien divergen, la explicacion del mecanismo esta mal y hay que
@@ -191,7 +192,13 @@ else
     echo "AVISO: falta assert_config.sh; la campaña corre SIN comprobar su configuracion."
 fi
 
-for sp in 177 178 246 247; do
+# 177/178 bracquean el umbral de la diagonal con SF7 (177.48 m) y 247/248 el de
+# SF8 (247.38 m). El par 246/247 del diseño original caia ENTERO del lado
+# alcanzable -- diagonal 347.9 y 349.3 m contra un alcance SF8 de 349.9 m -- asi
+# que las dos columnas median el mismo caso y no podian separar nada. Se
+# comprobo en su momento con 80 celdas identicas bit a bit en el brazo
+# determinista, y el calculo del umbral lo confirma.
+for sp in 177 178 247 248; do
   for cfg in toaref comp; do
     for n in 25 49; do
       for seed in $(seq 1 "$SEEDS"); do echo "$sp $cfg $n $seed"; done

@@ -14,6 +14,78 @@ namespace dvcl
 
 NS_LOG_COMPONENT_DEFINE("DvClMetricTag");
 NS_OBJECT_ENSURE_REGISTERED(DvClMetricTag);
+NS_OBJECT_ENSURE_REGISTERED(DvClFlatBeaconTag);
+
+// ---------------------------------------------------------------------------
+// DvClFlatBeaconTag: emulacion del setByteLength(12) de FLoRaMesh.
+// Ver la nota extensa en dv-cl-metric-tag.h. Solo se instancia cuando el
+// atributo PueyoFlatBeaconBytes es > 0, que no es el valor por defecto.
+// ---------------------------------------------------------------------------
+
+TypeId
+DvClFlatBeaconTag::GetTypeId()
+{
+    static TypeId tid = TypeId("ns3::dvcl::DvClFlatBeaconTag")
+                            .SetParent<Tag>()
+                            .SetGroupName("DvCl")
+                            .AddConstructor<DvClFlatBeaconTag>();
+    return tid;
+}
+
+TypeId
+DvClFlatBeaconTag::GetInstanceTypeId() const
+{
+    return GetTypeId();
+}
+
+void
+DvClFlatBeaconTag::SetPayload(const uint8_t* data, uint32_t len)
+{
+    m_payload.clear();
+    if (!data || len == 0)
+    {
+        return;
+    }
+    const uint32_t n = std::min<uint32_t>(len, kMaxPayloadBytes);
+    m_payload.assign(data, data + n);
+}
+
+uint32_t
+DvClFlatBeaconTag::GetSerializedSize() const
+{
+    return 2 + static_cast<uint32_t>(m_payload.size());
+}
+
+void
+DvClFlatBeaconTag::Serialize(TagBuffer i) const
+{
+    i.WriteU16(static_cast<uint16_t>(m_payload.size()));
+    for (uint8_t b : m_payload)
+    {
+        i.WriteU8(b);
+    }
+}
+
+void
+DvClFlatBeaconTag::Deserialize(TagBuffer i)
+{
+    const uint16_t n = i.ReadU16();
+    m_payload.assign(std::min<uint16_t>(n, kMaxPayloadBytes), 0);
+    for (uint16_t k = 0; k < n; ++k)
+    {
+        const uint8_t b = i.ReadU8();
+        if (k < m_payload.size())
+        {
+            m_payload[k] = b;
+        }
+    }
+}
+
+void
+DvClFlatBeaconTag::Print(std::ostream& os) const
+{
+    os << "flatBeaconPayloadBytes=" << m_payload.size();
+}
 
 TypeId
 DvClMetricTag::GetTypeId()

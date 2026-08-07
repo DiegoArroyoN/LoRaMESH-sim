@@ -372,6 +372,12 @@ class DvClApp : public Application
     uint32_t m_dvBeaconMaxRoutes{0};
     uint32_t m_dvBeaconOverheadBytes{1};
     uint32_t m_dvPayloadMaxBytes{0}; // 0 = derive from MTU, else hard payload cap for route entries
+    // ABLACION DE SUPUESTOS AJENOS. 0 = desactivado (valor por defecto y unico
+    // valor fisicamente coherente). > 0 factura TODA baliza a ese numero de
+    // bytes en el aire mientras las rutas siguen llegando completas, que es lo
+    // que hace FLoRaMesh con setByteLength(12). No es un modo de operacion: es
+    // un instrumento para ponerle precio a su decision de modelado.
+    uint32_t m_pueyoFlatBeaconBytes{0};
     std::string m_routeAdvertPolicy{"top_score"};
     Time m_lastDvBeaconTime{Seconds(0)};
     Time m_extraDvBeaconMinGap{Seconds(0.5)};

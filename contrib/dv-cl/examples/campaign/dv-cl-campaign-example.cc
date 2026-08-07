@@ -186,6 +186,9 @@ main(int argc, char* argv[])
     std::string costEncoding = "cost255";            // score100 | cost255 | score255
     std::string sfLinkMode = "observed_rxsf";        // observed_rxsf | deterministic_sensitivity
     double sfLinkMarginDb = 0.0;
+    // ABLACION, no modo de operacion. 0 = desactivado. Ver la puerta
+    // --allowFlatBeaconBillingOverride y dv-cl-metric-tag.h.
+    uint32_t pueyoFlatBeaconBytes = 0;
     double compositeWToa = 0.60;      // alpha -- thesis 4.2
     double compositeWHop = 0.15;      // beta -- thesis 4.2
     double compositeWEnergy = 0.25;   // delta -- thesis 4.2
@@ -212,6 +215,9 @@ main(int argc, char* argv[])
     // IDENTICO al binario congelado (regression-safe).
     bool allowShadowOverride = false;
     bool allowPayloadOverride = false;
+    bool allowDvPayloadOverride = false;
+    bool allowSfMarginOverride = false;
+    bool allowFlatBeaconBillingOverride = false;
     bool allowInterferenceModelOverride = false;
     bool allowPacketsPerPairOverride = false;
     bool allowMetricModeOverride = false;
@@ -503,6 +509,38 @@ main(int argc, char* argv[])
     cmd.AddValue("allowPayloadOverride",
                  "§Robustness: allow CLI dataPayloadSizeBytes to override the Pueyo-fixed 20 B.",
                  allowPayloadOverride);
+    cmd.AddValue("allowDvPayloadOverride",
+                 "Permite apartarse de dvPayloadMaxBytes=251 del perfil comparable. Existe para "
+                 "medir el coste del plano de control: el tamano de la baliza fija cuantas rutas "
+                 "se anuncian por emision, y con 7 B por entrada dvPayloadMaxBytes=7 da una baliza "
+                 "de 12 B, que es exactamente lo que FLoRaMesh factura a sus paquetes de ruteo "
+                 "(routingPacketMaxSize=12B) INDEPENDIENTEMENTE de cuantas rutas lleven.",
+                 allowDvPayloadOverride);
+    cmd.AddValue("allowSfMarginOverride",
+                 "Permite apartarse de sfLinkMarginDb=0 del perfil comparable. Existe porque el "
+                 "margen 0 hace que el selector elija el SF mas rapido que TEORICAMENTE alcanza, "
+                 "sin reserva: medido el 2026-08-03, en separaciones de 240-250 m el enlace queda "
+                 "con 0.04-0.40 dB de margen, el selector lo declara viable y la red entrega CERO "
+                 "sin dar un solo error. Barrer este parametro caracteriza cuanta reserva hace "
+                 "falta de verdad.",
+                 allowSfMarginOverride);
+    cmd.AddValue(
+        "pueyoFlatBeaconBytes",
+        "ABLACION DE SUPUESTOS AJENOS, NO ES UN MODO DE OPERACION. 0 = desactivado (por "
+        "defecto). Si es > 0, toda baliza se factura al aire con ese tamaño fijo mientras sus "
+        "entradas de ruta llegan COMPLETAS al receptor. Reproduce a proposito el "
+        "setByteLength(routingPacketMaxSize=12) de FLoRaMesh, que en OMNeT++ deja las entradas "
+        "en una estructura que nunca se serializa: informacion de ruteo completa al precio de "
+        "un paquete minimo. Esa combinacion NO es fisicamente realizable y el simulador no debe "
+        "operar nunca asi; existe solo para poner precio a esa decision de modelado ajena. "
+        "Exige --allowFlatBeaconBillingOverride.",
+        pueyoFlatBeaconBytes);
+    cmd.AddValue("allowFlatBeaconBillingOverride",
+                 "Abre --pueyoFlatBeaconBytes. Puerta aparte y nombre explicito a proposito: "
+                 "activar la facturacion plana produce numeros que NO son de nuestro protocolo "
+                 "sino de una emulacion de un defecto ajeno, y no deben acabar en una figura sin "
+                 "decirlo.",
+                 allowFlatBeaconBillingOverride);
     cmd.AddValue("floodingMode",
                  "§DoE E6: plano de datos por inundacion gestionada (linea de referencia "
                  "externa). No se consulta la tabla de rutas: se difunde y cada vecino "
@@ -730,8 +768,28 @@ main(int argc, char* argv[])
         return o.str();
     };
 #define DVCL_SNAP(v) snap[#v] = asText(v)
+// Variante para cuando el flag y la variable no se llaman igual. La clave TIENE
+// que ser el nombre del flag: el contraste de mas abajo busca por ese nombre y,
+// si no lo encuentra, hace continue y no comprueba nada.
+#define DVCL_SNAP_AS(nombre, v) snap[nombre] = asText(v)
     auto snapshotProfileForced = [&]() {
         std::map<std::string, std::string> snap;
+        // Los ocho de aqui salieron de la auditoria del 30-jul: los perfiles los
+        // sobrescriben DESPUES de leer la linea de comandos y ninguno estaba en
+        // esta lista, asi que el bloque que aborta ni los miraba. Se comprobo
+        // con huellas bit a bit que --enableDuty=false, --dutyLimit=0.05 y
+        // --enableCsma=false producian corridas IDENTICAS a no pasarlos: la
+        // campaña decia medir una cosa y media otra, igual que sfMax=8.
+        // Duty y MAC son ademas dos de los ejes de la matriz factorial, asi que
+        // sin esto la matriz habria tenido dos factores fantasma.
+        DVCL_SNAP_AS("enableCsma", cfg.enableCsma);
+        DVCL_SNAP_AS("enableDuty", cfg.enableDutyCycle);
+        DVCL_SNAP_AS("dutyLimit", cfg.dutyLimit);
+        DVCL_SNAP_AS("socHysteresis", socHysteresisPercent);
+        DVCL_SNAP(enableSfScanRx);
+        DVCL_SNAP(pueyoFloraLikeRx);
+        DVCL_SNAP(sfLinkMode);
+        DVCL_SNAP(useBeaconBattery);
         DVCL_SNAP(beaconIntervalStableSec);
         DVCL_SNAP(beaconLatestOnly);
         DVCL_SNAP(controlBackoffFactor);
@@ -758,6 +816,7 @@ main(int argc, char* argv[])
         DVCL_SNAP(routeSwitchMinDeltaX100);
         DVCL_SNAP(routeTimeoutFactor);
         DVCL_SNAP(sfLinkMarginDb);
+        DVCL_SNAP(pueyoFlatBeaconBytes);
         DVCL_SNAP(sfMax);
         DVCL_SNAP(sfMin);
         DVCL_SNAP(sfScanEdThresholdDbm);
@@ -770,6 +829,7 @@ main(int argc, char* argv[])
         return snap;
     };
 #undef DVCL_SNAP
+#undef DVCL_SNAP_AS
     const std::map<std::string, std::string> requestedValues = snapshotProfileForced();
 
 
@@ -811,6 +871,9 @@ main(int argc, char* argv[])
     const bool cliDataFixedPhaseCadence = dataFixedPhaseCadence;
     const double cliShadowingSigmaDb = shadowingSigmaDb;
     const uint32_t cliDataPayloadSizeBytes = dataPayloadSizeBytes;
+    const uint32_t cliDvPayloadMaxBytes = dvPayloadMaxBytes;
+    const double cliSfLinkMarginDb = sfLinkMarginDb;
+    const uint32_t cliPueyoFlatBeaconBytes = pueyoFlatBeaconBytes;
     const std::string cliInterferenceModel = interferenceModel;
     const uint32_t cliPueyoPacketsPerPair = pueyoPacketsPerPair;
     const std::string cliRouteMetricMode = routeMetricMode;
@@ -856,6 +919,14 @@ main(int argc, char* argv[])
         routeAdvertPolicy = "cost_weighted";
         costEncoding = "cost255";
         sfLinkMarginDb = 0.0;
+        // La base comparable NUNCA factura balizas de forma plana: es un
+        // artefacto de ablacion, no una opcion de configuracion. Forzarlo aqui
+        // es lo que hace que la puerta muerda de verdad -- el aborto de flags
+        // descartados compara lo pedido por CLI contra lo que queda tras el
+        // perfil, asi que un parametro que el perfil no toca se cuela sin que
+        // salte nada (comprobado: sin esta linea, --pueyoFlatBeaconBytes=12 sin
+        // puerta devolvia rc=0 y simulaba con facturacion plana).
+        pueyoFlatBeaconBytes = 0;
         maxRoutesPerDestination = 2;
         maxTotalRoutes = 1024;
         dvPayloadMaxBytes = 251;
@@ -1164,6 +1235,18 @@ main(int argc, char* argv[])
     {
         dataPayloadSizeBytes = cliDataPayloadSizeBytes;
     }
+    if (allowDvPayloadOverride)
+    {
+        dvPayloadMaxBytes = cliDvPayloadMaxBytes;
+    }
+    if (allowSfMarginOverride)
+    {
+        sfLinkMarginDb = cliSfLinkMarginDb;
+    }
+    if (allowFlatBeaconBillingOverride)
+    {
+        pueyoFlatBeaconBytes = cliPueyoFlatBeaconBytes;
+    }
     if (allowInterferenceModelOverride)
     {
         interferenceModel = cliInterferenceModel;
@@ -1184,6 +1267,9 @@ main(int argc, char* argv[])
         {"beaconIntervalStableSec", "allowBeaconOverride"},
         {"beaconIntervalWarmSec", "allowBeaconOverride"},
         {"dataPayloadSizeBytes", "allowPayloadOverride"},
+        {"dvPayloadMaxBytes", "allowDvPayloadOverride"},
+        {"sfLinkMarginDb", "allowSfMarginOverride"},
+        {"pueyoFlatBeaconBytes", "allowFlatBeaconBillingOverride"},
         {"enableNs3EnergyFramework", "allowEnergyFwOverride"},
         {"interferenceModel", "allowInterferenceModelOverride"},
         {"pueyoPacketsPerPair", "allowPacketsPerPairOverride"},
@@ -1279,7 +1365,7 @@ main(int argc, char* argv[])
         NS_ABORT_MSG_IF(routeAdvertPolicy != "cost_weighted",
                         "Error: profile=" << profileName
                                           << " requiere routeAdvertPolicy=cost_weighted");
-        NS_ABORT_MSG_IF(dvPayloadMaxBytes != 251,
+        NS_ABORT_MSG_IF(dvPayloadMaxBytes != 251 && !allowDvPayloadOverride,
                         "Error: profile=" << profileName << " requiere dvPayloadMaxBytes=251");
         NS_ABORT_MSG_IF(maxRoutesPerDestination != 2 || maxTotalRoutes != 1024,
                         "Error: profile=" << profileName << " requiere tabla DV 2/1024");
@@ -1698,6 +1784,23 @@ main(int argc, char* argv[])
                         << maxRoutesPerDestination);
     NS_ABORT_MSG_IF(maxTotalRoutes < 1,
                     "Error: maxTotalRoutes debe ser >=1, valor actual: " << maxTotalRoutes);
+    // La facturacion plana solo tiene sentido entre la cabecera de baliza (6 B,
+    // por debajo no cabe ni el encabezado) y la MTU LoRa. Y se avisa por stderr
+    // cada vez que se activa: es un artefacto deliberado y no puede pasar
+    // inadvertido en un log de campaña.
+    NS_ABORT_MSG_IF(pueyoFlatBeaconBytes > 0 && (pueyoFlatBeaconBytes < 6 ||
+                                                 pueyoFlatBeaconBytes > 255),
+                    "Error: pueyoFlatBeaconBytes debe ser 0 (desactivado) o estar en [6,255], "
+                    "valor actual: "
+                        << pueyoFlatBeaconBytes);
+    if (pueyoFlatBeaconBytes > 0)
+    {
+        std::cerr << "[ABLACION] facturacion plana de balizas ACTIVADA a " << pueyoFlatBeaconBytes
+                  << " B: las rutas llegan completas y el aire se cobra a tamaño fijo. "
+                     "Emulacion del setByteLength(12) de FLoRaMesh. Estos numeros NO son de "
+                     "nuestro protocolo -- no reportar sin declararlo."
+                  << std::endl;
+    }
     NS_ABORT_MSG_IF(nodePlacementMode != "line" && nodePlacementMode != "random" &&
                         nodePlacementMode != "pueyo_grid" &&
                         nodePlacementMode != "pueyo_random_equiv",
@@ -2198,6 +2301,8 @@ main(int argc, char* argv[])
                                DoubleValue(energyMaxPenalty));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::SfLinkMode", StringValue(sfLinkMode));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::SfLinkMarginDb", DoubleValue(sfLinkMarginDb));
+    Config::SetDefaultFailSafe("ns3::dvcl::DvClApp::PueyoFlatBeaconBytes",
+                               UintegerValue(pueyoFlatBeaconBytes));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::MaxRoutesPerDestination",
                                UintegerValue(maxRoutesPerDestination));
     Config::SetDefaultFailSafe("ns3::dvcl::DvClRouting::MaxTotalRoutes",

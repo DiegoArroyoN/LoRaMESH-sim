@@ -1,0 +1,2 @@
+def build(bld):
+    bld.ns3_python_bindings()
