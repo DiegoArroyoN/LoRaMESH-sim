@@ -517,12 +517,13 @@ main(int argc, char* argv[])
                  "(routingPacketMaxSize=12B) INDEPENDIENTEMENTE de cuantas rutas lleven.",
                  allowDvPayloadOverride);
     cmd.AddValue("allowSfMarginOverride",
-                 "Permite apartarse de sfLinkMarginDb=0 del perfil comparable. Existe porque el "
-                 "margen 0 hace que el selector elija el SF mas rapido que TEORICAMENTE alcanza, "
-                 "sin reserva: medido el 2026-08-03, en separaciones de 240-250 m el enlace queda "
-                 "con 0.04-0.40 dB de margen, el selector lo declara viable y la red entrega CERO "
-                 "sin dar un solo error. Barrer este parametro caracteriza cuanta reserva hace "
-                 "falta de verdad.",
+                 "Permite apartarse de sfLinkMarginDb=1.0 dB, que es el valor de la base "
+                 "comparable desde el 2026-08-07. Antes era 0, y con 0 el selector elige el SF "
+                 "mas rapido que TEORICAMENTE alcanza, sin reserva: en la rejilla de 177 m la "
+                 "DIAGONAL cae a 250.3 m, o sea a 0.02 dB del umbral de SF7, y en 240-250 m la "
+                 "red entrega CERO con rc=0 y sin un solo error. Usar este override para bajar a "
+                 "0 sirve para reproducir aquel regimen (es el brazo de atribucion de la replica "
+                 "de Pueyo-Centelles), no para operar.",
                  allowSfMarginOverride);
     cmd.AddValue(
         "pueyoFlatBeaconBytes",
@@ -918,7 +919,41 @@ main(int argc, char* argv[])
         dataBackoffFactor = 10.0;
         routeAdvertPolicy = "cost_weighted";
         costEncoding = "cost255";
-        sfLinkMarginDb = 0.0;
+        // MARGEN DEL SELECTOR DE SF: 1 dB desde el 2026-08-07. Antes 0.0.
+        //
+        // POR QUE CAMBIA. Con 0 la regla es "usa el SF mas rapido que
+        // TEORICAMENTE alcanza", sin reserva, y nuestro selector mira solo la
+        // sensibilidad termica mientras el receptor exige ademas sobrevivir a la
+        // matriz de aislamiento 6x6. Los dos componentes no se hablan, asi que el
+        // selector declara viables enlaces que el receptor mata. Es un defecto
+        // NUESTRO, no una eleccion de modelado.
+        //
+        // Lo que costaba, medido (E23, rejilla SF7-8, N=25, determinista):
+        //   sep 177 m: PDR 0.1867 con margen 0 frente a 0.4249 con 1 dB (x2.3)
+        //   sep 240 y 248 m: PDR 0.0000 con margen 0, con rc=0 y sin un error
+        // El mecanismo es la geometria de la rejilla: la diagonal esta a d*raiz(2)
+        // y a 177 m de separacion eso son 250.3 m, a 0.02 dB del umbral de SF7
+        // (alcance 251.0 m). El selector la da por buena y no sobrevive a nada.
+        //
+        // POR QUE 1 dB Y NO MAS. E23 barrio 0, 1, 2, 3 y 6 dB: los valores 1, 2 y
+        // 3 dan resultados IDENTICOS en las cinco separaciones -- el reparto de SF
+        // esta cuantizado, y 1-3 dB caen en el mismo escalon. Solo 6 dB cambia
+        // algo, forzando todo a SF8. Se elige el extremo BAJO de esa meseta porque
+        // inflar el SF cuesta aire, y bajo duty al 1% ese coste se paga entero.
+        //
+        // LO QUE NO ES. No modela desvanecimiento: el canal de las campañas de
+        // replica es determinista (sigma=0). Es un sustituto escalar de la
+        // interferencia que el selector no ve. El arreglo de fondo seria un
+        // selector que decida por SINR esperado, y queda como trabajo futuro.
+        //
+        // ROMPE COMPARABILIDAD con todo lo medido antes de esta fecha (E7, E14,
+        // E15, E17-E20) que corrio a margen 0. E24 y E25 ya comprobaron que las
+        // conclusiones pareadas sobreviven: el contraste de cadencia queda
+        // intacto (+228.7% frente a +229.7%), el de metrica se atenua (+5.69% ->
+        // +3.62%) y delta sigue sin servir. La columna `sfmargin` de
+        // mesh_dv_effective_config.csv permite saber a que margen corrio cualquier
+        // celda archivada.
+        sfLinkMarginDb = 1.0;
         // La base comparable NUNCA factura balizas de forma plana: es un
         // artefacto de ablacion, no una opcion de configuracion. Forzarlo aqui
         // es lo que hace que la puerta muerda de verdad -- el aborto de flags
