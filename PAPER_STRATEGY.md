@@ -56,14 +56,31 @@ Objetivo: **Pueyo-Centelles 2024**, porque implementamos su métrica fielmente
 (`toa_only`, ecuación 4) y su escenario (rejilla 177 m), y ellos publicaron
 simulación **y hardware**.
 
-**Su figura 11a (rejilla 177 m, tráfico bajo) queda reproducida.** Seis puntos,
-10 semillas cada uno, con margen 1 dB y SF ortogonales:
+**Sus ocho subfiguras (11a-d rejilla, 12a-d aleatoria) están replicadas** con
+margen 1 dB y los dos modelos de interferencia, 20 semillas por caja (E21b+E21c,
+3 840 celdas, 96 cajas completas).
 
-| N | 9 | 16 | 25 | 36 | 49 | 64 |
-|---|---|---|---|---|---|---|
-| Pueyo | 0.955 | 0.910 | 0.870 | 0.830 | 0.790 | 0.730 |
-| nosotros | 0.9569 | 0.9305 | 0.9036 | 0.8524 | 0.7934 | 0.7395 |
-| desviación | +0.2% | +2.3% | +3.9% | +2.7% | +0.4% | +1.3% |
+> ⚠️ **RETRACTO 2026-08-07 — la comparación es de TENDENCIA, no de números.**
+> Sus figuras son **boxplots y no publican valores numéricos**. Durante días usé
+> `{0.955, 0.910, 0.870, 0.830, 0.790, 0.730}` como "sus valores publicados" de
+> la fig. 11a y sobre ellos monté un titular de *"réplica reproducida, +0.2% a
+> +3.9%"*. **Esos seis números no tenían fuente verificable**: aparecían solo en
+> tres ficheros que había escrito yo. Tomé una nota propia anterior como si fuera
+> una fuente. Al renderizar el PDF y leer su serie ToA, los valores reales están
+> ~0.012–0.016 por encima, y el sesgo iba en la dirección que nos favorecía.
+>
+> **Ninguna figura nuestra lleva ya una línea con sus valores**, y no se reporta
+> ninguna desviación numérica contra sus figuras. La regla que sale de esto:
+> *una nota propia anterior no es una fuente*.
+
+**Lo que sí se puede afirmar, y es visual:** con margen 1 dB + SF ortogonales
+reproducimos su tendencia y su nivel en tres de los cuatro paneles de tráfico
+bajo, **incluidos los dos de topología aleatoria**, que son los más difíciles de
+acertar por casualidad porque su dispersión entre semillas es grande y también la
+reproducimos. Las dos discrepancias: en **tráfico alto entregamos más que ellos**
+(su eje llega a 0.25 y nuestro PDR alcanza 0.49), y en la **rejilla de 248 m en
+tráfico bajo** divergemos de forma creciente con N — que es donde su facturación
+de control les regala más.
 
 **Y llegar ahí costó dos cosas, que hay que reportar separadas porque son de
 naturaleza distinta:**
@@ -83,9 +100,11 @@ información de ruteo **completa** al precio de un paquete **mínimo**. Su plano
 control no escala con la red por construcción. Medido:
 
 - ToA media de baliza, nuestra: 99.9 → 399.5 ms entre N=9 y N=64. La suya: **65.9 ms plana**.
-- E22 (recortar la baliza a su precio): el PDR **baja**, no sube — con 2 rutas por
-  emisión se ahorra aire pero la convergencia se degrada más de lo que compensa.
-  Óptimo interior en 18 rutas, y ni ese se acerca a su curva.
+- E28 (recortar la baliza a su precio, 600 celdas a margen 1): el PDR **baja**,
+  no sube — con 2 rutas por emisión se ahorra aire pero la convergencia se
+  degrada más de lo que compensa, y cuesta **×3.15** de entrega a 64 nodos. El
+  óptimo es interior y **escala con N**: 9 rutas a N=16, 18 a N=25-36, 37 a
+  N=49-64, siempre entre el 50% y el 77% de las rutas conocidas.
 - E26 (su modelo exacto: 12 B de aire con las rutas completas, vía tag): sube el
   PDR ×1.13 a 177 m y ×1.34 a 248 m en N=64, y la fracción de aire en balizas cae
   del 66% al 23%.
@@ -104,20 +123,33 @@ necesitan.
 
 ### Huecos que siguen abiertos
 
-1. **δ nunca se ha probado sin duty cycle con el binario arreglado.** Todas las
-   campañas de δ (E15, E17, E18, E19, E25) usan `--allowDutyOverride=true`. El
-   viejo "+9.69% de FND sin duty" es del binario roto. Si δ funciona sin duty y
-   muere con duty, la conclusión deja de ser *"el término de energía no sirve"* y
-   pasa a ser **"la regulación de duty cycle es lo que lo anula"** — más citable,
-   y alineado con lo que el survey de ACM señala. ~200 celdas. **Es el hueco de
-   más valor esperado que queda.**
+1. ~~δ nunca se ha probado sin duty cycle~~ **CERRADO 2026-08-08 con E27**, y
+   con el desenlace bueno: δ **sí funciona** sin duty (FND +13.41%, 30/30
+   semillas) y **cambia de signo** con duty (−1.01%). La conclusión pasa de *"el
+   término de energía no sirve"* a **"la regulación de duty cycle es lo que lo
+   anula"**. Ver el Acto 2. Registré la predicción contraria antes de mirar y era
+   falsa: yo esperaba que el signo no cambiara.
 2. **Las figuras 11c (rejilla 248 m) y 12 (aleatoria) no están digitalizadas.**
    Los valores de referencia que usamos ahí son aproximaciones nuestras, así que
    ninguna desviación de 248 m es reportable. Bloquea la mitad del capítulo de
    réplica, justo la mitad donde la facturación plana pega más fuerte.
-3. **E22 corrió a margen 0.** El mecanismo del ToA es contabilidad de aire y no
-   depende del margen, pero el óptimo interior de 18 rutas es un contraste
-   pareado y hay que reverificarlo con margen 1 (mismo argumento que E24).
+3. ~~E22 corrió a margen 0~~ **CERRADO 2026-08-08 con E28** (600 celdas, los dos
+   margenes en la misma campaña y el mismo binario). El óptimo interior
+   sobrevive, se desplaza hacia más rutas y aparece una regla que a margen 0 no
+   se veía: **escala con N y se queda entre el 50% y el 77% de las rutas
+   conocidas** (9 rutas a N=16, 18 a N=25-36, 37 a N=49-64). Anunciar todas nunca
+   es lo mejor. Y el precio de la facturación de FLoRaMesh pasa de ×1.4 a
+   **×3.15** a 64 nodos.
+
+4. **NUEVO — el resto de campañas de margen 0.** Decisión de Diego del
+   2026-08-07: los resultados medidos a `sfLinkMarginDb = 0` no se analizan.
+   Afecta a E1–E20 y E22 enteras. Se salvan δ=0 (E25 lo confirmó a margen 1, y
+   E27 lo ha reemplazado), la cadencia de balizas (E24 dio +228.7% frente al
+   +229.7% de E20) y la réplica. **Se caen** el presupuesto energético de E14
+   —que abre el paper—, la frontera α/β de E16 —de la que salía la elección de
+   pesos—, la curva de balizas más allá de 1800 s y el umbral de SF de E7.
+   Relanzamiento en cola: **E14** (320 celdas, corriendo) → **E16** (480) →
+   **E20 extendida** (400) → **E7** (640).
 
 ---
 
@@ -192,49 +224,125 @@ eficiencia energética. Nuestros dos resultados principales responden a ambos.
 
 ## 4. Storyline propuesto
 
-**Título de trabajo:** *Dónde va realmente la energía en LoRa mesh con duty
-cycle: el plano de control domina a la métrica de ruteo en un orden de magnitud*
+> **REESCRITO EL 2026-08-08 TRAS E27.** La tesis anterior era *"el término de
+> energía no sirve"*. E27 (240 celdas, duty como factor pareado, margen 1 dB)
+> demuestra que **sí sirve, y que lo que lo anula es la regulación**. El cambio
+> es de fondo, no de matiz: pasa de ser un resultado negativo sobre nuestra
+> propia métrica a ser un resultado positivo sobre el dominio de validez de una
+> familia de técnicas.
 
-**Tesis:** bajo EU868 al 1%, el encaminamiento gobierna el **1.6%** del
-presupuesto energético de un nodo. Ninguna métrica de ruteo puede mover la vida
-útil desde ahí. Lo que sí la mueve —y a la vez la entrega— es el plan del plano
-de control.
+**Título de trabajo:** *La regulación como frontera del ruteo consciente de
+energía: el duty cycle EU868 anula un término que funciona sin él*
 
-**Encuadre obligatorio (validación 2026-08-03):** el resultado se presenta como
-**delimitación del dominio de validez** de una técnica que sí funciona en redes
-de sensores clásicas, no como refutación general. La frontera es el duty cycle
-regulatorio, que acota el TX a ≤36.4% del gasto y hace que domine la escucha.
+**Tesis:** el término energy-aware **funciona**: sin restricción de duty cycle
+mejora el FND un **+13.4%**, con unanimidad en las 30 semillas. Bajo EU868 al 1%
+el mismo término, en el mismo escenario y con las mismas semillas, **cambia de
+signo** y pasa a ser levemente dañino. La regulación no atenúa el beneficio: lo
+invierte.
+
+**Y un segundo resultado que matiza al primero, dentro del propio régimen sin
+duty:** δ sube el FND (+13.4%) mientras baja el T50 (−6.7%). No es una
+contradicción sino la firma del balanceo de carga, confirmada por la dispersión
+del relevo entre nodos (`rel_cv` **−31.1%**). Al igualar el reparto, el nodo más
+castigado dura más y desaparecen los nodos poco cargados que antes sobrevivían
+mucho tiempo. **δ desplaza vida útil del primer nodo al conjunto.** Cuál de las
+dos métricas importa deja de ser un detalle y pasa a ser una decisión de diseño
+que el paper explicita.
+
+**Encuadre obligatorio (validación 2026-08-03, reforzado por E27):** el resultado
+se presenta como **delimitación del dominio de validez** de una técnica que sí
+funciona en redes de sensores clásicas, no como refutación general. Ahora esa
+delimitación no es una interpretación nuestra: es una medida con el régimen
+regulatorio como factor experimental, y la frontera está donde el duty cycle
+convierte el aire en el recurso escaso.
 
 ### Cinco actos
 
-1. **El presupuesto.** Reposo 45.7%, TX 33.2%, RX 19.2%, CAD 1.8%. Dentro del
-   TX: balizas 65.4%, tráfico propio 29.7%, relevo 4.8% → el ruteo controla el
-   **1.61%**. Techo estructural: en 72 escenarios el relevo nunca pasa del
-   8.21% y el TX nunca del 36.4%, **porque el duty del 1% obliga a que la
-   escucha domine**. La regulación pone el techo.
-2. **El término de energía falla, y sabemos por qué.** δ **hace su trabajo**
-   (reparte el relevo 22% mejor, 40/40 celdas, p<0.0001) y aun así acorta la
-   vida. Mecanismo: esquivar a un vecino débil exige **subir el SF**; más SF
-   reparte mejor pero cada transmisión dura el doble. El equilibrio cuesta más
-   airtime del que ahorra. Verificado con δ ∈ [0, 0.85], 3 topologías, 2 rangos
-   de SF, con y sin lotería de batería, **y con margen de SF de 0 y 1 dB
-   (E25)** — este último cerraba la última duda, porque el margen sube el SF por
-   su cuenta y podía haber quitado a δ su única palanca o habérsela dado. Ni lo
-   uno ni lo otro: cada efecto de δ es del mismo signo con margen y **un poco
-   mayor en la dirección mala** (t50 −0.86%→−1.22%, e_max +0.96%→+1.10%). El
-   `e_max` sube en 27 de 30 semillas: δ hace que el nodo más castigado gaste
-   *más*. Un solo contraste salió positivo (FND +0.56%) y es ruido, p=0.58.
+1. **El presupuesto.** ⚠️ **CIFRAS PENDIENTES DE REMEDIR.** Reposo 45.7%,
+   TX 33.2%, RX 19.2%, CAD 1.8%; dentro del TX, balizas 65.4%, tráfico propio
+   29.7%, relevo 4.8% → el ruteo controla el **1.61%**. Techo estructural: en 72
+   escenarios el relevo nunca pasa del 8.21% y el TX nunca del 36.4%, **porque el
+   duty del 1% obliga a que la escucha domine**.
+
+   Todos esos números salen de E14 y de la sonda de 72 escenarios, que corrieron
+   a `sfLinkMarginDb = 0`. Por decisión del 2026-08-07 **no se reportan**. E14
+   está relanzada a margen 1 dB (`e14_static_m1`, 320 celdas) y estas cifras se
+   sustituyen cuando cierre. La estructura del argumento —la escucha domina y el
+   ruteo controla una fracción pequeña— es lo que E27 acaba de reforzar por otra
+   vía, así que se espera que sobreviva; los decimales, no.
+2. **El término de energía funciona, y la regulación lo anula.** Acto reescrito
+   el 2026-08-08 con E27 (240 celdas, margen 1 dB, 15 semillas, el duty como
+   factor **pareado**: mismas semillas, mismo escenario de máximo relevo, con y
+   sin regulación).
+
+   | contraste sobre el FND | sin duty | con duty 1% |
+   |---|---|---|
+   | δ = 0.25 frente a δ = 0 | **+10.26%** (30/30, p<0.001) | −0.86% (0/30, p<0.001) |
+   | δ = 0.85 frente a δ = 0 | **+13.41%** (30/30, p<0.001) | −1.01% (0/30, p<0.001) |
+
+   **El signo cambia**, y era el listón registrado antes de mirar: para sostener
+   *"la regulación es lo que anula δ"* no bastaba con que el efecto se atenuara.
+   Cambia, y con unanimidad en las 30 semillas de cada brazo.
+
+   **El mecanismo, ahora completo.** δ iguala el reparto de relevo entre nodos
+   (`rel_cv` **−31.05%** sin duty, −24.64% con él): eso lo hace en los dos
+   regímenes. Lo que cambia es el precio. Igualar exige **subir el SF**, y cada
+   transmisión en SF más alto dura el doble; bajo duty al 1% el aire es el
+   recurso escaso y ese coste se cobra entero, así que el balanceo sale a
+   pérdidas. Sin la restricción, el mismo balanceo se cobra en un recurso que
+   sobra y el beneficio queda al descubierto. **La tensión no la crea el PHY: la
+   crea la regulación.**
+
+   **Y una salvedad que enriquece el resultado en vez de debilitarlo:** dentro
+   del régimen sin duty, δ sube el FND (+13.41%) y **baja el T50 (−6.70%)**. Es
+   la firma del balanceo de carga: al igualar el reparto, el nodo más castigado
+   dura más y a la vez desaparecen los nodos poco cargados que antes sobrevivían
+   mucho tiempo, de modo que el grueso muere junto. **δ desplaza vida útil del
+   primer nodo al conjunto**, y cuál de las dos importa pasa a ser una decisión
+   de diseño explícita en vez de un detalle.
+
+   **Métricas que NO se pueden usar aquí, y hay que decirlo:** `e_max` y
+   `soc_min` están saturadas — 240 celdas dan 6 valores distintos de `e_max`,
+   todos en 225.000x mAh (el tope de batería), y `soc_min` tiene un único valor,
+   0.000000. A 300 ks todos los nodos mueren y las dos métricas dejan de
+   discriminar. El mismo problema apareció en E25. Los contrastes válidos son
+   FND, T50, PDR y `rel_cv`.
 3. **La palanca estaba en otro sitio.** Balizas de 60 s a 900 s: **+229% de PDR
-   y +8.1% de FND**, las dos a la vez. La métrica: +4.7% de PDR a costa de
-   −13.2% de FND. Cincuenta veces más efecto, y sin canje.
+   y +8.1% de FND**, las dos a la vez. Es el único de los actos con cifra de
+   margen 0 que **ya está confirmado a margen 1**: E24 midió +228.7% frente al
+   +229.7% de E20, prácticamente idéntico. Lo que falta es la curva más allá de
+   1800 s, que E24 no cubrió.
+
+   El contraste de la métrica sí se movió al corregir el margen: de +4.8% a
+   **+3.62%** de PDR. Aun así el orden de magnitud entre las dos palancas se
+   mantiene: la decisión de cadencia vale unas sesenta veces más que la de
+   encaminamiento, y mejora las dos métricas a la vez mientras el ruteo tiene que
+   elegir entre ellas — cosa que E27 acaba de precisar: incluso cuando δ
+   funciona, elige entre FND y T50.
 4. **Y esto invalida cómo el campo evalúa.** La ventaja de la compuesta pasa de
    +13.08% a +4.8% al sanear la cadencia, y su coste en vida útil se triplica.
    **Evaluar una métrica con una cadencia sin examinar mide sobre todo la
-   cadencia.**
+   cadencia.** ⚠️ Las dos cifras son de E20/E16 a margen 0; el reemplazo a
+   margen 1 sale de E24 (+3.62%) y de E16 relanzada. El argumento metodológico no
+   depende del valor exacto, pero la tabla del paper sí.
+
+   **Y E27 le añade un segundo filo, más fuerte:** evaluar un término
+   energy-aware **sin declarar el régimen regulatorio** mide sobre todo el
+   régimen. El mismo δ, el mismo escenario y las mismas semillas dan +13.41% o
+   −1.01% de FND según haya duty o no. Cualquier trabajo que reporte uno de los
+   dos números sin decir cuál está midiendo, no es comparable.
 5. **Implicaciones de diseño.** Anuncio por evento en vez de por reloj.
-   Receptor con ciclo de trabajo (el 45.7% intocado). Y el detalle que lo
-   resume: **quitar el byte de SoC de la baliza ahorra 1.3–2.7% de la energía
-   total — más de lo que el término de SoC podía mover en su techo teórico.**
+   Receptor con ciclo de trabajo (el 45.7% intocado, cifra pendiente de remedir).
+   **δ se activa o no según el régimen regulatorio**, que es la implicación nueva
+   y la más accionable: en despliegues fuera de EU868 —o bajo LBT, o con
+   ciclo de trabajo relajado— el término paga; bajo EU868 al 1%, no.
+
+   Y la **capacidad de baliza como parámetro de diseño con regla** (E28, 600
+   celdas, margen 1): el óptimo no es un valor fijo sino que **escala con N y se
+   queda entre el 50% y el 77% de las rutas conocidas** — 9 rutas a N=16, 18 a
+   N=25-36, 37 a N=49-64. Anunciar *todas* las rutas nunca es lo mejor y a N=64
+   cuesta un 4%. Recortarla a los 12 B que factura FLoRaMesh cuesta **×3.15** de
+   entrega a 64 nodos.
 
 6. **Auditoría de los supuestos de modelado del estado del arte.** Acto nuevo,
    incorporado el 2026-08-06 y hoy el más sólido del manuscrito: reproducimos la
@@ -280,20 +388,26 @@ de escribir y mucho más difícil de refutar.
 E23 (500), E24 (320), E25 (240), E26 (240). El nivel 3 de V&V está cerrado a
 177 m y la réplica pasó de ser verificación a ser **aportación**.
 
-1. **Digitalizar las figuras 11c y 12.** No es cómputo, es media hora de trabajo,
-   y desbloquea la mitad del capítulo de réplica. **Camino crítico.**
-2. **δ sin duty cycle** (~200 celdas). El hueco de más valor esperado que queda:
-   puede convertir *"el término no sirve"* en *"la regulación lo anula"*.
-3. **E22 con margen 1** (~300 celdas). Reverifica el óptimo interior del tamaño
-   de baliza fuera del régimen frágil.
-4. **Gate G4** con S. Sobarzo y G. Saavedra sobre `DOE.md` v3 y este storyline.
-   Es un cambio de tesis, no un ajuste.
-5. **Campañas finales** (M1, M2, E4, E5, E6): ~13 000 celdas, 35–50 h.
-6. **Reescritura**: conservar related work, system model y methodology; rehacer
+~~2. δ sin duty cycle~~ **HECHA**: E27, 240 celdas. Cambió la tesis del paper.
+~~3. E22 con margen 1~~ **HECHA**: E28, 600 celdas. El óptimo pasó a ser una regla.
+
+1. **Relanzar lo que corrió a margen 0**, por orden de daño al manuscrito:
+   **E14** (presupuesto energético, 320 celdas, *corriendo*) → **E16** (frontera
+   α/β, 480) → **E20 extendida** (cadencias que E24 no cubrió, 400) → **E7**
+   (umbral de SF, 640). Sin E14 no hay Acto 1 y sin E16 no hay forma de justificar
+   los pesos que se reportan.
+2. **Gate G4** con S. Sobarzo y G. Saavedra. Es un cambio de tesis, no un ajuste,
+   y ahora hay dos: la réplica pasó de verificación a aportación, y δ pasó de
+   fracaso a resultado condicionado por la regulación.
+3. **Campañas finales** (M1, M2, E4, E5, E6): ~13 000 celdas, 35–50 h.
+4. **Reescritura**: conservar related work, system model y methodology; rehacer
    intro, results, discussion y conclusion.
 
-Los pasos 1–3 son ~500 celdas más media hora de digitalización, y cierran las
-tres dudas que quedan antes de comprometer nada.
+**Lo que NO está en el camino crítico y conviene decir por qué.** Digitalizar las
+figuras 11c y 12 de Pueyo estaba como paso 1 el 2026-08-06. Ya no: al descubrir
+que sus figuras son boxplots sin valores publicados, la comparación pasó a ser de
+tendencia y **no se reporta ninguna desviación numérica contra ellas**. Digitalizar
+no desbloquea nada porque no vamos a publicar esos números.
 
 ---
 
