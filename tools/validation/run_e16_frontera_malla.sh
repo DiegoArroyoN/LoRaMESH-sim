@@ -61,7 +61,9 @@ SEEDS=${SEEDS:-20}
 export CHAN SEEDS
 BIN="$NS3/build/contrib/dv-cl/examples/ns3-dev-dv-cl-campaign-example-default"
 export LD_LIBRARY_PATH="$NS3/build/lib"
-OUT=$HOME/ns3-runs/e16_$CHAN
+# Ver la nota de SUF en run_e14_energia.sh: relanzamiento a directorio limpio.
+SUF=${SUF:-}
+OUT=$HOME/ns3-runs/e16_${CHAN}${SUF}
 mkdir -p "$OUT/cells"
 CSV="$OUT/e16_frontera_malla.csv"
 HDR="probe,arm,cfg,alpha,beta,delta,wsum,nEd,seed,rc,pdr,adm,fnd_s,t50_s,gen,deliv,tx_sum,soc_min,dtx,d_sf_mean,d_air_s,hops_mean,relay_tx,q_raw_mean"
@@ -159,7 +161,7 @@ if [ -f "$HOME/assert_config.sh" ]; then
     bash "$HOME/assert_config.sh" "$BIN" /tmp/cfgchk_$$ \
         "--profile=proposal_pueyo_like_csmacad --nEd=16 --stopSec=6000 --rngRun=1 \
          --allowDutyOverride=true --shadowingModel=$CHAN --enablePcap=false --verboseLogs=false" \
-        sfmin=7 wire=pueyo7b hyst=1 shadow=$CHAN spacing=178 coststep=0.025 mac=csmacad \
+        sfmin=7 wire=pueyo7b hyst=1 shadow=$CHAN spacing=178 coststep=0.025 mac=csmacad sfmargin=1 \
         || { echo "ABORTA: la configuracion efectiva no es la declarada."; exit 5; }
     [ -s /tmp/cfgchk_$$/mesh_dv_effective_config.csv ] && echo "cell,$(head -1 /tmp/cfgchk_$$/mesh_dv_effective_config.csv)" > "$OUT/config_header.txt"
     rm -rf /tmp/cfgchk_$$

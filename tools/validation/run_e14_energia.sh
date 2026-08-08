@@ -39,7 +39,12 @@ SEEDS=${SEEDS:-20}
 export CHAN SEEDS
 BIN="$NS3/build/contrib/dv-cl/examples/ns3-dev-dv-cl-campaign-example-default"
 export LD_LIBRARY_PATH="$NS3/build/lib"
-OUT=$HOME/ns3-runs/e14_$CHAN
+# SUF permite relanzar a un directorio limpio sin pisar los datos viejos ni que
+# el salto de celdas existentes ([ -s "$row" ] && return 0) haga que la campaña
+# "termine" sin correr nada. El relanzamiento del 2026-08-08 usa SUF=_m1 porque
+# la tanda original corrio a sfLinkMarginDb=0 y esos numeros ya no valen.
+SUF=${SUF:-}
+OUT=$HOME/ns3-runs/e14_${CHAN}${SUF}
 mkdir -p "$OUT/cells"
 CSV="$OUT/e14_energia.csv"
 HDR="mac,rango,metrica,nEd,seed,rc,pdr,hops_mean,e_total,e_tx,e_rx,e_cad,e_idle,n_baliza,n_fuente,n_relevo,air_baliza,air_fuente,air_relevo,tx_cv,tot_cv"
@@ -139,7 +144,7 @@ if [ -f "$HOME/assert_config.sh" ]; then
       bash "$HOME/assert_config.sh" "$BIN" /tmp/cfgchk_$$ \
         "--profile=${prf%%:*} --nEd=16 --stopSec=6000 --rngRun=1 \
          --allowDutyOverride=true --shadowingModel=$CHAN --enablePcap=false --verboseLogs=false" \
-        sfmin=7 sfmax=12 wire=pueyo7b hyst=1 shadow=$CHAN spacing=178 mac=${prf##*:} \
+        sfmin=7 sfmax=12 wire=pueyo7b hyst=1 shadow=$CHAN spacing=178 mac=${prf##*:} sfmargin=1 \
         || { echo "ABORTA: ${prf%%:*} no da la configuracion declarada."; exit 5; }
     done
     [ -s /tmp/cfgchk_$$/mesh_dv_effective_config.csv ] && echo "cell,$(head -1 /tmp/cfgchk_$$/mesh_dv_effective_config.csv)" > "$OUT/config_header.txt"
