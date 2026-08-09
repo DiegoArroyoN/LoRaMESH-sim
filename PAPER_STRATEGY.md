@@ -258,18 +258,32 @@ convierte el aire en el recurso escaso.
 
 ### Cinco actos
 
-1. **El presupuesto.** ⚠️ **CIFRAS PENDIENTES DE REMEDIR.** Reposo 45.7%,
-   TX 33.2%, RX 19.2%, CAD 1.8%; dentro del TX, balizas 65.4%, tráfico propio
-   29.7%, relevo 4.8% → el ruteo controla el **1.61%**. Techo estructural: en 72
-   escenarios el relevo nunca pasa del 8.21% y el TX nunca del 36.4%, **porque el
-   duty del 1% obliga a que la escucha domine**.
+1. **El presupuesto.** ✅ **REMEDIDO A MARGEN 1 dB** (E14, 320 celdas, 2026-08-09).
+   La estructura sobrevive casi intacta:
 
-   Todos esos números salen de E14 y de la sonda de 72 escenarios, que corrieron
-   a `sfLinkMarginDb = 0`. Por decisión del 2026-08-07 **no se reportan**. E14
-   está relanzada a margen 1 dB (`e14_static_m1`, 320 celdas) y estas cifras se
-   sustituyen cuando cierre. La estructura del argumento —la escucha domina y el
-   ruteo controla una fracción pequeña— es lo que E27 acaba de reforzar por otra
-   vía, así que se espera que sobreviva; los decimales, no.
+   | | reposo | TX | RX | CAD |
+   |---|---|---|---|---|
+   | margen 0 (retirado) | 45.7% | 33.2% | 19.2% | 1.8% |
+   | **margen 1 (vigente)** | **46.46%** | **33.71%** | **18.01%** | **1.83%** |
+
+   **El ruteo gobierna el 2.21% de la energía total** (antes 1.61%), con un techo
+   de 5.43% sobre las 320 celdas. El TX nunca pasa del **37.40%**: el duty del 1%
+   obliga a que la escucha domine, y esa es la frontera estructural.
+
+   **Y aparece un matiz que a margen 0 no se veía, que hay que reportar porque
+   condiciona el titular:** el reparto del aire depende fuertemente del rango de
+   SF.
+
+   | rango | balizas | tráfico propio | relevo |
+   |---|---|---|---|
+   | SF7-12 | **75–80%** | 18–23% | **1.7–2.1%** |
+   | SF7-8 | 42–44% | 46–47% | **10.3–10.8%** |
+
+   Con el rango completo las balizas se emiten en SF repartidos hasta SF12 y su
+   aire se dispara, dejando al relevo en el 2% del canal. Forzando la malla a
+   SF7-8 las balizas se abaratan y el relevo sube al 10%. **"El ruteo gobierna una
+   fracción pequeña" es cierto en los dos regímenes en energía total, pero por
+   razones distintas**, y el paper debe declarar en cuál mide.
 2. **El término de energía funciona, y la regulación lo anula.** Acto reescrito
    el 2026-08-08 con E27 (240 celdas, margen 1 dB, 15 semillas, el duty como
    factor **pareado**: mismas semillas, mismo escenario de máximo relevo, con y
@@ -322,9 +336,25 @@ convierte el aire en el recurso escaso.
 4. **Y esto invalida cómo el campo evalúa.** La ventaja de la compuesta pasa de
    +13.08% a +4.8% al sanear la cadencia, y su coste en vida útil se triplica.
    **Evaluar una métrica con una cadencia sin examinar mide sobre todo la
-   cadencia.** ⚠️ Las dos cifras son de E20/E16 a margen 0; el reemplazo a
-   margen 1 sale de E24 (+3.62%) y de E16 relanzada. El argumento metodológico no
-   depende del valor exacto, pero la tabla del paper sí.
+   cadencia.** El reemplazo a margen 1 sale de E24 (+3.62%).
+
+   ✅ **E16 remedida a margen 1** (480 celdas, 2026-08-09) y la conclusión de los
+   pesos **se confirma**: la ventaja viene de **tener** el término de saltos, no
+   de ajustarlo.
+
+   | | α/β de 0.95/0.05 a 0.30/0.70 | β=0 (toa_only) → β>0 |
+   |---|---|---|
+   | PDR (perf) | spread ~1.4%, **ninguno significativo** | **+8.76%**, 40/40, p<0.0001 |
+   | PDR (life) | spread ~3.0% | **+14.66%**, 40/40, p<0.0001 |
+
+   **α=0.85, β=0.15 es el punto de operación**, y ahora sobre datos válidos: gana
+   los tres contrastes de vida útil frente a las cuatro alternativas (p<0.0001) y
+   solo pierde en rendimiento por un 1.3–1.4% que no es significativo (p≈0.08).
+   Coste declarado: −2.64% de FND frente a `toa_only`.
+
+   Eso blinda la pregunta obvia del revisor —*"¿cómo calibraron α y β?"*— cuya
+   respuesta pasa a ser **"no hizo falta calibrarlos, y aquí está el barrido de
+   480 celdas que lo demuestra"**.
 
    **Y E27 le añade un segundo filo, más fuerte:** evaluar un término
    energy-aware **sin declarar el régimen regulatorio** mide sobre todo el

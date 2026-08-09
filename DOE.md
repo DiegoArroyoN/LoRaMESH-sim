@@ -193,9 +193,9 @@ Se propone retirarlo y dedicar esas 40 celdas a M2. **Decisión para el G4.**
 
 | ID | Qué establece | Celdas |
 |---|---|---|
-| E14 | desglose energético por actividad, ambos MAC, ambos rangos de SF | 320 |
+| **E14 (m1)** | **desglose energético a margen 1 dB: reposo 46.46%, TX 33.71%, RX 18.01%, CAD 1.83%; el ruteo gobierna el 2.21%** | **320** |
 | E15 | δ = 0 en las tres topologías | 360 |
-| E16 | frontera α/β en régimen malla: plana | 480 |
+| **E16 (m1)** | **frontera α/β a margen 1 dB: 85/15 gana vida útil (p<0.0001); la ventaja viene de tener β>0, no de ajustarlo** | **480** |
 | E17 | δ hasta cuota 0.85 en el escenario de máximo relevo | 280 |
 | E18 | δ sin lotería de batería, con FND medible | 320 |
 | E19 | mecanismo de δ en 3 topologías × 2 rangos | 720 |
