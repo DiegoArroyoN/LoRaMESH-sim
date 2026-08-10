@@ -78,7 +78,7 @@ contestan.
 | **Q3** | ¿Por qué falla el término energy-aware, y bajo qué condiciones fallaría cualquier otro? | E17–E19 | **respondida**: mecanismo de escalada de SF, medido en 3 topologías y 2 rangos (E19, 720 celdas) |
 | **Q4** | ¿Depende del MAC el beneficio de la métrica? ¿Hay interacción? | M1 | interacción **negativa** (−8.21 pp). Falta confirmarla en el diseño factorial |
 | **Q5** | ¿Cuánto del rendimiento lo fija el **plan de control** frente a la métrica de ruteo? | M2 | **respondida en un escenario**: cadencia +229% PDR vs métrica +4.7%. Falta generalizar a 3 escenarios |
-| **Q6** | ¿Es el umbral de SF de Pueyo-Centelles un efecto real o un artefacto de canal determinista? | E7 | **respondida**: con σ=3.57 dB el umbral desaparece; sin sombreado `toa_only` colapsa a PDR 0.0001 por quedarse clavado en SF7 |
+| **Q6** | ¿Es el umbral de SF de Pueyo-Centelles un efecto real o un artefacto de canal determinista? | E7 (m1) | **RESPUESTA CAMBIADA 2026-08-09**: no hay umbral. El colapso a PDR 0.0001 era artefacto de NUESTRO margen 0, no de su ecuación (4). A margen 1 el selector sube a SF8 y el PDR es 0.0151; la caída de 177→247 m es suave (×0.53) e **igual en los dos canales**, así que el sombreado no enmascara nada |
 
 Q5 es ahora la más citable. Cotrim & Margi (2024) estudian el duty cycle como
 cuello de botella de throughput; nadie ha caracterizado que **el plan de balizas
@@ -200,7 +200,7 @@ Se propone retirarlo y dedicar esas 40 celdas a M2. **Decisión para el G4.**
 | E18 | δ sin lotería de batería, con FND medible | 320 |
 | E19 | mecanismo de δ en 3 topologías × 2 rangos | 720 |
 | **E20** | **frontera de cadencia de balizas, 60 → 14400 s** | **720** |
-| E7 | umbral de SF, brazos con y sin sombreado | 640 |
+| **E7 (m1)** | **no hay umbral de SF: el colapso era nuestro. Dos canales, 640 celdas** | **640** |
 | **E21b+c** | **réplica de Pueyo-Centelles: las ocho subfiguras (11a-d rejilla, 12a-d aleatoria) con margen 1 dB y los dos modelos de interferencia, 20 semillas** | **3 840** |
 | E22 | precio de la baliza: óptimo interior en 18 rutas; su punto no es realizable | 300 |
 | E23 | cuánta reserva necesita el selector de SF; la banda muerta de 240–251 m | 500 |
@@ -436,7 +436,7 @@ de ellas como figura principal.
 | **F6'** | **la ventaja de la métrica según la cadencia: cómo el canje se degrada 7.6×** | Q1, Q5 | E20 | **datos listos** |
 | **F7'** | **mecanismo de δ: reparte la carga (−22% CV) y aun así acorta la vida** | Q3 | E17–E19 | **datos listos** |
 | F8 | Δ-pareadas resumen (forest plot) | Q1–Q6 | todos | pendiente |
-| **F9'** | **umbral de SF con y sin sombreado: `toa_only` clavado en SF7** | Q6 | E7 | **datos listos** |
+| **F9'** | **~~umbral de SF~~ → el sesgo de la ec. (4) hacia SF bajos SIN colapso: `toa_only` usa 99.7% de SF7 a 177 m frente al 23.2% de la compuesta** | Q6 | E7 (m1) | **datos listos, claim reescrito** |
 | T1 | comparación flooding | Q1 | E6 | pendiente |
 | T2 | disciplinas de duty (apéndice) | — | E4b | pendiente |
 | **T3** | **tabla de parámetros fijos** (§10.1) | — | — | **hecha** |

@@ -53,7 +53,12 @@ SEEDS=${SEEDS:-20}
 export CHAN SEEDS
 BIN="$NS3/build/contrib/dv-cl/examples/ns3-dev-dv-cl-campaign-example-default"
 export LD_LIBRARY_PATH="$NS3/build/lib"
-OUT=$HOME/ns3-runs/e20_$CHAN
+# SUF: relanzamiento a directorio limpio. La tanda original corrio a
+# sfLinkMarginDb=0 y por decision del 2026-08-07 esos numeros no se analizan.
+# Sin SUF, el salto de celdas existentes haria que la campaña "terminara" en
+# segundos reutilizando las filas viejas.
+SUF=${SUF:-}
+OUT=$HOME/ns3-runs/e20_${CHAN}${SUF}
 mkdir -p "$OUT/cells"
 CSV="$OUT/e20_frontera_balizas.csv"
 HDR="baliza_s,cfg,nEd,seed,rc,pdr,fnd_s,t50_s,soc_min,e_mean,e_max,n_baliza,air_baliza,air_dato,frac_baliza,hops,sf_mean,rel_n"
@@ -134,6 +139,16 @@ export -f celda
 export BIN LD_LIBRARY_PATH OUT
 
 [ -f "$CSV" ] || echo "$HDR" > "$CSV"
+
+# PRECONDICION: el margen efectivo tiene que ser 1 dB. Es el relanzamiento
+# entero: si el binario no trajera el defecto nuevo, produciriamos 720 filas
+# indistinguibles de las que acabamos de retirar.
+if [ -f "$HOME/assert_config.sh" ]; then
+    bash "$HOME/assert_config.sh" "$BIN" /tmp/cfgchk_$$         "--profile=proposal_pueyo_like_csmacad --nEd=16 --stopSec=6000 --rngRun=1          --allowDutyOverride=true --shadowingModel=$CHAN --enablePcap=false --verboseLogs=false"         sfmargin=1 mac=csmacad shadow=$CHAN wire=pueyo7b         || { echo "ABORTA: la configuracion efectiva no es la declarada."; rm -rf /tmp/cfgchk_$$; exit 5; }
+    rm -rf /tmp/cfgchk_$$
+else
+    echo "ABORTA: falta assert_config.sh y esta campaña NO puede correr sin comprobar el margen."; exit 5
+fi
 
 for bcn in 60 150 300 600 900 1800 3600 7200 14400; do
   for cfg in comp toaref; do

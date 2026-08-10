@@ -57,7 +57,11 @@ SEEDS=${SEEDS:-20}
 export CHAN SEEDS
 BIN="$NS3/build/contrib/dv-cl/examples/ns3-dev-dv-cl-campaign-example-default"
 export LD_LIBRARY_PATH="$NS3/build/lib"
-OUT=$HOME/ns3-runs/e7_$CHAN
+# SUF: ver la nota en run_e20_frontera_balizas.sh. Relanzamiento a margen 1 dB.
+# En esta campaña importa doblemente: E7 mide el UMBRAL DE SF, o sea que medirla
+# con el selector de SF roto era medir el instrumento con el instrumento.
+SUF=${SUF:-}
+OUT=$HOME/ns3-runs/e7_${CHAN}${SUF}
 mkdir -p "$OUT/cells"
 CSV="$OUT/e7_spacing.csv"
 HDR="spacing,cfg,nEd,seed,rc,pdr,fnd_s,t50_s,relay_tx,src_tx,tx_sum,soc_min,dtx,d_sf_mean,d_air_s,d_sf7,d_sf8,d_sf9,d_sf10,d_sf11,d_sf12,hops_mean"
@@ -185,7 +189,7 @@ fi
 # Solo se declaran INVARIANTES de la campaña: los factores que se barren
 # (metrica, pesos, espaciado, caudal) cambian por celda y no se declaran aqui.
 if [ -x "$HOME/assert_config.sh" ] || [ -f "$HOME/assert_config.sh" ]; then
-    bash "$HOME/assert_config.sh" "$BIN" /tmp/cfgchk_$$         "--profile=proposal_pueyo_like_csmacad --nEd=16 --stopSec=6000 --rngRun=1          --allowDutyOverride=true --shadowingModel=$CHAN          --enablePcap=false --verboseLogs=false"         sfmin=7 sfmax=12 wire=pueyo7b hyst=1 shadow=$CHAN || { echo "ABORTA: la configuracion efectiva no es la declarada."; exit 5; }
+    bash "$HOME/assert_config.sh" "$BIN" /tmp/cfgchk_$$         "--profile=proposal_pueyo_like_csmacad --nEd=16 --stopSec=6000 --rngRun=1          --allowDutyOverride=true --shadowingModel=$CHAN          --enablePcap=false --verboseLogs=false"         sfmin=7 sfmax=12 wire=pueyo7b hyst=1 shadow=$CHAN sfmargin=1 || { echo "ABORTA: la configuracion efectiva no es la declarada."; exit 5; }
     [ -s /tmp/cfgchk_$$/mesh_dv_effective_config.csv ] && echo "cell,$(head -1 /tmp/cfgchk_$$/mesh_dv_effective_config.csv)" > "$OUT/config_header.txt"
     rm -rf /tmp/cfgchk_$$
 else

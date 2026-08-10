@@ -390,6 +390,28 @@ canal determinista `toa_only` usa SF7 en el 99.4–100% de las transmisiones: es
 porque SF7 alcanza; a 247 m se hunde a PDR 0.0001. El sombreado lo enmascara
 (250× → 2×), lo que explica por qué nadie lo había visto.
 
+> ⚠️ **RETRACTADO 2026-08-09 con E7 a margen 1 dB (640 celdas, los dos canales).**
+> El hundimiento a PDR 0.0001 **era nuestro, no suyo**. A margen 0 el enlace de
+> 247 m quedaba 0.11 dB por encima de la sensibilidad de SF7, el selector lo
+> declaraba viable y `toa_only` se quedaba clavado ahí: 99.7% de SF7 y colapso.
+> Con margen 1 dB el selector **sube correctamente a SF8** —0.0% de SF7 a 247 m,
+> SF medio 8.02— y el PDR pasa de 0.0001 a **0.0151**, unas 150 veces más.
+>
+> | canal | 177 m | 247 m | caída |
+> |---|---|---|---|
+> | determinista (su condición) | 0.0287 | 0.0151 | ×0.53 |
+> | sombreado σ=3.57 dB | 0.0489 | 0.0276 | ×0.56 |
+>
+> Queda una degradación suave al alejar los nodos, **igual en los dos canales**,
+> así que ni siquiera se sostiene que el sombreado enmascare un umbral: no hay
+> umbral que enmascarar. La ecuación (4) sí sesga hacia SF bajos —`toa_only` usa
+> 99.7% de SF7 a 177 m frente al 23.2% de la compuesta— pero con un selector
+> coherente eso no produce ningún colapso.
+>
+> **Esta crítica sale del paper.** Acusar al trabajo ancla de un fallo que era
+> nuestro habría sido el peor error posible del manuscrito, y solo se detectó
+> porque Diego exigió no analizar nada medido a margen 0.
+
 ### Por qué no es un paper débil
 
 Un revisor ve: un resultado positivo de ingeniería (+229% PDR por configuración),
