@@ -304,7 +304,7 @@ comparación agregada.
 |---|---|---|
 | **D6'** | E4c (US915): ¿se mantiene? | ⚠️ **RECOMENDACIÓN INVERTIDA 2026-08-08.** Decía "retirar" porque su premisa era que δ no tiene efecto en ningún régimen. **E27 refutó esa premisa**: sin duty δ mejora el FND un 13.41%. Ahora E4c es la **validación externa del hallazgo principal** — un régimen regulatorio real sin la restricción del 1%. **Mantener y promover.** ~300 celdas |
 | **D7** | ¿el paper reporta la métrica en régimen de 60 s, de 900 s, o ambos? | **ambos**, y explicar por qué difieren: ese contraste *es* el argumento cross-layer |
-| **D8** | ¿se quita el byte de SoC de la baliza? | **no eliminarlo; medirlo** como variante `pueyo6b`. Ahorra 1.3–2.7% de la energía total — más que el techo de δ — pero rompe comparabilidad de formato con Pueyo |
+| **D8** | ¿se quita el byte de SoC de la baliza? | ⚠️ **REESCRITA 2026-08-10, ver `G4.md` §3 bis.** El "ahorra 1.3–2.7%" era falso por dos motivos: la ToA se cuantiza en bloques de símbolos y el ahorro real es **0.00%** en los tres tamaños del óptimo de E28 (9, 18 y 37 rutas); y ese byte es la **única vía** por la que un nodo conoce la batería de su vecino, así que sin él δ·Ψ(b_j) no se puede evaluar y E27 no existiría. **Se queda.** Limitación a declarar: en `toa_only` se transmite sin usarse, +1.88% de ToA de media en la réplica — sesgo conservador, contra nosotros |
 | **D9** | ¿anuncio de rutas por evento en vez de por reloj? | **sí como trabajo futuro**, no como implementación para este paper. E20 lo motiva pero no lo prueba: la topología es estática |
 | **D10** | ¿receptor con ciclo de trabajo? | **trabajo futuro declarado.** Es el 45.7% del gasto y hoy no existe knob; el radio nunca duerme |
 
