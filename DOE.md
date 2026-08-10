@@ -302,7 +302,7 @@ comparación agregada.
 
 | # | Decisión | Recomendación |
 |---|---|---|
-| **D6'** | E4c (US915): ¿se mantiene? | **retirar** — su premisa era que δ recupera su efecto sin duty, y δ no tiene efecto |
+| **D6'** | E4c (US915): ¿se mantiene? | ⚠️ **RECOMENDACIÓN INVERTIDA 2026-08-08.** Decía "retirar" porque su premisa era que δ no tiene efecto en ningún régimen. **E27 refutó esa premisa**: sin duty δ mejora el FND un 13.41%. Ahora E4c es la **validación externa del hallazgo principal** — un régimen regulatorio real sin la restricción del 1%. **Mantener y promover.** ~300 celdas |
 | **D7** | ¿el paper reporta la métrica en régimen de 60 s, de 900 s, o ambos? | **ambos**, y explicar por qué difieren: ese contraste *es* el argumento cross-layer |
 | **D8** | ¿se quita el byte de SoC de la baliza? | **no eliminarlo; medirlo** como variante `pueyo6b`. Ahorra 1.3–2.7% de la energía total — más que el techo de δ — pero rompe comparabilidad de formato con Pueyo |
 | **D9** | ¿anuncio de rutas por evento en vez de por reloj? | **sí como trabajo futuro**, no como implementación para este paper. E20 lo motiva pero no lo prueba: la topología es estática |
@@ -448,12 +448,23 @@ que son el gasto que este DoE pide autorizar.
 
 ## 12. Qué se pide al G4
 
-1. **Aprobar o corregir la reformulación de Q2 y Q5.** Es el cambio de fondo:
-   el paper deja de proponer una métrica de tres términos y pasa a demostrar
-   por qué el tercero no puede funcionar, y qué capa sí gobierna la vida útil.
-2. **Decidir D6' a D10** (§9.2), en particular si se retira E4c.
-3. **Acordar el storyboard v1** (§11), sobre todo qué figura es la principal.
-4. **Autorizar el gasto de M1 y M2** (~13 000 celdas, 35–50 h de servidor).
+> **El paquete completo está en `G4.md`**, con orden del día, riesgos declarados
+> y las cinco decisiones desarrolladas. Esto es el resumen.
 
-Los cuatro son decisiones de coautoría, no técnicas. Todo lo que se podía
-cerrar con evidencia ya está cerrado y documentado arriba.
+1. **D1 — aprobar el cambio de tesis.** Es lo único que si no se aprueba invalida
+   el resto. El paper pasa de *"el término de energía no sirve"* a **"la
+   regulación anula un término que funciona sin ella"** (E27: el signo del
+   contraste cambia entre regímenes, 30/30 semillas en cada brazo).
+2. **D2 — el régimen principal.** ¿Duty al 1% con el otro como contraste, o el
+   duty como factor de primer nivel? La tesis nueva apunta a lo segundo y duplica
+   las figuras.
+3. **D3 — FND o T50 como métrica primaria.** E27 obliga a elegir: δ sube el FND
+   un 13.41% y baja el T50 un 6.70%. Recomendación: reportar ambas y explicar el
+   intercambio, porque nadie en la literatura las distingue.
+4. **D4 — E4c (US915) revive**, con la recomendación invertida (§9.2).
+5. **D5 — ¿se publica la retractación del umbral de SF?** La crítica que le
+   hacíamos a Pueyo era un artefacto de nuestro propio selector.
+6. **Autorizar M1, M2 y E4c** (~13 800 celdas, 37–53 h).
+
+Todo lo que se podía cerrar con evidencia ya está cerrado y documentado arriba;
+lo que queda son decisiones de coautoría.
