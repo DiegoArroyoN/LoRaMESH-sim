@@ -315,6 +315,35 @@ convierte el aire en el recurso escaso.
    primer nodo al conjunto**, y cuál de las dos importa pasa a ser una decisión
    de diseño explícita en vez de un detalle.
 
+   > ⚠️ **CONFUSOR DETECTADO 2026-08-11, y decisión de Diego: se reportan las dos
+   > campañas con la explicación.** Los brazos de E27 movían **tres** cosas a la
+   > vez, porque los pesos se usaban como un símplex que suma 1:
+   >
+   > | brazo | α | β | δ | H = (β/α)·C |
+   > |---|---|---|---|---|
+   > | d00 | 0.85 | 0.15 | 0 | 1493 ms |
+   > | d25 | 0.60 | 0.15 | 0.25 | 2116 ms |
+   > | **d85** | **0.00** | 0.15 | 0.85 | **∞ — sin término de ToA** |
+   >
+   > **Qué sobrevive.** El confusor es idéntico en los dos regímenes de duty, así
+   > que la **interacción —el cambio de signo, que es la tesis— se mantiene**. Lo
+   > que no está limpio es atribuirle el efecto a δ en solitario.
+   >
+   > **Y la dirección del sesgo juega a favor.** E29 mide que más H cuesta FND
+   > (−11% al pasar de 129 ms a 1493 ms), así que el brazo d85 —con H infinito—
+   > partía con desventaja. **El efecto real de δ sin duty es probablemente mayor
+   > que el +13.41% medido.**
+   >
+   > **E31** (480 celdas, en cola) lo rehace con α=1, β'=0.01524 y paso=0.005
+   > fijos en los cinco brazos, moviendo solo δ'. Es lo que E27 creía estar
+   > haciendo. Equivalencia de escala: δ=0.25 era 1.59× el coste de un enlace →
+   > δ'=0.05 es 2.18×; δ=0.85 era 5.41× → δ'=0.15 es 6.55×.
+   >
+   > **Las dos entran al manuscrito**, por la misma razón que la retractación del
+   > umbral de SF: el paper sostiene que evaluar sin auditar el instrumento mide
+   > sobre todo el instrumento, y aplicárnoslo a nosotros mismos es lo que da
+   > autoridad al argumento.
+
    **Métricas que NO se pueden usar aquí, y hay que decirlo:** `e_max` y
    `soc_min` están saturadas — 240 celdas dan 6 valores distintos de `e_max`,
    todos en 225.000x mAh (el tope de batería), y `soc_min` tiene un único valor,
