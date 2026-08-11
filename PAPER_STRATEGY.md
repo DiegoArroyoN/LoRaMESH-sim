@@ -227,8 +227,25 @@ corrección completa en `G4.md` §D6 bis. Está documentado en el survey de RPL
 (arXiv 1902.01888) desde 2019, tanto el término de energía demasiado pequeño para
 tener efecto como el problema de acotar los pesos a [0,1]. Se reporta como
 *"trampa conocida en RPL que reaparece sin señalar en LoRa mesh"*, con lo nuestro
-siendo la cuantificación, el canje y el acoplamiento por cuantización del campo
-de 1 byte.
+siendo la cuantificación y el canje.
+
+**Y el acoplamiento por cuantización tampoco es nuestro.** Llegué a decir que no
+aparecía en ninguna búsqueda; sí aparece, y es viejo: es el problema de las
+*narrow metrics* de IS-IS. La métrica de 6 bits limitaba a la vez el alcance
+(coste de camino máximo 1023) y la granularidad (*"with only 64 possible values
+per link, distinguishing between different bandwidth capacities became
+difficult"*), y se resolvió con las *wide metrics* TLV. Nuestro campo de 1 byte
+con SF7 y SF8 cayendo en la misma unidad es eso mismo.
+
+**Conclusión de la comprobación: el paper tiene DOS hallazgos metodológicos, no
+tres.** El tercero se reescribe como sección de discusión: *dos trampas clásicas
+del ruteo —el escalado de términos compuestos y las métricas estrechas— reaparecen
+sin señalar en LoRa mesh, y aquí está lo que cuestan medidas*. Eso es honesto,
+útil y no se cae en revisión.
+
+**Nota de método para mí mismo:** he reclamado novedad dos veces hoy sin
+comprobarlo antes, y las dos han fallado. La comprobación bibliográfica va
+**antes** de encuadrar algo como hallazgo, no después.
 
 ---
 
