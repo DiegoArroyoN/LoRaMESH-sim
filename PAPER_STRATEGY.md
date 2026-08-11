@@ -249,6 +249,48 @@ comprobarlo antes, y las dos han fallado. La comprobación bibliográfica va
 
 ---
 
+### 3.1 ter — Comprobación con la bibliografía cargada (NotebookLM, 2026-08-11)
+
+Consultado el corpus completo de `Papers_Magister`. Resultado por hallazgo:
+
+**HALLAZGO 1 — la cadencia de balizas domina. SE SOSTIENE, y se refina.**
+
+- *"Ningún artículo del corpus realiza una campaña experimental o simulación
+  barriendo de forma sistemática el intervalo o cadencia de los anuncios de
+  enrutamiento"*. Solé et al. corren a cadencia fija (300 s; 60 s para
+  Pueyo-Centelles). Leenders et al. 2023 sí barren la cadencia del **tráfico de
+  datos**, pero dejan `Troute` fija en 6 h sin variarla.
+- **La sobrecarga de control SÍ está reportada, pero en BYTES.** Solé et al.
+  definen `ControlOverhead = (RoutingPacketSize + HeaderDataMessages) /
+  DataMessagesPayload` y miden *"the total number of bytes"*: **19%** en un salto,
+  100% en el último nodo de una cadena.
+- Wong et al. 2024 dan la única cifra en aire, y es **analítica y de MAC, no de
+  ruteo**: *"At 1% duty cycle, TX is only allowed 1/100 slots, meaning 10%
+  bandwidth used just for synchronisation."*
+
+> **La refinación que esto permite, y que es mejor que el claim original:** en
+> LoRa, bytes y airtime **no son equivalentes** — el tiempo en aire escala con
+> 2^SF, y nuestras balizas se emiten con SF probabilístico. Medir la sobrecarga
+> de control en bytes la **infravalora**. Solé mide 19% en bytes; nosotros
+> medimos **60–75% en aire** sobre el mismo tipo de plano de control. Esa brecha
+> *es* el resultado, y la distinción bytes/airtime es la aportación conceptual.
+
+**HALLAZGO 2 — el régimen regulatorio como frontera. CONFIRMADO NOVEDOSO**, y
+ahora con el mapa exacto del corpus:
+
+| trabajo | qué hace con el duty |
+|---|---|
+| Uduwaka et al. 2026 (voz sobre Meshtastic) | **el único** que contrasta EU 1% contra US sin restricción — pero solo mide el tiempo de transmisión de un mensaje de voz de 3 s, **no toca el ruteo** |
+| Cotrim & Margi 2024 | lo modelan fijo al 1%, sin contraste |
+| Chen et al. 2025 | fuerzan el 1%, sin régimen alternativo |
+| Udugampola et al. 2025 | lo **ignoran** (100%), sin comparación cruzada |
+| Arroyo Navarrete 2026 (nuestra propia propuesta previa) | lo adoptaba fijo al 1%, sin contraste |
+
+**Nadie compara los dos regímenes para el ruteo.** Ni siquiera nosotros lo
+hacíamos antes de E27.
+
+---
+
 ### 3.2 Panorama competitivo
 
 **Competidor directo:** *Multi-Criteria Optimization Mechanisms for LoRa Network
