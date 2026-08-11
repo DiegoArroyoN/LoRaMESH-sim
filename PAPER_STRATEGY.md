@@ -200,6 +200,38 @@ inmediato.
 Eso convierte un resultado negativo en una **delimitación del dominio de
 validez** de una técnica establecida — mucho más defendible y más citable.
 
+### 3.1 bis — Validación bibliográfica del 2026-08-11 (tesis nueva)
+
+Los dos hallazgos que nacieron después de la validación de agosto —el régimen
+regulatorio (E27) y la normalización (E29/E30)— no se habían contrastado nunca
+contra la literatura. Se hizo el 2026-08-11 y el resultado es desigual.
+
+**SE SOSTIENE — nadie compara los dos regímenes regulatorios con el mismo
+protocolo.** El campo está partido y nadie cruza la frontera:
+
+- Udugampola et al. 2025 (arXiv 2510.03714) hacen ruteo energy-aware en LoRa mesh
+  subterránea y declaran explícitamente *"the full 100% duty cycle can be
+  utilized"*: eligen el entorno sin restricción porque no hay riesgo de
+  interferencia. Su mecanismo funciona — reparto de batería equilibrado, más vida
+  útil. **Es nuestra tesis vista desde el otro lado**, y confirma que el régimen
+  sin duty es un despliegue real y no un brazo sintético. Pero no prueban con
+  duty.
+- El competidor de 2026 (Electronics 15(9):1872) sí tiene métrica compuesta con
+  aire, batería y duty, muy parecida a la nuestra, pero trata el duty como
+  **restricción dura de factibilidad**, no como factor. Y confirma su límite
+  declarado: es un *"snapshot routing framework"* **sin simulación a nivel de
+  evento**. Optimizan un grafo; no miden una red.
+
+**NO SE SOSTIENE — la normalización no es un hallazgo nuestro.** Ver la
+corrección completa en `G4.md` §D6 bis. Está documentado en el survey de RPL
+(arXiv 1902.01888) desde 2019, tanto el término de energía demasiado pequeño para
+tener efecto como el problema de acotar los pesos a [0,1]. Se reporta como
+*"trampa conocida en RPL que reaparece sin señalar en LoRa mesh"*, con lo nuestro
+siendo la cuantificación, el canje y el acoplamiento por cuantización del campo
+de 1 byte.
+
+---
+
 ### 3.2 Panorama competitivo
 
 **Competidor directo:** *Multi-Criteria Optimization Mechanisms for LoRa Network
