@@ -29,13 +29,21 @@ existe, y sabemos por qué.
 | hay sinergia MAC×ruteo | la interacción es **negativa** (−8.21 pp) |
 | el ruteo gobierna ~1.4% del gasto | **1.61%**, y como máximo 8.21% en el mejor de 72 escenarios |
 
-**El mecanismo, medido:** δ sí hace su trabajo — reparte la carga de relevo
-hasta un 22% mejor, en 40 de 40 celdas, p<0.0001. Lo consigue **estirando** los
-enlaces: sube el SF, con lo que más nodos quedan al alcance y la carga se
-reparte entre más candidatos. Pero cada transmisión en un SF más alto dura el
-doble, así que el aire total sube, el consumo medio sube 0.54% y **el nodo más
-cargado acaba peor que sin δ**. El equilibrio que compra cuesta más de lo que
-ahorra.
+**El mecanismo, medido — CORREGIDO 2026-08-12 con E31.** δ sí hace su trabajo:
+reparte la carga de relevo un 22.73% mejor sin duty y un 10.83% con él, 40 de 40
+celdas, p<0.001 en ambos regímenes.
+
+> ⚠️ La explicación que dimos hasta el 2026-08-12 —que δ lo consigue **estirando**
+> los enlaces y subiendo el SF, y que ese SF más alto se paga en aire— **se
+> retira**. E31 mide que el SF medio apenas se mueve entre δ'=0 y δ'=0.15
+> (7.264 → 7.295). No hay escalada de SF que explique nada.
+
+Lo que de verdad ocurre es más simple: **el duty cycle acota el propio recurso
+que δ redistribuye.** Con duty el FND es 228 ks frente a 127 sin él —los nodos
+duran casi el doble porque transmiten menos— y en ese régimen el relevo es una
+fracción del presupuesto demasiado pequeña para mover la vida útil. Encaja con
+E14: el ruteo gobierna el 2.21% de la energía. Sin duty el aire es libre, el
+relevo pesa mucho más, y equilibrarlo sí alarga la vida del primer nodo.
 
 De ahí la frase que gobierna el paper:
 
@@ -75,7 +83,7 @@ contestan.
 |---|---|---|---|
 | **Q1** | ¿La métrica compuesta cross-layer mejora PDR/vida útil frente a métricas de una capa, bajo duty EU868 1%? | M1 | parcial: +4.8% PDR / −13.2% FND en régimen sano (E20); falta el barrido completo por escenario y N |
 | **Q2** | ¿Qué capa gobierna la vida útil de la red, y por qué **no** es el encaminamiento? | contexto, M2 | **respondida**: reposo 45.7%, balizas 21.7%, relevo 1.6%. E14 (320 celdas), sonda de 72 escenarios |
-| **Q3** | ¿Por qué falla el término energy-aware, y bajo qué condiciones fallaría cualquier otro? | E17–E19 | **respondida**: mecanismo de escalada de SF, medido en 3 topologías y 2 rangos (E19, 720 celdas) |
+| **Q3** | ¿Por qué falla el término energy-aware, y bajo qué condiciones fallaría cualquier otro? | E31 | **RESPUESTA CAMBIADA 2026-08-12.** No falla: **funciona sin duty (+11.95% FND, 40/40) y la regulación lo ANULA (−0.05%, n.s.)**. Y el mecanismo tampoco es el que creíamos: δ reparte la carga en los DOS regímenes (`rel_cv` −22.73% / −10.83%), y el SF medio apenas se mueve (7.264→7.295), así que **la hipótesis de la escalada de SF de E19 se retira**. Lo que ocurre es que el duty **acota el recurso que δ redistribuye**: con duty el FND sube a 228 ks frente a 127 sin él, y el relevo pasa a ser una fracción del presupuesto demasiado pequeña para mover la vida útil |
 | **Q4** | ¿Depende del MAC el beneficio de la métrica? ¿Hay interacción? | M1 | interacción **negativa** (−8.21 pp). Falta confirmarla en el diseño factorial |
 | **Q5** | ¿Cuánto del rendimiento lo fija el **plan de control** frente a la métrica de ruteo? | M2 | **respondida en un escenario**: cadencia +229% PDR vs métrica +4.7%. Falta generalizar a 3 escenarios |
 | **Q6** | ¿Es el umbral de SF de Pueyo-Centelles un efecto real o un artefacto de canal determinista? | E7 (m1) | **RESPUESTA CAMBIADA 2026-08-09**: no hay umbral. El colapso a PDR 0.0001 era artefacto de NUESTRO margen 0, no de su ecuación (4). A margen 1 el selector sube a SF8 y el PDR es 0.0151; la caída de 177→247 m es suave (×0.53) e **igual en los dos canales**, así que el sombreado no enmascara nada |
@@ -206,6 +214,8 @@ Se propone retirarlo y dedicar esas 40 celdas a M2. **Decisión para el G4.**
 | E23 | cuánta reserva necesita el selector de SF; la banda muerta de 240–251 m | 500 |
 | E24 | las conclusiones sobreviven al margen: A intacto, B se atenúa | 320 |
 | E25 | δ = 0 también con margen 1 dB — cierra el último caveat de δ | 240 |
+| **E29 + E30** | **H (el aire que vale un salto) es un CANJE, no un error**: H alto entrega más a corto plazo y cuesta vida útil. La parametrización pasa a α≡1, β'=H/C, paso 0.005 | **840** |
+| **E31** | **δ funciona sin duty (+11.95% FND) y se ANULA con duty (−0.05%, n.s.)**, con α y β fijos para que mover δ no arrastre H. Sustituye a E27, que tenía ese confusor | **480** |
 | **E26** | **facturación plana de balizas: precio del supuesto de FLoRaMesh** | **240** |
 | sondas | dominancia de relevo (72 escenarios), consumo vs carga | 75 |
 

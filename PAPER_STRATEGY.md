@@ -123,12 +123,16 @@ necesitan.
 
 ### Huecos que siguen abiertos
 
-1. ~~δ nunca se ha probado sin duty cycle~~ **CERRADO 2026-08-08 con E27**, y
-   con el desenlace bueno: δ **sí funciona** sin duty (FND +13.41%, 30/30
-   semillas) y **cambia de signo** con duty (−1.01%). La conclusión pasa de *"el
-   término de energía no sirve"* a **"la regulación de duty cycle es lo que lo
-   anula"**. Ver el Acto 2. Registré la predicción contraria antes de mirar y era
-   falsa: yo esperaba que el signo no cambiara.
+1. ~~δ nunca se ha probado sin duty cycle~~ **CERRADO 2026-08-12 con E31** (E27
+   lo abrió pero con un confusor). δ **sí funciona** sin duty (FND **+11.95%**,
+   40/40 semillas) y **se anula** con duty (−0.05%, p=0.15). La conclusión pasa
+   de *"el término de energía no sirve"* a **"la regulación de duty cycle es lo
+   que lo anula"**. Ver el Acto 2.
+
+   Dos predicciones mías fallaron por el camino y conviene tenerlas anotadas:
+   esperaba que el signo **no** cambiara (E27 sugirió que sí; E31 muestra que ni
+   una cosa ni la otra: se anula), y esperaba que sin el confusor el efecto fuera
+   **mayor** de 13.41% (es 11.95%, algo menor).
 2. **Las figuras 11c (rejilla 248 m) y 12 (aleatoria) no están digitalizadas.**
    Los valores de referencia que usamos ahí son aproximaciones nuestras, así que
    ninguna desviación de 248 m es reportable. Bloquea la mitad del capítulo de
@@ -376,71 +380,50 @@ convierte el aire en el recurso escaso.
    fracción pequeña" es cierto en los dos regímenes en energía total, pero por
    razones distintas**, y el paper debe declarar en cuál mide.
 2. **El término de energía funciona, y la regulación lo anula.** Acto reescrito
-   el 2026-08-08 con E27 (240 celdas, margen 1 dB, 15 semillas, el duty como
-   factor **pareado**: mismas semillas, mismo escenario de máximo relevo, con y
-   sin regulación).
+   el 2026-08-12 con **E31** (480 celdas, 20 semillas, duty como factor pareado).
+   Sustituye a E27, que medía lo mismo pero con un confusor.
 
-   | contraste sobre el FND | sin duty | con duty 1% |
-   |---|---|---|
-   | δ = 0.25 frente a δ = 0 | **+10.26%** (30/30, p<0.001) | −0.86% (0/30, p<0.001) |
-   | δ = 0.85 frente a δ = 0 | **+13.41%** (30/30, p<0.001) | −1.01% (0/30, p<0.001) |
+   | FND, δ' frente a δ'=0 | sin duty | con duty 1% |
+   |---:|---:|---:|
+   | δ'=0.005 | **+4.50%** (40/40, p<0.001) | +0.09% |
+   | δ'=0.015 | **+4.91%** (40/40, p<0.001) | +0.05% (p=0.64) |
+   | δ'=0.05 | **+7.38%** (40/40, p<0.001) | +0.03% (p=0.27) |
+   | δ'=0.15 | **+11.95%** (40/40, p<0.001) | **−0.05%** (p=0.15) |
 
-   **El signo cambia**, y era el listón registrado antes de mirar: para sostener
-   *"la regulación es lo que anula δ"* no bastaba con que el efecto se atenuara.
-   Cambia, y con unanimidad en las 30 semillas de cada brazo.
+   **El efecto se ANULA, no se invierte.** De +11.95% con unanimidad en 40
+   semillas a cero estadístico.
 
-   **El mecanismo, ahora completo.** δ iguala el reparto de relevo entre nodos
-   (`rel_cv` **−31.05%** sin duty, −24.64% con él): eso lo hace en los dos
-   regímenes. Lo que cambia es el precio. Igualar exige **subir el SF**, y cada
-   transmisión en SF más alto dura el doble; bajo duty al 1% el aire es el
-   recurso escaso y ese coste se cobra entero, así que el balanceo sale a
-   pérdidas. Sin la restricción, el mismo balanceo se cobra en un recurso que
-   sobra y el beneficio queda al descubierto. **La tensión no la crea el PHY: la
-   crea la regulación.**
+   > **Corrección respecto a E27.** E27 daba −1.01% con duty, significativo, y de
+   > ahí salió el encuadre del "cambio de signo". Ese signo negativo lo producía
+   > el confusor: sus brazos usaban α+β+δ=1, así que subir δ bajaba α, y en `d85`
+   > α llegaba a **0** — sin término de ToA y con H infinito. E29/E30 demostraron
+   > que eso por sí solo cuesta FND. E31 fija α=1 y β'=0.01524 en todos los
+   > brazos, de modo que mover δ' ya no arrastra H, y entonces el efecto con duty
+   > es **nulo**, no negativo. El título del paper dice *anula*, y anular es
+   > exactamente lo que se mide; el listón del "cambio de signo" que declaré por
+   > escrito **no se cumple** y se retira.
 
-   **Y una salvedad que enriquece el resultado en vez de debilitarlo:** dentro
-   del régimen sin duty, δ sube el FND (+13.41%) y **baja el T50 (−6.70%)**. Es
-   la firma del balanceo de carga: al igualar el reparto, el nodo más castigado
-   dura más y a la vez desaparecen los nodos poco cargados que antes sobrevivían
-   mucho tiempo, de modo que el grueso muere junto. **δ desplaza vida útil del
-   primer nodo al conjunto**, y cuál de las dos importa pasa a ser una decisión
-   de diseño explícita en vez de un detalle.
+   **El mecanismo, y es mejor que el que teníamos.** δ hace su trabajo en **los
+   dos** regímenes — reparte la carga de relevo, 40/40 semillas, p<0.001 en ambos:
+   `rel_cv` cae **−22.73%** sin duty y **−10.83%** con él. Lo que cambia no es si
+   δ equilibra, sino si equilibrar **sirve de algo**.
 
-   > ⚠️ **CONFUSOR DETECTADO 2026-08-11, y decisión de Diego: se reportan las dos
-   > campañas con la explicación.** Los brazos de E27 movían **tres** cosas a la
-   > vez, porque los pesos se usaban como un símplex que suma 1:
-   >
-   > | brazo | α | β | δ | H = (β/α)·C |
-   > |---|---|---|---|---|
-   > | d00 | 0.85 | 0.15 | 0 | 1493 ms |
-   > | d25 | 0.60 | 0.15 | 0.25 | 2116 ms |
-   > | **d85** | **0.00** | 0.15 | 0.85 | **∞ — sin término de ToA** |
-   >
-   > **Qué sobrevive.** El confusor es idéntico en los dos regímenes de duty, así
-   > que la **interacción —el cambio de signo, que es la tesis— se mantiene**. Lo
-   > que no está limpio es atribuirle el efecto a δ en solitario.
-   >
-   > **Y la dirección del sesgo juega a favor.** E29 mide que más H cuesta FND
-   > (−11% al pasar de 129 ms a 1493 ms), así que el brazo d85 —con H infinito—
-   > partía con desventaja. **El efecto real de δ sin duty es probablemente mayor
-   > que el +13.41% medido.**
-   >
-   > **E31** (480 celdas, en cola) lo rehace con α=1, β'=0.01524 y paso=0.005
-   > fijos en los cinco brazos, moviendo solo δ'. Es lo que E27 creía estar
-   > haciendo. Equivalencia de escala: δ=0.25 era 1.59× el coste de un enlace →
-   > δ'=0.05 es 2.18×; δ=0.85 era 5.41× → δ'=0.15 es 6.55×.
-   >
-   > **Las dos entran al manuscrito**, por la misma razón que la retractación del
-   > umbral de SF: el paper sostiene que evaluar sin auditar el instrumento mide
-   > sobre todo el instrumento, y aplicárnoslo a nosotros mismos es lo que da
-   > autoridad al argumento.
+   El duty cycle **acota el recurso que δ redistribuye**. Con duty el FND es
+   228 ks frente a 127 sin él: los nodos duran casi el doble porque transmiten
+   menos, y en ese régimen el relevo es una fracción del presupuesto demasiado
+   pequeña para mover la vida útil. Encaja con E14, donde el ruteo gobierna el
+   2.21% de la energía. **El SF medio apenas se mueve** (7.264 → 7.295), así que
+   la explicación **no** es la escalada de SF que veníamos suponiendo desde E19 —
+   esa hipótesis se retira.
 
-   **Métricas que NO se pueden usar aquí, y hay que decirlo:** `e_max` y
-   `soc_min` están saturadas — 240 celdas dan 6 valores distintos de `e_max`,
-   todos en 225.000x mAh (el tope de batería), y `soc_min` tiene un único valor,
-   0.000000. A 300 ks todos los nodos mueren y las dos métricas dejan de
-   discriminar. El mismo problema apareció en E25. Los contrastes válidos son
-   FND, T50, PDR y `rel_cv`.
+   **Y el canje FND/T50 se mantiene**, más nítido sin duty: δ'=0.15 da +11.95% de
+   FND y **−4.24% de T50** (0/40, p<0.001). δ desplaza vida útil del primer nodo
+   al conjunto. Cuál de las dos importa es decisión de diseño, no detalle.
+
+   **Métricas inservibles aquí, declaradas:** `e_max` y `soc_min` están saturadas
+   a 300 ks — todos los nodos mueren y dejan de discriminar. Los contrastes
+   válidos son FND, T50, PDR y `rel_cv`.
+
 3. **La palanca estaba en otro sitio.** Balizas de 60 s a 900 s: **+229% de PDR
    y +8.1% de FND**, las dos a la vez. Es el único de los actos con cifra de
    margen 0 que **ya está confirmado a margen 1**: E24 midió +228.7% frente al
